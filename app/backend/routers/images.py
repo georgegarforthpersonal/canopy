@@ -13,18 +13,21 @@ Endpoints:
   GET    /api/images/{id}/preview                     - Get presigned preview URL
 """
 
+import json
 import logging
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 
 from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
     File,
+    Form,
     HTTPException,
+    Query,
     UploadFile,
     status,
 )
@@ -148,12 +151,14 @@ async def upload_images(
     survey_id: int,
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
+    skip_processing: bool = Query(False, description="Skip AI processing (for manual classification)"),
+    metadata: Optional[str] = Form(None, description="JSON mapping filename to ISO timestamp"),
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """
     Upload one or more camera trap images to a survey.
-    Files are stored in R2 and processing is auto-triggered.
+    Files are stored in R2 and processing is auto-triggered unless skip_processing=true.
     """
     # Verify survey belongs to org
     survey = (
@@ -163,6 +168,14 @@ async def upload_images(
     )
     if not survey:
         raise HTTPException(status_code=404, detail="Survey not found")
+
+    # Parse optional metadata (filename -> ISO timestamp mapping)
+    timestamps_map: dict[str, str] = {}
+    if metadata:
+        try:
+            timestamps_map = json.loads(metadata)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid metadata JSON")
 
     uploaded = []
     for file in files:
@@ -188,8 +201,14 @@ async def upload_images(
                 status_code=400, detail=f"File already exists: {file.filename}"
             )
 
-        # Extract metadata from filename
+        # Extract metadata from filename (fallback) or use provided timestamps
         info = extract_image_info(file.filename)
+        image_timestamp = info["image_timestamp"]
+        if file.filename in timestamps_map:
+            try:
+                image_timestamp = datetime.fromisoformat(timestamps_map[file.filename])
+            except (ValueError, TypeError):
+                pass  # Fall back to filename-extracted timestamp
 
         # Get file size
         file.file.seek(0, 2)  # Seek to end
@@ -201,22 +220,24 @@ async def upload_images(
         r2_key = upload_image_file(file.file, file.filename, org.slug, content_type)
 
         # Create database record
+        initial_status = ProcessingStatus.completed if skip_processing else ProcessingStatus.pending
         image = CameraTrapImage(
             survey_id=survey_id,
             filename=file.filename,
             r2_key=r2_key,
             file_size_bytes=file_size,
             device_serial=info["device_serial"],
-            image_timestamp=info["image_timestamp"],
-            processing_status=ProcessingStatus.pending,
+            image_timestamp=image_timestamp,
+            processing_status=initial_status,
         )
         db.add(image)
         db.flush()  # Get the ID
 
         uploaded.append(image)
 
-        # Auto-trigger background processing
-        background_tasks.add_task(process_image_background, image_id=image.id)
+        # Auto-trigger background processing (unless skipped)
+        if not skip_processing:
+            background_tasks.add_task(process_image_background, image_id=image.id)
 
     db.commit()
 

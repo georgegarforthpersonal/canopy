@@ -1,6 +1,6 @@
 import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Stack, Button, Avatar, AvatarGroup, Tooltip, CircularProgress, Alert, Snackbar, Pagination, FormControl, Select, MenuItem } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
-import { CalendarToday, Person, Visibility, Category, FilterList } from '@mui/icons-material';
+import { CalendarToday, Person, Visibility, Category, FilterList, PhotoCamera } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getSpeciesIcon, formatSpeciesCount } from '../config';
@@ -265,19 +265,35 @@ export function SurveysPage() {
             </Select>
           </FormControl>
         </Stack>
-        <Button
-          variant="contained"
-          size="medium"
-          onClick={handleCreateClick}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 600,
-            boxShadow: 'none',
-            '&:hover': { boxShadow: 'none' }
-          }}
-        >
-          New
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="outlined"
+            size="medium"
+            startIcon={<PhotoCamera />}
+            onClick={() => requireAuth(() => navigate('/surveys/new/camera-trap'))}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              boxShadow: 'none',
+              '&:hover': { boxShadow: 'none' }
+            }}
+          >
+            Camera Trap
+          </Button>
+          <Button
+            variant="contained"
+            size="medium"
+            onClick={handleCreateClick}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              boxShadow: 'none',
+              '&:hover': { boxShadow: 'none' }
+            }}
+          >
+            New
+          </Button>
+        </Stack>
       </Stack>
 
       {/* Surveys Table */}

@@ -206,6 +206,7 @@ async def get_surveys(
                 "conditions_met": survey.conditions_met,
                 "notes": survey.notes,
                 "location_id": survey.location_id,
+                "device_id": survey.device_id,
                 "surveyor_ids": surveyor_ids_map.get(survey.id, []),
                 "sightings_count": sightings_count_map.get(survey.id, 0),
                 "species_breakdown": species_breakdown_map.get(survey.id, []),
@@ -269,6 +270,7 @@ async def get_survey(
         "conditions_met": survey.conditions_met,
         "notes": survey.notes,
         "location_id": survey.location_id,
+        "device_id": survey.device_id,
         "surveyor_ids": surveyor_ids_list,
         "survey_type_id": survey.survey_type_id
     }
@@ -300,6 +302,7 @@ async def create_survey(
             conditions_met=survey.conditions_met,
             notes=survey.notes,
             location_id=survey.location_id,
+            device_id=survey.device_id,
             survey_type_id=survey.survey_type_id,
             organisation_id=org.id
         )
@@ -327,6 +330,7 @@ async def create_survey(
             "conditions_met": db_survey.conditions_met,
             "notes": db_survey.notes,
             "location_id": db_survey.location_id,
+            "device_id": db_survey.device_id,
             "survey_type_id": db_survey.survey_type_id,
             "surveyor_ids": survey.surveyor_ids
         }
@@ -404,6 +408,7 @@ async def update_survey(
         "conditions_met": db_survey.conditions_met,
         "notes": db_survey.notes,
         "location_id": db_survey.location_id,
+        "device_id": db_survey.device_id,
         "survey_type_id": db_survey.survey_type_id,
         "surveyor_ids": surveyor_ids_list
     }

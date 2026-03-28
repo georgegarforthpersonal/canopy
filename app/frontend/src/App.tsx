@@ -12,6 +12,7 @@ import { SurveyDetailPage } from './pages/SurveyDetailPage';
 import { NewSurveyPage } from './pages/NewSurveyPage';
 import { DashboardsPage } from './pages/DashboardsPage';
 import { AdminPage } from './pages/AdminPage';
+import { NewCameraTrapSurveyPage } from './pages/NewCameraTrapSurveyPage';
 
 // Set dayjs to use UK locale globally (dd/mm/yyyy format)
 dayjs.locale('en-gb');
@@ -36,6 +37,9 @@ function App() {
 
                 {/* New survey page */}
                 <Route path="/surveys/new" element={<NewSurveyPage />} />
+
+                {/* Camera trap survey wizard */}
+                <Route path="/surveys/new/camera-trap" element={<NewCameraTrapSurveyPage />} />
 
                 {/* Survey detail page */}
                 <Route path="/surveys/:id" element={<SurveyDetailPage />} />

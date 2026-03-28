@@ -344,7 +344,7 @@ export function AdminPage() {
       setSurveyTypeFormError('Name is required');
       return;
     }
-    if (formSelectedLocations.length === 0) {
+    if (formSelectedLocations.length === 0 && !formAllowImageUpload) {
       setSurveyTypeFormError('At least one location must be selected');
       return;
     }
@@ -1134,6 +1134,7 @@ export function AdminPage() {
                 : 'Image upload is disabled for this survey type'}
             </Typography>
           </Box>
+          {!formAllowImageUpload && (
           <Autocomplete
             multiple
             options={allLocations}
@@ -1146,6 +1147,12 @@ export function AdminPage() {
             )}
             sx={{ mt: 2 }}
           />
+          )}
+          {formAllowImageUpload && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Camera trap survey types use devices instead of locations. Devices can be managed in the Devices section below.
+            </Typography>
+          )}
           <Autocomplete
             multiple
             options={allSpeciesTypes}

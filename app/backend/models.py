@@ -439,7 +439,7 @@ class SurveyType(SurveyTypeBase, table=True):  # type: ignore[call-arg]
 
 class SurveyTypeCreate(SurveyTypeBase):
     """Model for creating a survey type"""
-    location_ids: List[int] = Field(description="List of allowed location IDs")
+    location_ids: List[int] = Field(default_factory=list, description="List of allowed location IDs")
     species_type_ids: List[int] = Field(description="List of allowed species type IDs")
 
 
@@ -486,6 +486,7 @@ class SurveyBase(SQLModel):
     notes: Optional[str] = Field(None, description="Additional notes")
     location_id: Optional[int] = Field(None, foreign_key="location.id", description="Location ID (required when survey type uses survey-level location)")
     survey_type_id: Optional[int] = Field(None, foreign_key="survey_type.id", description="Survey type ID")
+    device_id: Optional[int] = Field(None, foreign_key="device.id", description="Device ID (for camera trap surveys)")
 
 
 class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
@@ -506,6 +507,7 @@ class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
     sightings: List["Sighting"] = Relationship(back_populates="survey", cascade_delete=True)
     location: Optional["Location"] = Relationship(back_populates="surveys")
     survey_type: Optional["SurveyType"] = Relationship(back_populates="surveys")
+    device: Optional["Device"] = Relationship()
     audio_recordings: List["AudioRecording"] = Relationship(
         back_populates="survey",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"}
@@ -530,6 +532,7 @@ class SurveyUpdate(SQLModel):
     conditions_met: Optional[bool] = None
     notes: Optional[str] = None
     location_id: Optional[int] = Field(None, gt=0)
+    device_id: Optional[int] = None
     surveyor_ids: Optional[List[int]] = None
 
 

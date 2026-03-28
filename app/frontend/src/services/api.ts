@@ -274,7 +274,8 @@ export interface Survey {
   temperature_celsius: string | null;
   conditions_met: boolean | null;
   notes: string | null;
-  location_id: number;
+  location_id: number | null;
+  device_id: number | null;
   surveyor_ids: number[];
   sightings_count: number; // Total count across all species
   species_breakdown: SpeciesTypeCount[]; // Breakdown by species type
@@ -760,9 +761,12 @@ export const devicesAPI = {
   /**
    * Get all devices
    */
-  getAll: (includeInactive: boolean = false): Promise<Device[]> => {
-    const query = includeInactive ? '?include_inactive=true' : '';
-    return fetchAPI(`/devices${query}`);
+  getAll: (includeInactive: boolean = false, deviceType?: string): Promise<Device[]> => {
+    const params = new URLSearchParams();
+    if (includeInactive) params.append('include_inactive', 'true');
+    if (deviceType) params.append('device_type', deviceType);
+    const query = params.toString();
+    return fetchAPI(`/devices${query ? `?${query}` : ''}`);
   },
 
   /**
@@ -1381,6 +1385,55 @@ export const imagesAPI = {
    */
   uploadFiles: (surveyId: number, files: File[]): Promise<CameraTrapImage[]> => {
     return uploadMediaFiles(`/surveys/${surveyId}/images`, files);
+  },
+
+  /**
+   * Upload image files with optional metadata and skip_processing flag.
+   * Used by the camera trap wizard to upload only selected images without AI processing.
+   */
+  uploadFilesWithMetadata: (
+    surveyId: number,
+    files: File[],
+    timestamps?: Record<string, string>,
+    skipProcessing?: boolean
+  ): Promise<CameraTrapImage[]> => {
+    const params = new URLSearchParams();
+    if (skipProcessing) params.append('skip_processing', 'true');
+    const query = params.toString();
+    const endpoint = `/surveys/${surveyId}/images${query ? `?${query}` : ''}`;
+
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    if (timestamps) {
+      formData.append('metadata', JSON.stringify(timestamps));
+    }
+
+    const token = getAuthToken();
+    const headers: Record<string, string> = {
+      'X-Org-Slug': ORG_SLUG,
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) {
+        let errorMessage = `Upload failed: ${response.status}`;
+        try {
+          const error = await response.json();
+          if (error.detail) {
+            errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+          }
+        } catch { /* ignore parse error */ }
+        throw new Error(errorMessage);
+      }
+      return response.json();
+    });
   },
 
   /**
