@@ -6,7 +6,7 @@ from pathlib import Path
 import birdnet
 
 LOCATION_FILTER_THRESHOLD = 0.03
-MIN_CONFIDENCE = 0.25
+MIN_CONFIDENCE = 0.80
 
 # BirdNET uses outdated scientific names for some species.
 # Maps BirdNET scientific name -> DB scientific name.
