@@ -84,7 +84,7 @@ SPECIES_CONFIG = {
                 "name": "Spiders",
                 "api_filter": "taxonGroup_s:\"spider (Araneae)\"",
                 "min_occurrence": 0,
-                "require_common_name": True  # Spiders need common names
+                "require_common_name": False  # Include spiders without common names
             },
             {
                 "name": "Harvestmen",
