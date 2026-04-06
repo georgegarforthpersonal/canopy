@@ -6,6 +6,7 @@ Usage:
     ./dev-run migrate_species.py -s butterflies --no-dry-run # Apply to database
     ./dev-run migrate_species.py -s birds --export file.json --no-dry-run
     ./dev-run migrate_species.py -s spiders                  # Dry-run for spiders and harvestmen
+    ./dev-run migrate_species.py -s spiders --add-only --no-dry-run  # Only add new species, skip updates
     ./dev-run migrate_species.py -s mammals                  # Dry-run for mammals
     ./dev-run migrate_species.py -s bats                     # Dry-run for bats
     ./dev-run migrate_species.py -s reptiles                 # Dry-run for reptiles
@@ -77,7 +78,7 @@ SPECIES_CONFIG = {
     "spiders": {
         "db_type": "spider",
         "display_name": "Spiders and Harvestmen",
-        "allowed_ranks": ["species", "genus", "family"],  # Include family/genus (e.g., "crab spiders", "Zebra Spider")
+        "allowed_ranks": ["species"],  # Include family/genus (e.g., "crab spiders", "Zebra Spider")
         # Subgroups allow different filter criteria for spiders vs harvestmen
         "subgroups": [
             {
@@ -1327,7 +1328,8 @@ def final_confirmation(dry_run: bool, update_count: int, insert_count: int) -> b
     logger.info("⚠️  FINAL CONFIRMATION REQUIRED")
     logger.info("="*80)
     logger.info("You are about to MODIFY THE DATABASE:")
-    logger.info(f"  • Update {update_count} existing species with NBN Atlas data")
+    if update_count > 0:
+        logger.info(f"  • Update {update_count} existing species with NBN Atlas data")
     logger.info(f"  • Insert {insert_count} new species")
     logger.info("")
     logger.info("This operation will commit changes to the database.")
@@ -1343,11 +1345,12 @@ def apply_migration(
     approved_low_confidence: list[MatchResult],
     approved_new_species: list[APISpecies],
     species_type: str,
-    dry_run: bool
+    dry_run: bool,
+    add_only: bool = False
 ) -> bool:
     """Apply migration to database (or show dry-run summary)."""
     high_confidence = [r for r in results if r.match_type == "high_confidence"]
-    updates = high_confidence + approved_low_confidence
+    updates = [] if add_only else high_confidence + approved_low_confidence
     update_count = len(updates)
     insert_count = len(approved_new_species)
 
@@ -1470,7 +1473,7 @@ def print_mode_banner(dry_run: bool):
         logger.info("="*80 + "\n")
 
 
-def main(species_type: str, dry_run: bool = True, export_file: Optional[str] = None):
+def main(species_type: str, dry_run: bool = True, export_file: Optional[str] = None, add_only: bool = False):
     """
     Main script execution with full workflow.
 
@@ -1485,6 +1488,10 @@ def main(species_type: str, dry_run: bool = True, export_file: Optional[str] = N
     try:
         # Print mode banner
         print_mode_banner(dry_run)
+
+        if add_only:
+            logger.info("ADD-ONLY MODE: Will only insert new species, existing species will not be updated.")
+            logger.info("")
 
         config = SPECIES_CONFIG[species_type]
         logger.info(f"Processing: {config['display_name']}")
@@ -1625,7 +1632,8 @@ def main(species_type: str, dry_run: bool = True, export_file: Optional[str] = N
             approved_low_confidence,
             approved_new_species,
             species_type,
-            dry_run
+            dry_run,
+            add_only
         )
 
         return 0 if success else 1
@@ -1657,9 +1665,15 @@ if __name__ == "__main__":
         type=str,
         help="Export results to specific JSON file (default: auto-generated with timestamp)"
     )
+    parser.add_argument(
+        "--add-only",
+        action="store_true",
+        default=False,
+        help="Only add new species, skip updating existing species"
+    )
 
     args = parser.parse_args()
 
     # The arg_parser already provides args.dry_run
-    exit_code = main(args.species_type, dry_run=args.dry_run, export_file=args.export)
+    exit_code = main(args.species_type, dry_run=args.dry_run, export_file=args.export, add_only=args.add_only)
     sys.exit(exit_code)
