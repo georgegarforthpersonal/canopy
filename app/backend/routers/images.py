@@ -53,6 +53,7 @@ from models import (
     Species,
     Survey,
     SurveyImageDetectionsResponse,
+    SurveyTypeSpeciesTypeLink,
 )
 from services.r2_storage import (
     delete_image_file,
@@ -186,6 +187,142 @@ async def filter_images_for_false_positives(
         "empty_count": empty_count,
         "person_count": person_count,
     }
+
+
+@filter_router.post("/classify-species")
+async def classify_species(
+    files: List[UploadFile] = File(...),
+    detections_json: str = Form(...),
+    survey_type_id: int = Form(...),
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Classify species in camera trap images using cropped bounding boxes.
+
+    Accepts image files alongside JSON metadata describing bounding boxes
+    (from MegaDetector). Each image is cropped to its animal bounding boxes,
+    classified with EVA02, and predictions are matched against the species
+    database filtered by survey type.
+    """
+    from PIL import Image as PILImage
+
+    from services.camera_trap import crop_and_classify, get_classifier
+
+    classifier = get_classifier()
+    if not classifier.load():
+        raise HTTPException(
+            status_code=503,
+            detail="Species classification model failed to load. Try again or skip detection.",
+        )
+
+    try:
+        detections_list = json.loads(detections_json)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid detections_json format")
+
+    if len(detections_list) != len(files):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Mismatch: {len(files)} files but {len(detections_list)} detection entries",
+        )
+
+    # Load species for this survey type (same query as species router)
+    survey_species = (
+        db.query(Species)
+        .join(
+            SurveyTypeSpeciesTypeLink,
+            SurveyTypeSpeciesTypeLink.species_type_id == Species.species_type_id,
+        )
+        .filter(SurveyTypeSpeciesTypeLink.survey_type_id == survey_type_id)
+        .all()
+    )
+
+    # Build lookup indices for matching
+    sci_name_map: dict[str, Species] = {}
+    genus_map: dict[str, Species] = {}
+    for sp in survey_species:
+        if sp.scientific_name:
+            sci_name_map[sp.scientific_name.lower()] = sp
+            genus = sp.scientific_name.lower().split()[0] if " " in sp.scientific_name else ""
+            if genus:
+                genus_map[genus] = sp  # Last one wins — genus-level fallback only
+
+    def match_species(scientific_name: str, common_name: str) -> dict:
+        """Match a prediction to the species DB. Returns species_id + display name."""
+        sci_lower = scientific_name.lower()
+
+        # 1. Exact match on scientific name
+        if sci_lower in sci_name_map:
+            sp = sci_name_map[sci_lower]
+            return {"species_id": sp.id, "species_name": sp.name or common_name}
+
+        # 2. Prefix match (e.g. "Vulpes vulpes vulpes" -> "Vulpes vulpes")
+        for db_sci, sp in sci_name_map.items():
+            if sci_lower.startswith(db_sci) or db_sci.startswith(sci_lower):
+                return {"species_id": sp.id, "species_name": sp.name or common_name}
+
+        # 3. No match
+        return {"species_id": None, "species_name": common_name}
+
+    results = []
+
+    for file, detection_info in zip(files, detections_list):
+        ext = Path(file.filename or "unknown.jpg").suffix.lower()
+        if ext not in IMAGE_EXTENSIONS:
+            results.append({
+                "filename": file.filename,
+                "suggestions": [],
+                "error": f"Unsupported file type: {ext}",
+            })
+            continue
+
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=True) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp.flush()
+
+            try:
+                pil_image = PILImage.open(tmp.name)
+            except Exception as e:
+                results.append({
+                    "filename": file.filename,
+                    "suggestions": [],
+                    "error": f"Failed to open image: {e}",
+                })
+                continue
+
+            boxes = detection_info.get("boxes", [])
+            all_predictions = crop_and_classify(pil_image, boxes, top_k=3)
+
+            # Collect best prediction per box, deduplicate by species
+            seen_species: set[str] = set()
+            suggestions = []
+
+            for preds in all_predictions:
+                if not preds:
+                    continue
+                top = preds[0]
+                sci_key = top["scientific_name"].lower()
+                if sci_key in seen_species:
+                    continue
+                seen_species.add(sci_key)
+
+                match = match_species(top["scientific_name"], top["common_name"])
+                suggestions.append({
+                    "scientific_name": top["scientific_name"],
+                    "common_name": top["common_name"],
+                    "confidence": round(top["confidence"], 4),
+                    "species_id": match["species_id"],
+                    "species_name": match["species_name"],
+                })
+
+            results.append({
+                "filename": file.filename,
+                "suggestions": suggestions,
+            })
+
+    return {"results": results}
 
 
 @router.get("/{survey_id}/images", response_model=List[CameraTrapImageRead])

@@ -101,15 +101,16 @@ class SpeciesClassifier:
             logger.error(f"Failed to load model: {e}")
             return False
 
-    def predict(self, image_path: Path, top_k: int = 5) -> list[dict]:
+    def predict_from_pil(self, image: Image.Image, top_k: int = 5) -> list[dict]:
+        """Run species prediction on an already-opened PIL Image."""
         if not self._loaded and not self.load():
             return []
 
         import torch
 
         try:
-            image = Image.open(image_path).convert("RGB")
-            img_tensor = self.transform(image).unsqueeze(0)
+            rgb = image.convert("RGB")
+            img_tensor = self.transform(rgb).unsqueeze(0)
 
             with torch.no_grad():
                 outputs = self.model(img_tensor)
@@ -134,7 +135,18 @@ class SpeciesClassifier:
 
             return predictions
         except Exception as e:
-            logger.error(f"Prediction failed for {image_path}: {e}")
+            logger.error(f"Prediction failed: {e}")
+            return []
+
+    def predict(self, image_path: Path, top_k: int = 5) -> list[dict]:
+        if not self._loaded and not self.load():
+            return []
+
+        try:
+            image = Image.open(image_path).convert("RGB")
+            return self.predict_from_pil(image, top_k)
+        except Exception as e:
+            logger.error(f"Failed to open image {image_path}: {e}")
             return []
 
 
@@ -146,6 +158,61 @@ def get_classifier() -> SpeciesClassifier:
     if _classifier is None:
         _classifier = SpeciesClassifier()
     return _classifier
+
+
+def crop_and_classify(
+    image: Image.Image,
+    boxes: list[dict],
+    padding_fraction: float = 0.15,
+    top_k: int = 3,
+) -> list[list[dict]]:
+    """Crop image to each bounding box (with padding) and classify each crop.
+
+    Args:
+        image: PIL Image already opened.
+        boxes: List of dicts with normalised coords {x, y, w, h} (0-1).
+        padding_fraction: Fraction of box size to add as padding.
+        top_k: Number of top predictions per crop.
+
+    Returns:
+        List of prediction lists, one per box. If boxes is empty, classifies
+        the full image and returns a single-element list.
+    """
+    classifier = get_classifier()
+    if not classifier.load():
+        logger.error("Failed to load classifier for crop_and_classify")
+        return []
+
+    rgb = image.convert("RGB")
+    img_w, img_h = rgb.size
+
+    if not boxes:
+        predictions = classifier.predict_from_pil(rgb, top_k)
+        return [predictions]
+
+    results: list[list[dict]] = []
+    for box in boxes:
+        bx, by, bw, bh = box["x"], box["y"], box["w"], box["h"]
+
+        # Convert normalised coords to pixels
+        px = bx * img_w
+        py = by * img_h
+        pw = bw * img_w
+        ph = bh * img_h
+
+        # Add padding
+        pad_x = pw * padding_fraction
+        pad_y = ph * padding_fraction
+        left = max(0, px - pad_x)
+        top = max(0, py - pad_y)
+        right = min(img_w, px + pw + pad_x)
+        bottom = min(img_h, py + ph + pad_y)
+
+        crop = rgb.crop((int(left), int(top), int(right), int(bottom)))
+        predictions = classifier.predict_from_pil(crop, top_k)
+        results.append(predictions)
+
+    return results
 
 
 def _get_image_timestamp(image_path: Path) -> datetime | None:

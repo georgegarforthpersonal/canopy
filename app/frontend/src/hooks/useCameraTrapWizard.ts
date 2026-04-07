@@ -16,6 +16,7 @@ import type {
   Device,
   CameraTrapImage,
   ImageFilterResult,
+  SpeciesPrediction,
 } from '../services/api';
 import exifr from 'exifr';
 
@@ -37,6 +38,15 @@ export interface Classification {
 
 /** User override for a single image in the filter step */
 export type FilterOverride = 'include' | 'exclude';
+
+/** AI species suggestion from the classify-species endpoint */
+export interface AiSuggestion {
+  speciesId: number | null;
+  speciesName: string;
+  scientificName: string;
+  confidence: number;
+  dismissed: boolean;
+}
 
 export const WIZARD_STEPS = ['Setup', 'Upload', 'Filter', 'Classify', 'Review', 'Save'] as const;
 
@@ -161,6 +171,13 @@ export function useCameraTrapWizard() {
   const speciesInputRef = useRef<HTMLInputElement>(null);
   const thumbnailStripRef = useRef<HTMLDivElement>(null);
   const [classifyViewerOpen, setClassifyViewerOpen] = useState(false);
+
+  // ---- AI Species Detection ----
+  const [detecting, setDetecting] = useState(false);
+  const [detectProgress, setDetectProgress] = useState({ processed: 0, total: 0 });
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<Map<number, AiSuggestion[]>>(new Map());
+  const [detectedImageSet, setDetectedImageSet] = useState<ImageFile[] | null>(null);
 
   // ---- Step 5: Review ----
   const [deselectedImages, setDeselectedImages] = useState<Set<string>>(new Set());
@@ -365,6 +382,125 @@ export function useCameraTrapWizard() {
     });
   }, []);
 
+
+  // ============================================================================
+  // AI Species Detection
+  // ============================================================================
+
+  const DETECT_BATCH_SIZE = 5;
+
+  const runSpeciesDetection = useCallback(async () => {
+    if (filteredImageFiles.length === 0 || !selectedSurveyType) return;
+
+    setDetecting(true);
+    setDetectError(null);
+    setAiSuggestions(new Map());
+    setDetectProgress({ processed: 0, total: filteredImageFiles.length });
+
+    try {
+      const suggestions = new Map<number, AiSuggestion[]>();
+
+      for (let i = 0; i < filteredImageFiles.length; i += DETECT_BATCH_SIZE) {
+        const batch = filteredImageFiles.slice(i, i + DETECT_BATCH_SIZE);
+        const batchFiles = batch.map((img) => img.file);
+
+        // Build detections metadata — only animal bounding boxes
+        const batchDetections = batch.map((_, batchIdx) => {
+          const origIdx = filteredToOriginalIndex[i + batchIdx];
+          const result = filterResults.get(origIdx);
+          const animalBoxes = (result?.detections || [])
+            .filter((d) => d.category === 'animal')
+            .map((d) => ({ x: d.x, y: d.y, w: d.w, h: d.h }));
+          return { boxes: animalBoxes };
+        });
+
+        const response = await imagesAPI.classifySpecies(
+          batchFiles,
+          batchDetections,
+          selectedSurveyType.id,
+        );
+
+        response.results.forEach((result, batchIdx) => {
+          const origIdx = filteredToOriginalIndex[i + batchIdx];
+          const imgSuggestions: AiSuggestion[] = result.suggestions.map((s) => ({
+            speciesId: s.species_id,
+            speciesName: s.species_name,
+            scientificName: s.scientific_name,
+            confidence: s.confidence,
+            dismissed: false,
+          }));
+
+          if (imgSuggestions.length > 0) {
+            suggestions.set(origIdx, imgSuggestions);
+          }
+        });
+
+        setDetectProgress({
+          processed: Math.min(i + DETECT_BATCH_SIZE, filteredImageFiles.length),
+          total: filteredImageFiles.length,
+        });
+        setAiSuggestions(new Map(suggestions));
+      }
+
+      setDetectedImageSet(filteredImageFiles);
+    } catch (err: unknown) {
+      setDetectError(err instanceof Error ? err.message : 'Failed to detect species');
+    } finally {
+      setDetecting(false);
+    }
+  }, [filteredImageFiles, filteredToOriginalIndex, filterResults, selectedSurveyType]);
+
+  // Auto-trigger species detection when entering the Classify step
+  useEffect(() => {
+    if (activeStep !== 3 || detecting || detectError) return;
+    if (filteredImageFiles.length === 0) return;
+    const needsRun = detectedImageSet !== filteredImageFiles;
+    if (needsRun) {
+      runSpeciesDetection();
+    }
+  }, [activeStep, detecting, detectError, filteredImageFiles, detectedImageSet, runSpeciesDetection]);
+
+  const acceptSuggestion = useCallback(
+    (origIdx: number, suggestion: AiSuggestion) => {
+      if (suggestion.speciesId == null) return;
+      // Add to classifications using existing classifyImage logic
+      setClassifications((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(origIdx) || [];
+        if (existing.some((c) => c.speciesId === suggestion.speciesId)) return prev;
+        next.set(origIdx, [...existing, { speciesId: suggestion.speciesId!, speciesName: suggestion.speciesName }]);
+        return next;
+      });
+      // Mark suggestion as dismissed so it disappears from suggestion chips
+      setAiSuggestions((prev) => {
+        const next = new Map(prev);
+        const updated = (next.get(origIdx) || []).map((s) =>
+          s.scientificName === suggestion.scientificName ? { ...s, dismissed: true } : s,
+        );
+        next.set(origIdx, updated);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const dismissSuggestion = useCallback((origIdx: number, scientificName: string) => {
+    setAiSuggestions((prev) => {
+      const next = new Map(prev);
+      const updated = (next.get(origIdx) || []).map((s) =>
+        s.scientificName === scientificName ? { ...s, dismissed: true } : s,
+      );
+      next.set(origIdx, updated);
+      return next;
+    });
+  }, []);
+
+  const skipDetection = useCallback(() => {
+    setDetecting(false);
+    setDetectError(null);
+    setAiSuggestions(new Map());
+    setDetectedImageSet(filteredImageFiles);
+  }, [filteredImageFiles]);
 
   // ============================================================================
   // Step 4: Classification helpers
@@ -668,6 +804,9 @@ export function useCameraTrapWizard() {
     setCurrentImageIndex(0);
     setClassifications(new Map());
     setViewedImages(new Set());
+    setAiSuggestions(new Map());
+    setDetectError(null);
+    setDetectedImageSet(null);
     setActiveStep(3);
   }, []);
 
@@ -681,6 +820,9 @@ export function useCameraTrapWizard() {
     setCurrentImageIndex(0);
     setClassifications(new Map());
     setViewedImages(new Set());
+    setAiSuggestions(new Map());
+    setDetectError(null);
+    setDetectedImageSet(null);
   }, [imageFiles]);
 
   return {
@@ -721,6 +863,17 @@ export function useCameraTrapWizard() {
     runFiltering,
     toggleFilterOverride,
     filterDerived,
+
+    // AI Detection
+    detecting,
+    detectProgress,
+    detectError,
+    setDetectError,
+    aiSuggestions,
+    acceptSuggestion,
+    dismissSuggestion,
+    skipDetection,
+    runSpeciesDetection,
 
     // Classify
     filteredImageFiles,

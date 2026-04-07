@@ -11,11 +11,15 @@ import {
   LinearProgress,
   IconButton,
   Chip,
+  Tooltip,
 } from '@mui/material';
 import {
   ArrowBack,
   ArrowForward,
   CheckCircle,
+  SmartToy,
+  Check,
+  Close,
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
@@ -25,6 +29,12 @@ import { useArrowKeyNavigation } from '../../hooks/useArrowKeyNavigation';
 
 interface ClassifyStepProps {
   wizard: CameraTrapWizardState;
+}
+
+function confidenceColor(confidence: number): 'success' | 'warning' | 'error' {
+  if (confidence >= 0.7) return 'success';
+  if (confidence >= 0.4) return 'warning';
+  return 'error';
 }
 
 export function ClassifyStep({ wizard }: ClassifyStepProps) {
@@ -39,12 +49,20 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
     goToPrev, goToNext, goToNextUnviewed,
     viewedImages, viewedCount, uniqueSpeciesCount, remainingCount,
     canProceed, setActiveStep,
+    detecting, detectProgress, detectError, setDetectError,
+    aiSuggestions, acceptSuggestion, dismissSuggestion,
+    skipDetection, runSpeciesDetection,
   } = wizard;
 
   const currentImage = filteredImageFiles[currentImageIndex];
   const origIdx = filteredToOriginalIndex[currentImageIndex];
   const currentClassifications = classifications.get(origIdx);
   const detections = origIdx !== undefined ? filterResults.get(origIdx)?.detections : undefined;
+
+  // AI suggestions for the current image (non-dismissed only)
+  const currentSuggestions = origIdx !== undefined
+    ? (aiSuggestions.get(origIdx) || []).filter((s) => !s.dismissed)
+    : [];
 
   // Keyboard navigation — only when species search is empty
   const shouldHandle = useCallback(
@@ -69,6 +87,44 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
 
   return (
     <Paper sx={{ p: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
+      {/* AI Detection progress */}
+      {detecting && (
+        <Alert severity="info" sx={{ mb: 2 }} action={
+          <Button size="small" onClick={skipDetection} sx={{ textTransform: 'none' }}>
+            Skip
+          </Button>
+        }>
+          <Typography variant="body2" sx={{ mb: 0.5 }}>
+            Identifying species... {detectProgress.processed} of {detectProgress.total} images
+          </Typography>
+          <LinearProgress
+            variant="determinate"
+            value={detectProgress.total > 0 ? (detectProgress.processed / detectProgress.total) * 100 : 0}
+            sx={{ height: 4, borderRadius: 2 }}
+          />
+        </Alert>
+      )}
+
+      {/* AI Detection error */}
+      {detectError && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            <Stack direction="row" spacing={1}>
+              <Button size="small" onClick={() => { setDetectError(null); runSpeciesDetection(); }} sx={{ textTransform: 'none' }}>
+                Retry
+              </Button>
+              <Button size="small" onClick={skipDetection} sx={{ textTransform: 'none' }}>
+                Skip
+              </Button>
+            </Stack>
+          }
+        >
+          AI detection failed: {detectError}
+        </Alert>
+      )}
+
       {/* Progress bar */}
       <Box sx={{ mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
@@ -98,6 +154,52 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
               onDelete={() => removeClassification(origIdx, cls.speciesId)}
             />
           ))}
+        </Stack>
+      )}
+
+      {/* AI suggestion chips */}
+      {currentSuggestions.length > 0 && (
+        <Stack direction="row" spacing={0.5} sx={{ mb: 1, flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+          <SmartToy sx={{ fontSize: 16, color: 'text.secondary', mr: 0.5 }} />
+          {currentSuggestions.map((s) => {
+            const isMatchable = s.speciesId != null;
+            return (
+              <Chip
+                key={s.scientificName}
+                icon={<SmartToy sx={{ fontSize: '14px !important' }} />}
+                label={`${s.speciesName} ${(s.confidence * 100).toFixed(0)}%`}
+                size="small"
+                variant="outlined"
+                color={confidenceColor(s.confidence)}
+                deleteIcon={
+                  <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+                    {isMatchable && (
+                      <Tooltip title="Accept">
+                        <IconButton
+                          size="small"
+                          sx={{ p: 0.25 }}
+                          onClick={(e) => { e.stopPropagation(); acceptSuggestion(origIdx, s); }}
+                        >
+                          <Check sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    <Tooltip title="Dismiss">
+                      <IconButton
+                        size="small"
+                        sx={{ p: 0.25 }}
+                        onClick={(e) => { e.stopPropagation(); dismissSuggestion(origIdx, s.scientificName); }}
+                      >
+                        <Close sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                }
+                onDelete={() => {}} // Required for deleteIcon to render
+                sx={!isMatchable ? { opacity: 0.6 } : undefined}
+              />
+            );
+          })}
         </Stack>
       )}
 
@@ -219,7 +321,10 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
         }}
       >
         {filteredImageFiles.map((img, idx) => {
-          const hasClassifications = (classifications.get(filteredToOriginalIndex[idx])?.length ?? 0) > 0;
+          const thumbOrigIdx = filteredToOriginalIndex[idx];
+          const hasClassifications = (classifications.get(thumbOrigIdx)?.length ?? 0) > 0;
+          const hasPendingSuggestions = !hasClassifications &&
+            (aiSuggestions.get(thumbOrigIdx) || []).some((s) => !s.dismissed);
           const isViewed = viewedImages.has(idx);
           const isCurrent = idx === currentImageIndex;
           return (
@@ -255,6 +360,20 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
                     color: 'success.main',
                     bgcolor: 'white',
                     borderRadius: '50%',
+                  }}
+                />
+              )}
+              {hasPendingSuggestions && (
+                <SmartToy
+                  sx={{
+                    position: 'absolute',
+                    top: 1,
+                    right: 1,
+                    fontSize: 14,
+                    color: 'info.main',
+                    bgcolor: 'white',
+                    borderRadius: '50%',
+                    p: '1px',
                   }}
                 />
               )}

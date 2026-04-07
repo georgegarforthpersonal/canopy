@@ -1423,6 +1423,24 @@ export interface FilterResultsResponse {
   person_count: number;
 }
 
+export interface SpeciesPrediction {
+  scientific_name: string;
+  common_name: string;
+  confidence: number;
+  species_id: number | null;
+  species_name: string;
+}
+
+export interface ImageClassifyResult {
+  filename: string;
+  suggestions: SpeciesPrediction[];
+  error?: string;
+}
+
+export interface ClassifySpeciesResponse {
+  results: ImageClassifyResult[];
+}
+
 export interface CameraTrapDetection {
   id: number;
   species_name: string;
@@ -1485,6 +1503,48 @@ export const imagesAPI = {
     }).then(async (response) => {
       if (!response.ok) {
         let errorMessage = `Filter failed: ${response.status}`;
+        try {
+          const error = await response.json();
+          if (error.detail) {
+            errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+          }
+        } catch { /* ignore parse error */ }
+        throw new Error(errorMessage);
+      }
+      return response.json();
+    });
+  },
+
+  /**
+   * Classify species in images using cropped bounding boxes from MegaDetector.
+   * Returns AI suggestions matched against the species database.
+   */
+  classifySpecies: (
+    files: File[],
+    detections: Array<{ boxes: Array<{ x: number; y: number; w: number; h: number }> }>,
+    surveyTypeId: number,
+  ): Promise<ClassifySpeciesResponse> => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    formData.append('detections_json', JSON.stringify(detections));
+    formData.append('survey_type_id', String(surveyTypeId));
+
+    const token = getAuthToken();
+    const headers: Record<string, string> = {
+      'X-Org-Slug': ORG_SLUG,
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return fetch(`${API_BASE_URL}/surveys/classify-species`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) {
+        let errorMessage = `Classification failed: ${response.status}`;
         try {
           const error = await response.json();
           if (error.detail) {
