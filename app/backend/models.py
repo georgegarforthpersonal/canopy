@@ -407,6 +407,7 @@ class SurveyTypeBase(SQLModel):
     allow_sighting_notes: bool = Field(default=True, description="Whether notes can be entered for individual sightings")
     allow_audio_upload: bool = Field(default=False, description="Whether audio files can be uploaded for this survey type")
     allow_image_upload: bool = Field(default=False, description="Whether camera trap images can be uploaded for this survey type")
+    fetch_weather: bool = Field(default=False, description="Fetch weather from Open-Meteo on survey creation")
     icon: Optional[str] = Field(None, max_length=50, description="Lucide icon identifier (deprecated)")
     color: Optional[str] = Field(None, max_length=20, description="Notion-style color key (e.g., 'blue', 'purple')")
 
@@ -452,6 +453,7 @@ class SurveyTypeUpdate(SQLModel):
     allow_sighting_notes: Optional[bool] = None
     allow_audio_upload: Optional[bool] = None
     allow_image_upload: Optional[bool] = None
+    fetch_weather: Optional[bool] = None
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
@@ -500,6 +502,11 @@ class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
         nullable=False,
         sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
     )
+    weather_snapshot: Optional[dict] = Field(
+        default=None,
+        sa_column=sa.Column(sa.JSON, nullable=True),
+        description="Weather conditions at survey time from Open-Meteo"
+    )
 
     # Relationships
     organisation: Optional["Organisation"] = Relationship(back_populates="surveys")
@@ -540,6 +547,7 @@ class SurveyRead(SurveyBase):
     """Model for reading a survey (includes ID and surveyors)"""
     id: int
     surveyor_ids: List[int] = Field(default_factory=list, description="List of surveyor IDs")
+    weather_snapshot: Optional[dict] = Field(default=None, description="Weather conditions at survey time")
 
 
 class SpeciesTypeCount(SQLModel):

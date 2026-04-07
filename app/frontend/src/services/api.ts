@@ -265,6 +265,17 @@ export interface SpeciesTypeCount {
   count: number; // Number of sightings of this type
 }
 
+export interface WeatherSnapshot {
+  temperature_c: number;
+  precipitation_mm: number;
+  wind_speed_kmh: number;
+  cloud_cover_percent: number;
+  weather_description: string;
+  latitude: number;
+  longitude: number;
+  fetched_at: string;
+}
+
 export interface Survey {
   id: number;
   date: string;
@@ -283,6 +294,7 @@ export interface Survey {
   survey_type_name: string | null;
   survey_type_icon: string | null;
   survey_type_color: string | null;
+  weather_snapshot: WeatherSnapshot | null;
 }
 
 /**
@@ -478,6 +490,7 @@ export interface SurveyType {
   allow_sighting_notes: boolean;
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
+  fetch_weather: boolean;
   icon: string | null;
   color: string | null;
   is_active: boolean;
@@ -502,6 +515,7 @@ export interface SurveyTypeCreate {
   allow_sighting_notes: boolean;
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
+  fetch_weather: boolean;
   icon?: string;
   color?: string;
   location_ids: number[];
@@ -519,6 +533,7 @@ export interface SurveyTypeUpdate {
   allow_sighting_notes?: boolean;
   allow_audio_upload?: boolean;
   allow_image_upload?: boolean;
+  fetch_weather?: boolean;
   icon?: string;
   color?: string;
   is_active?: boolean;

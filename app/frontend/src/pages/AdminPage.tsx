@@ -121,6 +121,7 @@ export function AdminPage() {
   const [formAllowSightingNotes, setFormAllowSightingNotes] = useState(true);
   const [formAllowAudioUpload, setFormAllowAudioUpload] = useState(false);
   const [formAllowImageUpload, setFormAllowImageUpload] = useState(false);
+  const [formFetchWeather, setFormFetchWeather] = useState(false);
   const [formColor, setFormColor] = useState<string | null>(null);
   const [formSelectedLocations, setFormSelectedLocations] = useState<Location[]>([]);
   const [formSelectedSpeciesTypes, setFormSelectedSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
@@ -317,6 +318,7 @@ export function AdminPage() {
       setFormAllowSightingNotes(details.allow_sighting_notes);
       setFormAllowAudioUpload(details.allow_audio_upload);
       setFormAllowImageUpload(details.allow_image_upload);
+      setFormFetchWeather(details.fetch_weather);
       setFormColor(details.color);
       setFormSelectedLocations(details.locations);
       setFormSelectedSpeciesTypes(details.species_types);
@@ -334,6 +336,7 @@ export function AdminPage() {
     setFormAllowSightingNotes(true);
     setFormAllowAudioUpload(false);
     setFormAllowImageUpload(false);
+    setFormFetchWeather(false);
     setFormColor(null);
     setFormSelectedLocations([]);
     setFormSelectedSpeciesTypes([]);
@@ -366,6 +369,7 @@ export function AdminPage() {
         allow_sighting_notes: formAllowSightingNotes,
         allow_audio_upload: formAllowAudioUpload,
         allow_image_upload: formAllowImageUpload,
+        fetch_weather: formFetchWeather,
         color: formColor || undefined,
         location_ids: formSelectedLocations.map((l) => l.id),
         species_type_ids: formSelectedSpeciesTypes.map((st) => st.id),
@@ -1146,6 +1150,23 @@ export function AdminPage() {
               {formAllowImageUpload
                 ? 'Users can upload camera trap images for analysis'
                 : 'Image upload is disabled for this survey type'}
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formFetchWeather}
+                  onChange={(e) => setFormFetchWeather(e.target.checked)}
+                  disabled={savingSurveyType}
+                />
+              }
+              label="Fetch weather on creation"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+              {formFetchWeather
+                ? 'Weather conditions will be recorded automatically from Open-Meteo'
+                : 'No weather data will be captured for this survey type'}
             </Typography>
           </Box>
           {!formAllowImageUpload && (

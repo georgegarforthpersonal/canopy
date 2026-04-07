@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon } from '@mui/icons-material';
+import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useAuth } from '../context/AuthContext';
 import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI } from '../services/api';
@@ -679,6 +679,61 @@ export function SurveyDetailPage() {
             </Stack>
           )}
         </Paper>
+
+        {/* Weather Snapshot Card */}
+        {!isEditMode && survey.weather_snapshot && (
+          <Paper
+            sx={{
+              p: { xs: 2, sm: 2.5, md: 3 },
+              mb: { xs: 2, md: 3 },
+              boxShadow: 'none',
+              border: '1px solid',
+              borderColor: 'divider'
+            }}
+          >
+            <Typography variant="overline" sx={{ mb: 1.5, display: 'block', fontWeight: 600 }}>
+              Weather at Survey Time
+            </Typography>
+
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+              <WbSunny sx={{ fontSize: 20, color: 'text.secondary' }} />
+              <Typography variant="body1" fontWeight={500}>
+                {survey.weather_snapshot.weather_description}
+              </Typography>
+            </Stack>
+
+            <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+              <Box sx={{ flex: 1, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" display="block">Temp</Typography>
+                <Typography variant="body1" fontWeight={600}>
+                  {survey.weather_snapshot.temperature_c}<Typography component="span" variant="body2" color="text.secondary">&deg;C</Typography>
+                </Typography>
+              </Box>
+              <Box sx={{ flex: 1, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" display="block">Precip</Typography>
+                <Typography variant="body1" fontWeight={600}>
+                  {survey.weather_snapshot.precipitation_mm}<Typography component="span" variant="body2" color="text.secondary">mm</Typography>
+                </Typography>
+              </Box>
+              <Box sx={{ flex: 1, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" display="block">Wind</Typography>
+                <Typography variant="body1" fontWeight={600}>
+                  {survey.weather_snapshot.wind_speed_kmh}<Typography component="span" variant="body2" color="text.secondary">km/h</Typography>
+                </Typography>
+              </Box>
+              <Box sx={{ flex: 1, p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" display="block">Cloud</Typography>
+                <Typography variant="body1" fontWeight={600}>
+                  {survey.weather_snapshot.cloud_cover_percent}<Typography component="span" variant="body2" color="text.secondary">%</Typography>
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Typography variant="caption" color="text.secondary">
+              Fetched from Open-Meteo at survey start &middot; {Math.abs(survey.weather_snapshot.latitude).toFixed(3)}&deg;{survey.weather_snapshot.latitude >= 0 ? 'N' : 'S'}, {Math.abs(survey.weather_snapshot.longitude).toFixed(3)}&deg;{survey.weather_snapshot.longitude >= 0 ? 'E' : 'W'}
+            </Typography>
+          </Paper>
+        )}
 
         {/* Sightings Section */}
         <Paper

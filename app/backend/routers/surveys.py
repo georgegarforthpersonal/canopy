@@ -26,7 +26,7 @@ from auth import require_admin
 from dependencies import get_current_organisation
 import logging
 from models import (
-    Survey, SurveyRead, SurveyCreate, SurveyUpdate,
+    Survey, SurveyRead, SurveyCreate, SurveyUpdate, SurveyType,
     Sighting, SightingCreate, SightingUpdate, SightingWithDetails,
     Species, SpeciesType, Location, SurveySurveyor,
     BreedingStatusCode, BreedingStatusCodeRead,
@@ -35,6 +35,7 @@ from models import (
     AudioRecording, AudioDetection,
     Organisation
 )
+from clients.open_meteo import OpenMeteoClient
 from services.r2_storage import delete_media_file
 
 logger = logging.getLogger(__name__)
@@ -215,7 +216,8 @@ async def get_surveys(
                 "survey_type_id": survey.survey_type_id,
                 "survey_type_name": survey_type_name,
                 "survey_type_icon": survey_type_icon,
-                "survey_type_color": survey_type_color
+                "survey_type_color": survey_type_color,
+                "weather_snapshot": survey.weather_snapshot
             })
 
         return {
@@ -274,7 +276,8 @@ async def get_survey(
         "location_id": survey.location_id,
         "device_id": survey.device_id,
         "surveyor_ids": surveyor_ids_list,
-        "survey_type_id": survey.survey_type_id
+        "survey_type_id": survey.survey_type_id,
+        "weather_snapshot": survey.weather_snapshot
     }
 
 
@@ -311,6 +314,19 @@ async def create_survey(
         db.add(db_survey)
         db.flush()  # Get the ID without committing
 
+        # Fetch weather if survey type has fetch_weather enabled
+        if survey.survey_type_id:
+            survey_type = db.query(SurveyType).get(survey.survey_type_id)
+            if survey_type and survey_type.fetch_weather:
+                hour = survey.start_time.hour if survey.start_time else datetime.utcnow().hour
+                try:
+                    with OpenMeteoClient() as client:
+                        weather_snapshot = client.fetch_weather(hour)
+                    if weather_snapshot:
+                        db_survey.weather_snapshot = weather_snapshot
+                except Exception:
+                    pass  # Non-critical, survey created without weather
+
         # Insert surveyor associations
         for surveyor_id in survey.surveyor_ids:
             db_association = SurveySurveyor(
@@ -334,7 +350,8 @@ async def create_survey(
             "location_id": db_survey.location_id,
             "device_id": db_survey.device_id,
             "survey_type_id": db_survey.survey_type_id,
-            "surveyor_ids": survey.surveyor_ids
+            "surveyor_ids": survey.surveyor_ids,
+            "weather_snapshot": db_survey.weather_snapshot
         }
 
     except Exception as e:
