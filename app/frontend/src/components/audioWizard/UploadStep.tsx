@@ -18,13 +18,14 @@ interface UploadStepProps {
 export function UploadStep({ wizard }: UploadStepProps) {
   const {
     audioFiles, loadingFiles, fileInputRef, handleFileSelect,
-    processing, processProgress, processError, setProcessError, runProcessing,
+    processing, processPhase, processProgress, processError, setProcessError, fileErrors, runProcessing,
     detections, unmatchedSpecies, reviewData,
     canProceed, setActiveStep,
   } = wizard;
 
   const hasFiles = audioFiles.length > 0;
   const isProcessed = !processing && detections.length > 0;
+  const phaseLabel = processPhase === 'uploading' ? 'Uploading' : 'Analysing';
 
   return (
     <Paper sx={{ p: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
@@ -32,7 +33,7 @@ export function UploadStep({ wizard }: UploadStepProps) {
         Upload Audio Files
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Select WAV audio files from your recorder. Files will be analysed with BirdNET to detect species.
+        Select WAV audio files from your recorder. Files will be uploaded and analysed with BirdNET to detect species.
       </Typography>
 
       <input
@@ -92,7 +93,7 @@ export function UploadStep({ wizard }: UploadStepProps) {
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
             <CircularProgress size={20} />
             <Typography variant="body2" fontWeight={600}>
-              Analysing file {processProgress.processed + 1} of {processProgress.total}
+              {phaseLabel} file {Math.min(processProgress.processed + 1, processProgress.total)} of {processProgress.total}
             </Typography>
           </Stack>
           {processProgress.currentFilename && (
@@ -106,8 +107,8 @@ export function UploadStep({ wizard }: UploadStepProps) {
             sx={{ height: 6, borderRadius: 3 }}
           />
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {processProgress.processed} of {processProgress.total} files complete
-            {reviewData.length > 0 && <> &middot; {reviewData.length} species detected so far</>}
+            {processProgress.processed} of {processProgress.total} files {processPhase === 'uploading' ? 'uploaded' : 'analysed'}
+            {processPhase === 'analysing' && reviewData.length > 0 && <> &middot; {reviewData.length} species detected so far</>}
           </Typography>
         </Box>
       )}
@@ -124,6 +125,20 @@ export function UploadStep({ wizard }: UploadStepProps) {
           }
         >
           {processError}
+        </Alert>
+      )}
+
+      {/* Per-file errors (non-fatal) */}
+      {!processing && fileErrors.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+            {fileErrors.length} file{fileErrors.length !== 1 ? 's' : ''} had errors:
+          </Typography>
+          {fileErrors.map((err, i) => (
+            <Typography key={i} variant="body2" sx={{ fontSize: '0.85rem' }}>
+              {err}
+            </Typography>
+          ))}
         </Alert>
       )}
 

@@ -220,6 +220,67 @@ async function uploadMediaFiles<T>(endpoint: string, files: File[]): Promise<T> 
   return response.json();
 }
 
+/**
+ * Upload a single file via FormData (for temp upload endpoint which expects 'file' not 'files')
+ */
+async function uploadSingleFile<T>(endpoint: string, file: File): Promise<T> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'X-Org-Slug': ORG_SLUG,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let errorMessage = `Upload failed: ${response.status}`;
+    try {
+      const error = await response.json();
+      if (error.detail) {
+        errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+/**
+ * Retry wrapper with exponential backoff for unreliable operations.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 1000,
+): Promise<T> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < maxRetries) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -1288,6 +1349,11 @@ export interface AudioProcessingResponse {
   results: FileProcessingResult[];
 }
 
+export interface TempUploadResponse {
+  r2_key: string;
+  filename: string;
+}
+
 // ============================================================================
 // API Methods - Audio
 // ============================================================================
@@ -1371,6 +1437,38 @@ export const audioAPI = {
    */
   getDetectionsSummary: (surveyId: number): Promise<SurveyDetectionsSummaryResponse> => {
     return fetchAPI(`/surveys/${surveyId}/detections/summary`);
+  },
+
+  // ---- Decoupled wizard endpoints (upload → analyze → cleanup) ----
+
+  /**
+   * Upload a single audio file to R2 temporary storage for wizard processing.
+   */
+  uploadTempFile: (file: File): Promise<TempUploadResponse> => {
+    return uploadSingleFile('/surveys/process-audio/upload', file);
+  },
+
+  /**
+   * Analyze an audio file already in R2 with BirdNET.
+   */
+  analyzeTempFile: (r2Key: string, filename: string, lat?: number, lon?: number): Promise<FileProcessingResult> => {
+    const body: Record<string, unknown> = { r2_key: r2Key, filename };
+    if (lat != null) body.lat = lat;
+    if (lon != null) body.lon = lon;
+    return fetchAPI('/surveys/process-audio/analyze', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  /**
+   * Delete temporary audio files from R2 after wizard processing.
+   */
+  cleanupTempFiles: (r2Keys: string[]): Promise<{ deleted: number }> => {
+    return fetchAPI('/surveys/process-audio/cleanup', {
+      method: 'POST',
+      body: JSON.stringify({ r2_keys: r2Keys }),
+    });
   },
 };
 

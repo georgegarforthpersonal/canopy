@@ -3,6 +3,9 @@ Audio Recordings Router - API endpoints for bird audio analysis
 
 Endpoints:
   POST   /api/surveys/process-audio                  - Process audio files with BirdNET (no storage)
+  POST   /api/surveys/process-audio/upload           - Upload temp file to R2 for wizard processing
+  POST   /api/surveys/process-audio/analyze          - Analyze a file already in R2
+  POST   /api/surveys/process-audio/cleanup          - Delete temp files from R2
   GET    /api/surveys/{survey_id}/audio              - List audio recordings for survey
   POST   /api/surveys/{survey_id}/audio              - Upload audio file(s)
   GET    /api/surveys/{survey_id}/audio/{id}         - Get audio recording details
@@ -14,6 +17,7 @@ Endpoints:
 
 import logging
 import tempfile
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List
@@ -21,6 +25,7 @@ from typing import Any, List
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Body,
     Depends,
     File,
     HTTPException,
@@ -28,6 +33,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlmodel import col
@@ -56,9 +62,13 @@ from models import (
 )
 from services.r2_storage import (
     delete_audio_file,
+    delete_media_files,
     download_audio_file,
     generate_presigned_url,
     upload_audio_file,
+    upload_media_file,
+    download_media_file,
+    MediaType,
 )
 from utils.filename_parser import extract_media_info
 
@@ -159,6 +169,166 @@ async def process_audio_files(
             )
 
     return AudioProcessingResponse(results=results)
+
+
+# ============================================================================
+# Decoupled wizard endpoints: upload → analyze → cleanup
+# ============================================================================
+
+
+class TempUploadResponse(BaseModel):
+    r2_key: str
+    filename: str
+
+
+@router.post(
+    "/process-audio/upload",
+    response_model=TempUploadResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def upload_temp_audio(
+    file: UploadFile = File(...),
+    org: Organisation = Depends(get_current_organisation),
+) -> TempUploadResponse:
+    """
+    Upload a single audio file to R2 temporary storage for wizard processing.
+    Files are stored under temp-audio/{org_slug}/{uuid}/ and should be cleaned up after use.
+    """
+    if not file.filename or not file.filename.lower().endswith(".wav"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type: {file.filename}. Only WAV files accepted.",
+        )
+
+    session_id = uuid.uuid4().hex[:12]
+    temp_filename = f"{session_id}_{file.filename}"
+    r2_key = f"temp-audio/{org.slug}/{temp_filename}"
+
+    from services.r2_storage import get_r2_client
+    from config import settings
+
+    client = get_r2_client()
+    client.upload_fileobj(
+        file.file,
+        settings.r2_bucket_name,
+        r2_key,
+        ExtraArgs={"ContentType": "audio/wav"},
+    )
+
+    return TempUploadResponse(r2_key=r2_key, filename=file.filename)
+
+
+class AnalyzeRequest(BaseModel):
+    r2_key: str
+    filename: str
+    lat: float = DEFAULT_LAT
+    lon: float = DEFAULT_LON
+
+
+@router.post(
+    "/process-audio/analyze",
+    response_model=FileProcessingResult,
+    dependencies=[Depends(require_admin)],
+)
+async def analyze_temp_audio(
+    request: AnalyzeRequest,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> FileProcessingResult:
+    """
+    Analyze an audio file already uploaded to R2 with BirdNET.
+    Downloads from R2, processes, and returns detections. File remains in R2.
+    """
+    from services.bird_audio import analyze_file, get_db_scientific_name, get_location_species
+
+    # Validate the r2_key belongs to this org's temp space
+    expected_prefix = f"temp-audio/{org.slug}/"
+    if not request.r2_key.startswith(expected_prefix):
+        raise HTTPException(status_code=403, detail="Access denied to this file")
+
+    species_list = get_location_species(request.lat, request.lon)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        local_path = Path(tmpdir) / request.filename
+        try:
+            download_media_file(request.r2_key, local_path)
+        except Exception as e:
+            logger.exception(f"Failed to download {request.r2_key} from R2")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to download file from storage: {str(e)}",
+            )
+
+        try:
+            detections = analyze_file(local_path, species_list)
+        except Exception as e:
+            logger.exception(f"Error processing {request.filename}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to process {request.filename}: {str(e)}",
+            )
+
+        file_detections = []
+        unmatched = []
+        for det in detections:
+            scientific_name = get_db_scientific_name(det.species)
+            species = (
+                db.query(Species)
+                .join(Species.species_type)
+                .filter(
+                    Species.scientific_name == scientific_name,
+                    SpeciesType.name == "bird",
+                )
+                .first()
+            )
+
+            if species:
+                file_detections.append(
+                    AudioDetectionResult(
+                        species_name=det.species,
+                        species_id=species.id,
+                        species_common_name=species.name,
+                        species_scientific_name=species.scientific_name,
+                        confidence=det.confidence,
+                        start_time=det.start.strftime("%H:%M:%S"),
+                        end_time=det.end.strftime("%H:%M:%S"),
+                    )
+                )
+            else:
+                if det.species not in unmatched:
+                    unmatched.append(det.species)
+
+    return FileProcessingResult(
+        filename=request.filename,
+        detections=file_detections,
+        unmatched_species=unmatched,
+    )
+
+
+class CleanupRequest(BaseModel):
+    r2_keys: list[str]
+
+
+@router.post(
+    "/process-audio/cleanup",
+    dependencies=[Depends(require_admin)],
+)
+async def cleanup_temp_audio(
+    request: CleanupRequest,
+    org: Organisation = Depends(get_current_organisation),
+) -> dict[str, int]:
+    """
+    Delete temporary audio files from R2 after wizard processing is complete.
+    Only deletes files within the org's temp-audio prefix.
+    """
+    expected_prefix = f"temp-audio/{org.slug}/"
+    valid_keys = [k for k in request.r2_keys if k.startswith(expected_prefix)]
+
+    if not valid_keys:
+        return {"deleted": 0}
+
+    deleted = delete_media_files(valid_keys)
+    return {"deleted": deleted}
 
 
 def _build_recording_response(recording: AudioRecording, detection_count: int) -> dict:

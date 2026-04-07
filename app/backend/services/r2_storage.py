@@ -120,6 +120,35 @@ def delete_media_file(r2_key: str) -> bool:
         return False
 
 
+def delete_media_files(r2_keys: list[str]) -> int:
+    """
+    Delete multiple media files from R2 in a single batch.
+
+    Args:
+        r2_keys: List of R2 object keys to delete
+
+    Returns:
+        Number of files successfully deleted
+    """
+    if not r2_keys:
+        return 0
+
+    client = get_r2_client()
+    # S3 delete_objects supports up to 1000 keys per request
+    deleted = 0
+    for i in range(0, len(r2_keys), 1000):
+        batch = r2_keys[i : i + 1000]
+        try:
+            response = client.delete_objects(
+                Bucket=settings.r2_bucket_name,
+                Delete={"Objects": [{"Key": key} for key in batch], "Quiet": True},
+            )
+            deleted += len(batch) - len(response.get("Errors", []))
+        except ClientError:
+            pass
+    return deleted
+
+
 def generate_media_presigned_url(r2_key: str, expires_in: int = 3600) -> str:
     """
     Generate a presigned URL for downloading/previewing a file.

@@ -7,6 +7,7 @@ import {
   surveyTypesAPI,
   devicesAPI,
   audioAPI,
+  withRetry,
 } from '../services/api';
 import type {
   Surveyor,
@@ -14,6 +15,7 @@ import type {
   Device,
   AudioRecording,
   AudioDetectionResult,
+  TempUploadResponse,
 } from '../services/api';
 import { extractWavSnippet } from '../utils/wavSnippet';
 import { parseTimeToSeconds, formatDuration } from '../utils/time';
@@ -77,12 +79,16 @@ export function useAudioWizard() {
   const [loadingFiles, setLoadingFiles] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [processing, setProcessing] = useState(false);
+  const [processPhase, setProcessPhase] = useState<'uploading' | 'analysing'>('uploading');
   const [processProgress, setProcessProgress] = useState({ processed: 0, total: 0, currentFilename: '' });
   const [processError, setProcessError] = useState<string | null>(null);
+  const [fileErrors, setFileErrors] = useState<string[]>([]);
   const [detections, setDetections] = useState<WizardDetection[]>([]);
   const [unmatchedSpecies, setUnmatchedSpecies] = useState<string[]>([]);
   /** Track which files have been processed (to detect re-selection) */
   const [processedFileSet, setProcessedFileSet] = useState<AudioFile[] | null>(null);
+  /** R2 keys for temp-uploaded files, used for cleanup */
+  const [tempUploads, setTempUploads] = useState<TempUploadResponse[]>([]);
 
   // ---- Step 2: Review ----
   const [deselectedSpecies, setDeselectedSpecies] = useState<Set<number>>(new Set());
@@ -179,10 +185,30 @@ export function useAudioWizard() {
     fetchInitialData();
   }, []);
 
-  // Cleanup object URLs on unmount
+  // Track temp uploads in a ref so cleanup on unmount always has the latest keys
+  const tempUploadsRef = useRef<TempUploadResponse[]>([]);
+  useEffect(() => {
+    tempUploadsRef.current = tempUploads;
+  }, [tempUploads]);
+
+  const cleanupTempFiles = useCallback(() => {
+    const keys = tempUploadsRef.current.map((u) => u.r2_key);
+    if (keys.length === 0) return;
+    // Fire-and-forget — don't block on cleanup
+    audioAPI.cleanupTempFiles(keys).catch(() => {});
+    setTempUploads([]);
+    tempUploadsRef.current = [];
+  }, []);
+
+  // Cleanup object URLs and temp R2 files on unmount
   useEffect(() => {
     return () => {
       audioFiles.forEach((af) => URL.revokeObjectURL(af.objectUrl));
+      // Best-effort cleanup of temp R2 files
+      const keys = tempUploadsRef.current.map((u) => u.r2_key);
+      if (keys.length > 0) {
+        audioAPI.cleanupTempFiles(keys).catch(() => {});
+      }
     };
   }, [audioFiles]);
 
@@ -236,42 +262,78 @@ export function useAudioWizard() {
     if (audioFiles.length === 0) return;
 
     setProcessing(true);
+    setProcessPhase('uploading');
     setProcessError(null);
+    setFileErrors([]);
     setDetections([]);
     setUnmatchedSpecies([]);
+    setTempUploads([]);
     setProcessProgress({ processed: 0, total: audioFiles.length, currentFilename: audioFiles[0]?.filename ?? '' });
 
     try {
-      const allDetections: WizardDetection[] = [];
-      const allUnmatched: string[] = [];
+      // Phase A: Upload files to R2 with per-file retry
+      const uploaded: (TempUploadResponse & { fileIndex: number })[] = [];
+      const uploadErrors: string[] = [];
 
-      // Process one file at a time for progress tracking
       for (let i = 0; i < audioFiles.length; i++) {
         const af = audioFiles[i];
         setProcessProgress({ processed: i, total: audioFiles.length, currentFilename: af.filename });
-        const response = await audioAPI.processFiles(
-          [af.file],
-          selectedDevice?.latitude ?? undefined,
-          selectedDevice?.longitude ?? undefined,
-        );
+        try {
+          const result = await withRetry(() => audioAPI.uploadTempFile(af.file));
+          uploaded.push({ ...result, fileIndex: i });
+        } catch (err) {
+          uploadErrors.push(`Upload failed: ${af.filename} — ${err instanceof Error ? err.message : String(err)}`);
+        }
+        setProcessProgress({ processed: i + 1, total: audioFiles.length, currentFilename: '' });
+      }
 
-        for (const result of response.results) {
+      setTempUploads(uploaded.map(({ r2_key, filename }) => ({ r2_key, filename })));
+
+      if (uploaded.length === 0) {
+        setProcessError('All file uploads failed. Check your connection and try again.');
+        setFileErrors(uploadErrors);
+        return;
+      }
+
+      // Phase B: Analyze files from R2 with per-file retry + error isolation
+      setProcessPhase('analysing');
+      const allDetections: WizardDetection[] = [];
+      const allUnmatched: string[] = [];
+      const analyzeErrors: string[] = [];
+
+      for (let i = 0; i < uploaded.length; i++) {
+        const { r2_key, filename, fileIndex } = uploaded[i];
+        setProcessProgress({ processed: i, total: uploaded.length, currentFilename: filename });
+
+        try {
+          const result = await withRetry(() =>
+            audioAPI.analyzeTempFile(
+              r2_key,
+              filename,
+              selectedDevice?.latitude ?? undefined,
+              selectedDevice?.longitude ?? undefined,
+            ),
+          );
+
           for (const det of result.detections) {
-            allDetections.push({ ...det, fileIndex: i });
+            allDetections.push({ ...det, fileIndex });
           }
           for (const species of result.unmatched_species) {
             if (!allUnmatched.includes(species)) {
               allUnmatched.push(species);
             }
           }
+        } catch (err) {
+          analyzeErrors.push(`Analysis failed: ${filename} — ${err instanceof Error ? err.message : String(err)}`);
         }
 
-        setProcessProgress({ processed: i + 1, total: audioFiles.length, currentFilename: '' });
-        // Update detections progressively so UI updates
+        setProcessProgress({ processed: i + 1, total: uploaded.length, currentFilename: '' });
         setDetections([...allDetections]);
       }
 
       setUnmatchedSpecies(allUnmatched);
+      setFileErrors([...uploadErrors, ...analyzeErrors]);
+
       // All species start deselected — user must explicitly tick to include
       const allSpeciesIds = new Set(
         allDetections.map((d) => d.species_id).filter((id): id is number => id != null),
@@ -431,13 +493,16 @@ export function useAudioWizard() {
         });
       }
 
+      // Clean up temp R2 files now that save is complete
+      cleanupTempFiles();
+
       setSaveProgress({ step: 'Done!', percent: 100 });
       navigate(`/surveys/${survey.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save survey');
       setSaving(false);
     }
-  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, audioFiles, reviewData, deselectedSpecies, navigate]);
+  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, audioFiles, reviewData, deselectedSpecies, navigate, cleanupTempFiles]);
 
   // ============================================================================
   // Step validation
@@ -483,9 +548,11 @@ export function useAudioWizard() {
     fileInputRef,
     handleFileSelect,
     processing,
+    processPhase,
     processProgress,
     processError,
     setProcessError,
+    fileErrors,
     runProcessing,
     detections,
     unmatchedSpecies,

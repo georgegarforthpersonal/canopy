@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from pathlib import Path
+from typing import Any
 
 import birdnet
 
@@ -55,8 +56,26 @@ def _extract_recording_timestamp(file: Path) -> datetime:
     return datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
 
 
+_geo_model: Any = None
+_acoustic_model: Any = None
+
+
+def _get_geo_model() -> Any:
+    global _geo_model
+    if _geo_model is None:
+        _geo_model = birdnet.load("geo", "2.4", "tf")
+    return _geo_model
+
+
+def _get_acoustic_model() -> Any:
+    global _acoustic_model
+    if _acoustic_model is None:
+        _acoustic_model = birdnet.load("acoustic", "2.4", "tf")
+    return _acoustic_model
+
+
 def get_location_species(lat: float, lon: float) -> list[str]:
-    geo_model = birdnet.load("geo", "2.4", "tf")
+    geo_model = _get_geo_model()
     predictions = geo_model.predict(lat, lon, min_confidence=LOCATION_FILTER_THRESHOLD)
     return list(predictions.to_set())
 
@@ -65,7 +84,7 @@ def analyze_file(
     file: Path, species_list: list[str] | None = None, show_progress: bool = False
 ) -> list[Detection]:
     recording_time = _extract_recording_timestamp(file)
-    model = birdnet.load("acoustic", "2.4", "tf")
+    model = _get_acoustic_model()
 
     predictions = model.predict(
         file,
