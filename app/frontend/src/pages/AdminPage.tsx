@@ -121,6 +121,10 @@ export function AdminPage() {
   const [formAllowSightingNotes, setFormAllowSightingNotes] = useState(true);
   const [formAllowAudioUpload, setFormAllowAudioUpload] = useState(false);
   const [formAllowImageUpload, setFormAllowImageUpload] = useState(false);
+  const [formAllowStartEndTime, setFormAllowStartEndTime] = useState(false);
+  const [formAllowSunPercentage, setFormAllowSunPercentage] = useState(false);
+  const [formAllowTemperature, setFormAllowTemperature] = useState(false);
+  const [formAllowShowDescription, setFormAllowShowDescription] = useState(false);
   const [formColor, setFormColor] = useState<string | null>(null);
   const [formSelectedLocations, setFormSelectedLocations] = useState<Location[]>([]);
   const [formSelectedSpeciesTypes, setFormSelectedSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
@@ -317,6 +321,10 @@ export function AdminPage() {
       setFormAllowSightingNotes(details.allow_sighting_notes);
       setFormAllowAudioUpload(details.allow_audio_upload);
       setFormAllowImageUpload(details.allow_image_upload);
+      setFormAllowStartEndTime(details.allow_start_end_time);
+      setFormAllowSunPercentage(details.allow_sun_percentage);
+      setFormAllowTemperature(details.allow_temperature);
+      setFormAllowShowDescription(details.allow_show_description);
       setFormColor(details.color);
       setFormSelectedLocations(details.locations);
       setFormSelectedSpeciesTypes(details.species_types);
@@ -334,6 +342,10 @@ export function AdminPage() {
     setFormAllowSightingNotes(true);
     setFormAllowAudioUpload(false);
     setFormAllowImageUpload(false);
+    setFormAllowStartEndTime(false);
+    setFormAllowSunPercentage(false);
+    setFormAllowTemperature(false);
+    setFormAllowShowDescription(false);
     setFormColor(null);
     setFormSelectedLocations([]);
     setFormSelectedSpeciesTypes([]);
@@ -366,6 +378,10 @@ export function AdminPage() {
         allow_sighting_notes: formAllowSightingNotes,
         allow_audio_upload: formAllowAudioUpload,
         allow_image_upload: formAllowImageUpload,
+        allow_start_end_time: formAllowStartEndTime,
+        allow_sun_percentage: formAllowSunPercentage,
+        allow_temperature: formAllowTemperature,
+        allow_show_description: formAllowShowDescription,
         color: formColor || undefined,
         location_ids: formSelectedLocations.map((l) => l.id),
         species_type_ids: formSelectedSpeciesTypes.map((st) => st.id),
@@ -1146,6 +1162,74 @@ export function AdminPage() {
               {formAllowImageUpload
                 ? 'Users can upload camera trap images for analysis'
                 : 'Image upload is disabled for this survey type'}
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formAllowStartEndTime}
+                  onChange={(e) => setFormAllowStartEndTime(e.target.checked)}
+                  disabled={savingSurveyType}
+                />
+              }
+              label="Allow start/end time"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+              {formAllowStartEndTime
+                ? 'Surveyors can record start and end times'
+                : 'Start/end time fields are hidden for this survey type'}
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formAllowSunPercentage}
+                  onChange={(e) => setFormAllowSunPercentage(e.target.checked)}
+                  disabled={savingSurveyType}
+                />
+              }
+              label="Allow sun percentage"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+              {formAllowSunPercentage
+                ? 'Surveyors can record sun percentage conditions'
+                : 'Sun percentage field is hidden for this survey type'}
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formAllowTemperature}
+                  onChange={(e) => setFormAllowTemperature(e.target.checked)}
+                  disabled={savingSurveyType}
+                />
+              }
+              label="Allow temperature"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+              {formAllowTemperature
+                ? 'Surveyors can record temperature in Celsius'
+                : 'Temperature field is hidden for this survey type'}
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formAllowShowDescription}
+                  onChange={(e) => setFormAllowShowDescription(e.target.checked)}
+                  disabled={savingSurveyType}
+                />
+              }
+              label="Show description to surveyors"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+              {formAllowShowDescription
+                ? 'Survey type description is displayed at the top of the survey form'
+                : 'Description is only visible in admin settings'}
             </Typography>
           </Box>
           {!formAllowImageUpload && (
