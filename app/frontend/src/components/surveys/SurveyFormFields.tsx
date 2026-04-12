@@ -88,14 +88,9 @@ export function SurveyFormFields({
   const [surveyorsOpen, setSurveyorsOpen] = useState(false);
 
   // Time validation: end time must be after start time
-  const timeError = (() => {
-    if (startTime && endTime && startTime.isValid() && endTime.isValid()) {
-      if (endTime.isBefore(startTime) || endTime.isSame(startTime)) {
-        return 'End time must be after start time';
-      }
-    }
-    return validationErrors.endTime || undefined;
-  })();
+  const timeError = hasTimeValidationError(startTime ?? null, endTime ?? null)
+    ? 'End time must be after start time'
+    : validationErrors.endTime;
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
