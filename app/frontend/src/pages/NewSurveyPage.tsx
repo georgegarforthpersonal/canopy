@@ -31,7 +31,7 @@ import type {
   LocationWithBoundary,
   SurveyType,
 } from '../services/api';
-import { SurveyFormFields } from '../components/surveys/SurveyFormFields';
+import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/SurveyFormFields';
 import { SightingsEditor } from '../components/surveys/SightingsEditor';
 import type { DraftSighting } from '../components/surveys/SightingsEditor';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -67,6 +67,10 @@ export function NewSurveyPage() {
   const [locationId, setLocationId] = useState<number | null>(null);
   const [selectedSurveyors, setSelectedSurveyors] = useState<Surveyor[]>([]);
   const [notes, setNotes] = useState<string>('');
+  const [startTime, setStartTime] = useState<Dayjs | null>(null);
+  const [endTime, setEndTime] = useState<Dayjs | null>(null);
+  const [sunPercentage, setSunPercentage] = useState<string>('');
+  const [temperatureCelsius, setTemperatureCelsius] = useState<string>('');
 
   // ============================================================================
   // Form State - Sightings
@@ -110,6 +114,7 @@ export function NewSurveyPage() {
     location?: string;
     surveyors?: string;
     sightings?: string;
+    endTime?: string;
   }>({});
 
   // ============================================================================
@@ -219,6 +224,10 @@ export function NewSurveyPage() {
       }
     }
 
+    if (hasTimeValidationError(startTime, endTime)) {
+      errors.endTime = 'End time must be after start time';
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -286,6 +295,10 @@ export function NewSurveyPage() {
         surveyor_ids: selectedSurveyors.map((s) => s.id),
         notes: notes.trim() || null,
         survey_type_id: selectedSurveyType?.id,
+        start_time: startTime?.isValid() ? startTime.format('HH:mm:ss') : null,
+        end_time: endTime?.isValid() ? endTime.format('HH:mm:ss') : null,
+        sun_percentage: sunPercentage !== '' ? Number(sunPercentage) : null,
+        temperature_celsius: temperatureCelsius !== '' ? Number(temperatureCelsius) : null,
       };
 
       // Only include location_id if NOT at sighting level
@@ -420,6 +433,10 @@ export function NewSurveyPage() {
   const allowGeolocation = selectedSurveyType?.allow_geolocation ?? true;
   const allowSightingNotes = selectedSurveyType?.allow_sighting_notes ?? true;
   const allowImageUpload = selectedSurveyType?.allow_image_upload ?? false;
+  const showStartEndTime = selectedSurveyType?.allow_start_end_time ?? false;
+  const showSunPercentage = selectedSurveyType?.allow_sun_percentage ?? false;
+  const showTemperature = selectedSurveyType?.allow_temperature ?? false;
+  const showDescription = selectedSurveyType?.allow_show_description && selectedSurveyType?.description;
 
   // Determine if save button should be disabled
   const saveDisabled =
@@ -516,6 +533,13 @@ export function NewSurveyPage() {
         />
       </Paper>
 
+      {/* Survey Type Description Banner */}
+      {showDescription && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {selectedSurveyType!.description}
+        </Alert>
+      )}
+
       {/* Survey Details Card - Only show when survey type is selected */}
       {selectedSurveyType && (
         <Paper
@@ -536,14 +560,25 @@ export function NewSurveyPage() {
             locationId={locationId}
             selectedSurveyors={selectedSurveyors}
             notes={notes}
+            startTime={startTime}
+            endTime={endTime}
+            sunPercentage={sunPercentage}
+            temperatureCelsius={temperatureCelsius}
             locations={locations}
             surveyors={surveyors}
             onDateChange={setDate}
             onLocationChange={setLocationId}
             onSurveyorsChange={setSelectedSurveyors}
             onNotesChange={setNotes}
+            onStartTimeChange={setStartTime}
+            onEndTimeChange={setEndTime}
+            onSunPercentageChange={setSunPercentage}
+            onTemperatureCelsiusChange={setTemperatureCelsius}
             validationErrors={validationErrors}
             hideLocation={locationAtSightingLevel}
+            showStartEndTime={showStartEndTime}
+            showSunPercentage={showSunPercentage}
+            showTemperature={showTemperature}
           />
         </Paper>
       )}

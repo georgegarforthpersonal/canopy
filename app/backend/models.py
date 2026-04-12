@@ -407,6 +407,10 @@ class SurveyTypeBase(SQLModel):
     allow_sighting_notes: bool = Field(default=True, description="Whether notes can be entered for individual sightings")
     allow_audio_upload: bool = Field(default=False, description="Whether audio files can be uploaded for this survey type")
     allow_image_upload: bool = Field(default=False, description="Whether camera trap images can be uploaded for this survey type")
+    allow_start_end_time: bool = Field(default=False, description="Whether start/end time fields are shown for this survey type")
+    allow_sun_percentage: bool = Field(default=False, description="Whether sun percentage field is shown for this survey type")
+    allow_temperature: bool = Field(default=False, description="Whether temperature field is shown for this survey type")
+    allow_show_description: bool = Field(default=False, description="Whether survey type description is displayed to surveyors")
     icon: Optional[str] = Field(None, max_length=50, description="Lucide icon identifier (deprecated)")
     color: Optional[str] = Field(None, max_length=20, description="Notion-style color key (e.g., 'blue', 'purple')")
 
@@ -452,6 +456,10 @@ class SurveyTypeUpdate(SQLModel):
     allow_sighting_notes: Optional[bool] = None
     allow_audio_upload: Optional[bool] = None
     allow_image_upload: Optional[bool] = None
+    allow_start_end_time: Optional[bool] = None
+    allow_sun_percentage: Optional[bool] = None
+    allow_temperature: Optional[bool] = None
+    allow_show_description: Optional[bool] = None
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None

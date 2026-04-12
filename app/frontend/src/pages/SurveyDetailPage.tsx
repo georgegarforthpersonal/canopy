@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon } from '@mui/icons-material';
+import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useAuth } from '../context/AuthContext';
 import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI } from '../services/api';
 import type { SurveyDetail, Sighting, SightingAudioClip, Surveyor, Location, Species, Survey, BreedingStatusCode, LocationWithBoundary, SurveyType } from '../services/api';
-import { SurveyFormFields } from '../components/surveys/SurveyFormFields';
+import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/SurveyFormFields';
 import { SightingsEditor } from '../components/surveys/SightingsEditor';
 import type { DraftSighting } from '../components/surveys/SightingsEditor';
 import { AudioClipPlayer } from '../components/audio/AudioClipPlayer';
@@ -114,6 +114,10 @@ export function SurveyDetailPage() {
   const [editLocationId, setEditLocationId] = useState<number | null>(null);
   const [editSelectedSurveyors, setEditSelectedSurveyors] = useState<Surveyor[]>([]);
   const [editNotes, setEditNotes] = useState<string>('');
+  const [editStartTime, setEditStartTime] = useState<Dayjs | null>(null);
+  const [editEndTime, setEditEndTime] = useState<Dayjs | null>(null);
+  const [editSunPercentage, setEditSunPercentage] = useState<string>('');
+  const [editTemperatureCelsius, setEditTemperatureCelsius] = useState<string>('');
   const [editDraftSightings, setEditDraftSightings] = useState<DraftSighting[]>([]);
 
   const [validationErrors, setValidationErrors] = useState<{
@@ -121,6 +125,7 @@ export function SurveyDetailPage() {
     location?: string;
     surveyors?: string;
     sightings?: string;
+    endTime?: string;
   }>({});
 
   // ============================================================================
@@ -240,6 +245,10 @@ export function SurveyDetailPage() {
   const locationAtSightingLevel = surveyType?.location_at_sighting_level ?? false;
   const allowGeolocation = surveyType?.allow_geolocation ?? true;
   const allowSightingNotes = surveyType?.allow_sighting_notes ?? true;
+  const showStartEndTime = surveyType?.allow_start_end_time ?? false;
+  const showSunPercentage = surveyType?.allow_sun_percentage ?? false;
+  const showTemperature = surveyType?.allow_temperature ?? false;
+  const showDescription = surveyType?.allow_show_description && surveyType?.description;
 
 
   // ============================================================================
@@ -268,6 +277,10 @@ export function SurveyDetailPage() {
       }
     }
 
+    if (hasTimeValidationError(editStartTime, editEndTime)) {
+      errors.endTime = 'End time must be after start time';
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -286,6 +299,10 @@ export function SurveyDetailPage() {
       surveyors.filter((s) => survey.surveyor_ids.includes(s.id))
     );
     setEditNotes(survey.notes || '');
+    setEditStartTime(survey.start_time ? dayjs(survey.start_time, 'HH:mm:ss') : null);
+    setEditEndTime(survey.end_time ? dayjs(survey.end_time, 'HH:mm:ss') : null);
+    setEditSunPercentage(survey.sun_percentage != null ? String(survey.sun_percentage) : '');
+    setEditTemperatureCelsius(survey.temperature_celsius != null ? String(survey.temperature_celsius) : '');
 
     // Convert existing sightings to DraftSighting format
     // Note: sightings may include individuals array from API (SightingWithIndividuals)
@@ -333,6 +350,10 @@ export function SurveyDetailPage() {
         date: editDate!.format('YYYY-MM-DD'),
         surveyor_ids: editSelectedSurveyors.map((s) => s.id),
         notes: editNotes.trim() || null,
+        start_time: editStartTime?.isValid() ? editStartTime.format('HH:mm:ss') : null,
+        end_time: editEndTime?.isValid() ? editEndTime.format('HH:mm:ss') : null,
+        sun_percentage: editSunPercentage !== '' ? Number(editSunPercentage) : null,
+        temperature_celsius: editTemperatureCelsius !== '' ? Number(editTemperatureCelsius) : null,
       };
 
       // Only include location_id if NOT at sighting level
@@ -592,6 +613,13 @@ export function SurveyDetailPage() {
         </Alert>
       )}
 
+      {/* Survey Type Description Banner */}
+      {showDescription && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {surveyType!.description}
+        </Alert>
+      )}
+
         {/* Survey Metadata Card */}
         <Paper
           sx={{
@@ -612,14 +640,25 @@ export function SurveyDetailPage() {
               locationId={editLocationId}
               selectedSurveyors={editSelectedSurveyors}
               notes={editNotes}
+              startTime={editStartTime}
+              endTime={editEndTime}
+              sunPercentage={editSunPercentage}
+              temperatureCelsius={editTemperatureCelsius}
               locations={locations}
               surveyors={surveyors}
               onDateChange={setEditDate}
               onLocationChange={setEditLocationId}
               onSurveyorsChange={setEditSelectedSurveyors}
               onNotesChange={setEditNotes}
+              onStartTimeChange={setEditStartTime}
+              onEndTimeChange={setEditEndTime}
+              onSunPercentageChange={setEditSunPercentage}
+              onTemperatureCelsiusChange={setEditTemperatureCelsius}
               validationErrors={validationErrors}
               hideLocation={locationAtSightingLevel}
+              showStartEndTime={showStartEndTime}
+              showSunPercentage={showSunPercentage}
+              showTemperature={showTemperature}
             />
           ) : (
             <Stack spacing={2}>
@@ -660,6 +699,58 @@ export function SurveyDetailPage() {
                       </Typography>
                     </Stack>
                     <Typography variant="body1">{getLocationName(survey.location_id)}</Typography>
+                  </Box>
+                </>
+              )}
+
+              {/* Start/End Time */}
+              {showStartEndTime && (survey.start_time || survey.end_time) && (
+                <>
+                  <Divider />
+                  <Box>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                      <AccessTime sx={{ fontSize: 18, color: 'text.secondary' }} />
+                      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                        Time
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body1">
+                      {survey.start_time ? dayjs(survey.start_time, 'HH:mm:ss').format('HH:mm') : '—'}
+                      {' — '}
+                      {survey.end_time ? dayjs(survey.end_time, 'HH:mm:ss').format('HH:mm') : '—'}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+
+              {/* Temperature */}
+              {showTemperature && survey.temperature_celsius != null && (
+                <>
+                  <Divider />
+                  <Box>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                      <Thermostat sx={{ fontSize: 18, color: 'text.secondary' }} />
+                      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                        Temperature
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body1">{survey.temperature_celsius}{'\u00B0C'}</Typography>
+                  </Box>
+                </>
+              )}
+
+              {/* Sun Percentage */}
+              {showSunPercentage && survey.sun_percentage != null && (
+                <>
+                  <Divider />
+                  <Box>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                      <WbSunny sx={{ fontSize: 18, color: 'text.secondary' }} />
+                      <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                        Sun
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body1">{survey.sun_percentage}%</Typography>
                   </Box>
                 </>
               )}
