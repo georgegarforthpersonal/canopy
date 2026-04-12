@@ -238,10 +238,11 @@ export function SurveyFormFields({
               label="Sun %"
               type="number"
               value={sunPercentage ?? ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === '' || (Number(val) >= 0 && Number(val) <= 100)) {
-                  onSunPercentageChange?.(val);
+              onChange={(e) => onSunPercentageChange?.(e.target.value)}
+              onBlur={() => {
+                if (sunPercentage !== '' && sunPercentage != null) {
+                  const clamped = Math.min(100, Math.max(0, Math.round(Number(sunPercentage))));
+                  onSunPercentageChange?.(String(clamped));
                 }
               }}
               fullWidth
