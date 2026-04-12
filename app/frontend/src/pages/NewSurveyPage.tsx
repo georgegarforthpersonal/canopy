@@ -298,7 +298,7 @@ export function NewSurveyPage() {
         start_time: startTime?.isValid() ? startTime.format('HH:mm:ss') : null,
         end_time: endTime?.isValid() ? endTime.format('HH:mm:ss') : null,
         sun_percentage: sunPercentage !== '' ? Number(sunPercentage) : null,
-        temperature_celsius: temperatureCelsius !== '' ? Number(temperatureCelsius) : null,
+        temperature_celsius: temperatureCelsius !== '' ? temperatureCelsius : null,
       };
 
       // Only include location_id if NOT at sighting level
