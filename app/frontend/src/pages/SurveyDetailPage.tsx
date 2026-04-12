@@ -353,7 +353,7 @@ export function SurveyDetailPage() {
         start_time: editStartTime?.isValid() ? editStartTime.format('HH:mm:ss') : null,
         end_time: editEndTime?.isValid() ? editEndTime.format('HH:mm:ss') : null,
         sun_percentage: editSunPercentage !== '' ? Number(editSunPercentage) : null,
-        temperature_celsius: editTemperatureCelsius !== '' ? Number(editTemperatureCelsius) : null,
+        temperature_celsius: editTemperatureCelsius !== '' ? editTemperatureCelsius : null,
       };
 
       // Only include location_id if NOT at sighting level
