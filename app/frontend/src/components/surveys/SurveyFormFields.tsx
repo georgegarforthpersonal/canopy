@@ -225,7 +225,7 @@ export function SurveyFormFields({
         <Box sx={{ display: 'grid', gridTemplateColumns: showTemperature && showSunPercentage ? '1fr 1fr' : '1fr', gap: { xs: 2, md: 3 } }}>
           {showTemperature && (
             <TextField
-              label="Temperature (\u00B0C)"
+              label="Temperature (°C)"
               type="number"
               value={temperatureCelsius ?? ''}
               onChange={(e) => onTemperatureCelsiusChange?.(e.target.value)}
