@@ -752,11 +752,23 @@ async def update_sighting(
             detail=f"Sighting {sighting_id} not found for survey {survey_id}"
         )
 
-    # Update sighting fields
+    # Update sighting fields (exclude image_ids as it's handled separately via junction table)
     update_data = sighting.model_dump(exclude_unset=True)
+    image_ids = update_data.pop("image_ids", None)
 
     for field, value in update_data.items():
         setattr(db_sighting, field, value)
+
+    # Sync sighting_image junction table if image_ids provided
+    if image_ids is not None:
+        # Delete existing links
+        db.query(SightingImage).filter(SightingImage.sighting_id == sighting_id).delete()
+        # Insert new links
+        for img_id in image_ids:
+            db.add(SightingImage(
+                sighting_id=sighting_id,
+                camera_trap_image_id=img_id
+            ))
 
     db.commit()
     db.refresh(db_sighting)
@@ -764,13 +776,21 @@ async def update_sighting(
     # Get species name
     species = db.query(Species).filter(Species.id == db_sighting.species_id).first()
 
+    # Fetch updated image_ids
+    image_rows = db.query(SightingImage.camera_trap_image_id)\
+        .filter(SightingImage.sighting_id == sighting_id)\
+        .order_by(SightingImage.camera_trap_image_id)\
+        .all()
+    result_image_ids = [r[0] for r in image_rows]
+
     return {
         "id": db_sighting.id,
         "survey_id": db_sighting.survey_id,
         "species_id": db_sighting.species_id,
         "count": db_sighting.count,
         "species_name": species.name if species else None,
-        "species_scientific_name": species.scientific_name if species else None
+        "species_scientific_name": species.scientific_name if species else None,
+        "image_ids": result_image_ids,
     }
 
 

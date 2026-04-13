@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Box, Typography, TextField, Autocomplete, IconButton, Alert, Stack, Card, CardContent, Button, Chip, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
-import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, ViewList, Map as MapIcon } from '@mui/icons-material';
-import type { Species, BreedingStatusCode, LocationWithBoundary, Location } from '../../services/api';
+import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, ViewList, Map as MapIcon, PhotoCamera, Close } from '@mui/icons-material';
+import type { Species, BreedingStatusCode, LocationWithBoundary, Location, CameraTrapImage } from '../../services/api';
+import { imagesAPI } from '../../services/api';
 import { AddSightingModal } from './AddSightingModal';
 import type { SightingData } from './AddSightingModal';
 import { LocationModal } from './LocationModal';
@@ -9,6 +10,30 @@ import { MapModeSightings } from './MapModeSightings';
 import { getSpeciesIcon } from '../../config';
 import { useResponsive } from '../../hooks/useResponsive';
 import type { DraftIndividualLocation } from './MultiLocationMapPicker';
+
+/** Small thumbnail that lazily loads a presigned URL for an existing image */
+function ExistingPhotoThumbnail({ imageId }: { imageId: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    imagesAPI.getPreviewUrl(imageId).then((res) => {
+      if (mounted) setUrl(res.preview_url);
+    }).catch(() => { /* ignore */ });
+    return () => { mounted = false; };
+  }, [imageId]);
+
+  if (!url) return <Box sx={{ width: 48, height: 36, bgcolor: 'grey.200', borderRadius: 0.5, flexShrink: 0 }} />;
+
+  return (
+    <Box
+      component="img"
+      src={url}
+      alt=""
+      sx={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
+    />
+  );
+}
 
 export interface DraftSighting {
   tempId: string;
@@ -21,6 +46,12 @@ export interface DraftSighting {
   location_id?: number | null;
   // Optional notes for this sighting
   notes?: string | null;
+  // Pending photo files to upload on save
+  pendingPhotos?: File[];
+  // Existing image IDs already linked to this sighting (for edit mode)
+  existingImageIds?: number[];
+  // Image IDs to remove on save (subset of existingImageIds)
+  removedImageIds?: number[];
 }
 
 interface SightingsEditorProps {
@@ -35,6 +66,7 @@ interface SightingsEditorProps {
   locations?: Location[]; // Available locations for sighting-level selection
   allowGeolocation?: boolean; // Whether geolocation is allowed (controls geolocation button visibility)
   allowSightingNotes?: boolean; // Whether notes can be entered for individual sightings
+  allowSightingPhotoUpload?: boolean; // Whether photos can be attached to individual sightings
   surveyLocationId?: number | null; // Survey-level location ID for initial map zoom
 }
 
@@ -55,6 +87,7 @@ export function SightingsEditor({
   locations = [],
   allowGeolocation = true,
   allowSightingNotes = true,
+  allowSightingPhotoUpload = false,
   surveyLocationId,
 }: SightingsEditorProps) {
   const { isMobile } = useResponsive();
@@ -109,6 +142,9 @@ export function SightingsEditor({
               individuals: sightingData.individuals,
               location_id: sightingData.location_id,
               notes: sightingData.notes,
+              pendingPhotos: sightingData.pendingPhotos,
+              existingImageIds: sightingData.existingImageIds,
+              removedImageIds: sightingData.removedImageIds,
             }
           : s
       );
@@ -123,6 +159,7 @@ export function SightingsEditor({
           individuals: sightingData.individuals,
           location_id: sightingData.location_id,
           notes: sightingData.notes,
+          pendingPhotos: sightingData.pendingPhotos,
         },
       ]);
     }
@@ -211,6 +248,49 @@ export function SightingsEditor({
       );
       onSightingsChange(updatedSightings);
     }
+  };
+
+  // Photo handling
+  const handlePhotoSelect = (tempId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp'];
+    const validFiles = Array.from(files).filter((f) => {
+      const ext = f.name.toLowerCase().substring(f.name.lastIndexOf('.'));
+      return validExtensions.includes(ext);
+    });
+    if (validFiles.length === 0) return;
+    const updatedSightings = sightings.map((s) =>
+      s.tempId === tempId
+        ? { ...s, pendingPhotos: [...(s.pendingPhotos || []), ...validFiles] }
+        : s
+    );
+    onSightingsChange(updatedSightings);
+    event.target.value = '';
+  };
+
+  const handleRemovePendingPhoto = (tempId: string, fileIndex: number) => {
+    const updatedSightings = sightings.map((s) =>
+      s.tempId === tempId
+        ? { ...s, pendingPhotos: (s.pendingPhotos || []).filter((_, i) => i !== fileIndex) }
+        : s
+    );
+    onSightingsChange(updatedSightings);
+  };
+
+  const handleRemoveExistingPhoto = (tempId: string, imageId: number) => {
+    const updatedSightings = sightings.map((s) =>
+      s.tempId === tempId
+        ? { ...s, removedImageIds: [...(s.removedImageIds || []), imageId] }
+        : s
+    );
+    onSightingsChange(updatedSightings);
+  };
+
+  const getPhotoCount = (sighting: DraftSighting): number => {
+    const existing = (sighting.existingImageIds?.length || 0) - (sighting.removedImageIds?.length || 0);
+    const pending = sighting.pendingPhotos?.length || 0;
+    return existing + pending;
   };
 
   const validSightings = sightings.filter((s) => s.species_id !== null);
@@ -395,6 +475,21 @@ export function SightingsEditor({
                                 />
                               </Tooltip>
                             )}
+                            {allowSightingPhotoUpload && getPhotoCount(sighting) > 0 && (
+                              <Chip
+                                icon={<PhotoCamera sx={{ fontSize: 14 }} />}
+                                label={`${getPhotoCount(sighting)} photo${getPhotoCount(sighting) > 1 ? 's' : ''}`}
+                                size="small"
+                                sx={{
+                                  height: 24,
+                                  fontSize: '0.75rem',
+                                  bgcolor: 'info.light',
+                                  color: 'info.contrastText',
+                                  fontWeight: 500,
+                                  '& .MuiChip-icon': { color: 'inherit' },
+                                }}
+                              />
+                            )}
                           </Stack>
                         </Box>
 
@@ -452,6 +547,9 @@ export function SightingsEditor({
                   individuals: editingSighting.individuals,
                   location_id: editingSighting.location_id,
                   notes: editingSighting.notes,
+                  pendingPhotos: editingSighting.pendingPhotos,
+                  existingImageIds: editingSighting.existingImageIds,
+                  removedImageIds: editingSighting.removedImageIds,
                 }
               : undefined
           }
@@ -461,6 +559,7 @@ export function SightingsEditor({
           locations={locations}
           allowGeolocation={allowGeolocation}
           allowSightingNotes={allowSightingNotes}
+          allowSightingPhotoUpload={allowSightingPhotoUpload}
           surveyLocationId={surveyLocationId}
         />
       </>
@@ -512,6 +611,11 @@ export function SightingsEditor({
             cols.push('2fr');
           }
 
+          // Photos column (if sighting photo upload is allowed)
+          if (allowSightingPhotoUpload) {
+            cols.push('80px');
+          }
+
           // Delete button - fixed small width
           cols.push('40px');
 
@@ -556,6 +660,11 @@ export function SightingsEditor({
                 NOTES
               </Typography>
             )}
+            {allowSightingPhotoUpload && (
+              <Typography variant="body2" fontWeight={600} color="text.secondary" textAlign="center">
+                PHOTOS
+              </Typography>
+            )}
             <Box /> {/* Actions column - no header needed */}
           </Box>
 
@@ -571,16 +680,25 @@ export function SightingsEditor({
               ? `${individualCount} of ${sighting.count} individual${sighting.count > 1 ? 's' : ''} across ${locationCount} location${locationCount > 1 ? 's' : ''}`
               : `Click to add locations (0 of ${sighting.count})`;
 
+            const photoCount = getPhotoCount(sighting);
+            const activeExistingIds = (sighting.existingImageIds || []).filter(
+              (imgId) => !(sighting.removedImageIds || []).includes(imgId)
+            );
+
             return (
               <Box
                 key={sighting.tempId}
+                sx={{
+                  borderBottom: index < sightings.length - 1 ? '1px solid' : 'none',
+                  borderColor: 'divider',
+                }}
+              >
+              <Box
                 sx={{
                   display: 'grid',
                   gridTemplateColumns: gridColumns,
                   gap: 2,
                   p: 1.5,
-                  borderBottom: index < sightings.length - 1 ? '1px solid' : 'none',
-                  borderColor: 'divider',
                   alignItems: 'center',
                   bgcolor: isEmptyLastRow ? 'grey.50' : 'transparent',
                   transition: 'background-color 0.2s',
@@ -784,6 +902,33 @@ export function SightingsEditor({
                   />
                 )}
 
+                {allowSightingPhotoUpload && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                    {photoCount > 0 && (
+                      <Chip
+                        label={photoCount}
+                        size="small"
+                        sx={{ height: 20, fontSize: '0.7rem', minWidth: 24 }}
+                      />
+                    )}
+                    <IconButton
+                      component="label"
+                      size="small"
+                      disabled={isEmptyLastRow}
+                      sx={{ color: photoCount > 0 ? 'primary.main' : 'text.disabled' }}
+                    >
+                      <PhotoCamera sx={{ fontSize: 20 }} />
+                      <input
+                        type="file"
+                        hidden
+                        multiple
+                        accept=".jpg,.jpeg,.png,.tiff,.tif,.bmp"
+                        onChange={(e) => handlePhotoSelect(sighting.tempId, e)}
+                      />
+                    </IconButton>
+                  </Box>
+                )}
+
                 <IconButton
                   size="small"
                   color="error"
@@ -798,6 +943,60 @@ export function SightingsEditor({
                 >
                   <Delete sx={{ fontSize: 20 }} />
                 </IconButton>
+              </Box>
+
+              {/* Photo preview strip */}
+              {allowSightingPhotoUpload && (activeExistingIds.length > 0 || (sighting.pendingPhotos?.length || 0) > 0) && (
+                <Box sx={{ display: 'flex', gap: 0.5, px: 1.5, pb: 1, flexWrap: 'wrap' }}>
+                  {activeExistingIds.map((imgId) => (
+                    <Box key={`existing-${imgId}`} sx={{ position: 'relative' }}>
+                      <ExistingPhotoThumbnail imageId={imgId} />
+                      <IconButton
+                        size="small"
+                        onClick={() => handleRemoveExistingPhoto(sighting.tempId, imgId)}
+                        sx={{
+                          position: 'absolute',
+                          top: -6,
+                          right: -6,
+                          bgcolor: 'error.main',
+                          color: 'white',
+                          width: 16,
+                          height: 16,
+                          '&:hover': { bgcolor: 'error.dark' },
+                        }}
+                      >
+                        <Close sx={{ fontSize: 10 }} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                  {(sighting.pendingPhotos || []).map((file, fileIdx) => (
+                    <Box key={`pending-${fileIdx}`} sx={{ position: 'relative' }}>
+                      <Box
+                        component="img"
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        sx={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => handleRemovePendingPhoto(sighting.tempId, fileIdx)}
+                        sx={{
+                          position: 'absolute',
+                          top: -6,
+                          right: -6,
+                          bgcolor: 'error.main',
+                          color: 'white',
+                          width: 16,
+                          height: 16,
+                          '&:hover': { bgcolor: 'error.dark' },
+                        }}
+                      >
+                        <Close sx={{ fontSize: 10 }} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              )}
               </Box>
             );
           })}
