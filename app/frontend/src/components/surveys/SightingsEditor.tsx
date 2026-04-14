@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Typography, TextField, Autocomplete, IconButton, Alert, Stack, Card, CardContent, Button, Chip, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, ViewList, Map as MapIcon, PhotoCamera, Close } from '@mui/icons-material';
-import type { Species, BreedingStatusCode, LocationWithBoundary, Location, CameraTrapImage } from '../../services/api';
+import type { Species, BreedingStatusCode, LocationWithBoundary, Location } from '../../services/api';
 import { imagesAPI } from '../../services/api';
 import { AddSightingModal } from './AddSightingModal';
 import type { SightingData } from './AddSightingModal';
@@ -30,6 +30,29 @@ function ExistingPhotoThumbnail({ imageId }: { imageId: number }) {
       component="img"
       src={url}
       alt=""
+      sx={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
+    />
+  );
+}
+
+/** Thumbnail for a pending (not yet uploaded) file, with proper URL lifecycle */
+function PendingPhotoThumbnail({ file }: { file: File }) {
+  const urlRef = useRef<string | null>(null);
+  if (!urlRef.current) {
+    urlRef.current = URL.createObjectURL(file);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    };
+  }, []);
+
+  return (
+    <Box
+      component="img"
+      src={urlRef.current}
+      alt={file.name}
       sx={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
     />
   );
@@ -693,17 +716,17 @@ export function SightingsEditor({
                   borderColor: 'divider',
                 }}
               >
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: gridColumns,
-                  gap: 2,
-                  p: 1.5,
-                  alignItems: 'center',
-                  bgcolor: isEmptyLastRow ? 'grey.50' : 'transparent',
-                  transition: 'background-color 0.2s',
-                }}
-              >
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: gridColumns,
+                    gap: 2,
+                    p: 1.5,
+                    alignItems: 'center',
+                    bgcolor: isEmptyLastRow ? 'grey.50' : 'transparent',
+                    transition: 'background-color 0.2s',
+                  }}
+                >
                 <Autocomplete
                   options={sortedSpecies}
                   groupBy={(option) => formatCategoryName(option.type)}
@@ -941,62 +964,57 @@ export function SightingsEditor({
                     height: 36,
                   }}
                 >
-                  <Delete sx={{ fontSize: 20 }} />
-                </IconButton>
-              </Box>
-
-              {/* Photo preview strip */}
-              {allowSightingPhotoUpload && (activeExistingIds.length > 0 || (sighting.pendingPhotos?.length || 0) > 0) && (
-                <Box sx={{ display: 'flex', gap: 0.5, px: 1.5, pb: 1, flexWrap: 'wrap' }}>
-                  {activeExistingIds.map((imgId) => (
-                    <Box key={`existing-${imgId}`} sx={{ position: 'relative' }}>
-                      <ExistingPhotoThumbnail imageId={imgId} />
-                      <IconButton
-                        size="small"
-                        onClick={() => handleRemoveExistingPhoto(sighting.tempId, imgId)}
-                        sx={{
-                          position: 'absolute',
-                          top: -6,
-                          right: -6,
-                          bgcolor: 'error.main',
-                          color: 'white',
-                          width: 16,
-                          height: 16,
-                          '&:hover': { bgcolor: 'error.dark' },
-                        }}
-                      >
-                        <Close sx={{ fontSize: 10 }} />
-                      </IconButton>
-                    </Box>
-                  ))}
-                  {(sighting.pendingPhotos || []).map((file, fileIdx) => (
-                    <Box key={`pending-${fileIdx}`} sx={{ position: 'relative' }}>
-                      <Box
-                        component="img"
-                        src={URL.createObjectURL(file)}
-                        alt={file.name}
-                        sx={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
-                      />
-                      <IconButton
-                        size="small"
-                        onClick={() => handleRemovePendingPhoto(sighting.tempId, fileIdx)}
-                        sx={{
-                          position: 'absolute',
-                          top: -6,
-                          right: -6,
-                          bgcolor: 'error.main',
-                          color: 'white',
-                          width: 16,
-                          height: 16,
-                          '&:hover': { bgcolor: 'error.dark' },
-                        }}
-                      >
-                        <Close sx={{ fontSize: 10 }} />
-                      </IconButton>
-                    </Box>
-                  ))}
+                    <Delete sx={{ fontSize: 20 }} />
+                  </IconButton>
                 </Box>
-              )}
+
+                {/* Photo preview strip */}
+                {allowSightingPhotoUpload && (activeExistingIds.length > 0 || (sighting.pendingPhotos?.length || 0) > 0) && (
+                  <Box sx={{ display: 'flex', gap: 0.5, px: 1.5, pb: 1, flexWrap: 'wrap' }}>
+                    {activeExistingIds.map((imgId) => (
+                      <Box key={`existing-${imgId}`} sx={{ position: 'relative' }}>
+                        <ExistingPhotoThumbnail imageId={imgId} />
+                        <IconButton
+                          size="small"
+                          onClick={() => handleRemoveExistingPhoto(sighting.tempId, imgId)}
+                          sx={{
+                            position: 'absolute',
+                            top: -6,
+                            right: -6,
+                            bgcolor: 'error.main',
+                            color: 'white',
+                            width: 16,
+                            height: 16,
+                            '&:hover': { bgcolor: 'error.dark' },
+                          }}
+                        >
+                          <Close sx={{ fontSize: 10 }} />
+                        </IconButton>
+                      </Box>
+                    ))}
+                    {(sighting.pendingPhotos || []).map((file, fileIdx) => (
+                      <Box key={`pending-${fileIdx}`} sx={{ position: 'relative' }}>
+                        <PendingPhotoThumbnail file={file} />
+                        <IconButton
+                          size="small"
+                          onClick={() => handleRemovePendingPhoto(sighting.tempId, fileIdx)}
+                          sx={{
+                            position: 'absolute',
+                            top: -6,
+                            right: -6,
+                            bgcolor: 'error.main',
+                            color: 'white',
+                            width: 16,
+                            height: 16,
+                            '&:hover': { bgcolor: 'error.dark' },
+                          }}
+                        >
+                          <Close sx={{ fontSize: 10 }} />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
               </Box>
             );
           })}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Autocomplete, Stack, Box, Typography, IconButton } from '@mui/material';
 import { Close, PhotoCamera, CloudUpload } from '@mui/icons-material';
 import type { Species, BreedingStatusCode, LocationWithBoundary, Location } from '../../services/api';
@@ -186,6 +186,36 @@ export function AddSightingModal({
     }
     event.target.value = '';
   };
+
+  // Create and manage object URLs for pending photo previews to avoid memory leaks
+  const pendingPhotoUrls = useRef<Map<File, string>>(new Map());
+  const getPendingPhotoUrl = (file: File): string => {
+    let url = pendingPhotoUrls.current.get(file);
+    if (!url) {
+      url = URL.createObjectURL(file);
+      pendingPhotoUrls.current.set(file, url);
+    }
+    return url;
+  };
+  // Revoke URLs for files no longer in pendingPhotos
+  useEffect(() => {
+    const currentFiles = new Set(pendingPhotos);
+    for (const [file, url] of pendingPhotoUrls.current) {
+      if (!currentFiles.has(file)) {
+        URL.revokeObjectURL(url);
+        pendingPhotoUrls.current.delete(file);
+      }
+    }
+  }, [pendingPhotos]);
+  // Revoke all URLs on unmount
+  useEffect(() => {
+    return () => {
+      for (const url of pendingPhotoUrls.current.values()) {
+        URL.revokeObjectURL(url);
+      }
+      pendingPhotoUrls.current.clear();
+    };
+  }, []);
 
   const activeExistingIds = existingImageIds.filter((id) => !removedImageIds.includes(id));
 
@@ -449,7 +479,7 @@ export function AddSightingModal({
                     <Box key={`pending-${idx}`} sx={{ position: 'relative' }}>
                       <Box
                         component="img"
-                        src={URL.createObjectURL(file)}
+                        src={getPendingPhotoUrl(file)}
                         alt={file.name}
                         sx={{
                           width: 72,
