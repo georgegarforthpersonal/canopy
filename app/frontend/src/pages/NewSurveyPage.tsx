@@ -21,6 +21,7 @@ import {
   speciesAPI,
   surveyTypesAPI,
   imagesAPI,
+  devicesAPI,
 } from '../services/api';
 import type {
   Survey,
@@ -30,6 +31,7 @@ import type {
   BreedingStatusCode,
   LocationWithBoundary,
   SurveyType,
+  Device,
 } from '../services/api';
 import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/SurveyFormFields';
 import { SightingsEditor } from '../components/surveys/SightingsEditor';
@@ -100,6 +102,7 @@ export function NewSurveyPage() {
   const [species, setSpecies] = useState<Species[]>([]);
   const [breedingCodes, setBreedingCodes] = useState<BreedingStatusCode[]>([]);
   const [locationsWithBoundaries, setLocationsWithBoundaries] = useState<LocationWithBoundary[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,18 +163,23 @@ export function NewSurveyPage() {
     if (!selectedSurveyType) {
       setLocations([]);
       setSpecies([]);
+      setDevices([]);
       return;
     }
 
     const fetchFilteredData = async () => {
       try {
-        const [locationsData, speciesData] = await Promise.all([
+        const [locationsData, speciesData, devicesData] = await Promise.all([
           locationsAPI.getBySurveyType(selectedSurveyType.id),
           speciesAPI.getBySurveyType(selectedSurveyType.id),
+          selectedSurveyType.allow_sighting_device_selection && selectedSurveyType.sighting_device_type
+            ? devicesAPI.getAll(false, selectedSurveyType.sighting_device_type)
+            : Promise.resolve<Device[]>([]),
         ]);
 
         setLocations(locationsData);
         setSpecies(speciesData);
+        setDevices(devicesData);
 
         // Clear location if it's no longer in the available list
         if (locationId && !locationsData.some((l) => l.id === locationId)) {
@@ -217,7 +225,12 @@ export function NewSurveyPage() {
     const validSightings = draftSightings.filter(
       (s) => s.species_id !== null && s.count > 0
     );
-    if (selectedSurveyType?.location_at_sighting_level) {
+    if (selectedSurveyType?.allow_sighting_device_selection) {
+      const sightingsWithoutDevice = validSightings.filter((s) => !s.device_id);
+      if (sightingsWithoutDevice.length > 0) {
+        errors.sightings = 'Each sighting must have a device selected';
+      }
+    } else if (selectedSurveyType?.location_at_sighting_level) {
       const sightingsWithoutLocation = validSightings.filter((s) => !s.location_id);
       if (sightingsWithoutLocation.length > 0) {
         errors.sightings = 'Each sighting must have a location selected';
@@ -336,7 +349,8 @@ export function NewSurveyPage() {
           surveysAPI.addSighting(newSurvey.id, {
             species_id: sighting.species_id!,
             count: sighting.count,
-            location_id: selectedSurveyType?.location_at_sighting_level ? sighting.location_id : undefined,
+            location_id: locationAtSightingLevel ? sighting.location_id : undefined,
+            device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
             notes: sighting.notes,
             // Include individual locations with count and breeding status codes
             individuals: sighting.individuals?.map((ind) => ({
@@ -448,8 +462,9 @@ export function NewSurveyPage() {
   // Computed Values
   // ============================================================================
 
-  const locationAtSightingLevel = selectedSurveyType?.location_at_sighting_level ?? false;
-  const allowGeolocation = selectedSurveyType?.allow_geolocation ?? true;
+  const allowSightingDeviceSelection = selectedSurveyType?.allow_sighting_device_selection ?? false;
+  const locationAtSightingLevel = !allowSightingDeviceSelection && (selectedSurveyType?.location_at_sighting_level ?? false);
+  const allowGeolocation = !allowSightingDeviceSelection && (selectedSurveyType?.allow_geolocation ?? true);
   const allowSightingNotes = selectedSurveyType?.allow_sighting_notes ?? true;
   const allowImageUpload = selectedSurveyType?.allow_image_upload ?? false;
   const allowSightingPhotoUpload = selectedSurveyType?.allow_sighting_photo_upload ?? false;
@@ -709,6 +724,8 @@ export function NewSurveyPage() {
             allowGeolocation={allowGeolocation}
             allowSightingNotes={allowSightingNotes}
             allowSightingPhotoUpload={allowSightingPhotoUpload}
+            allowSightingDeviceSelection={allowSightingDeviceSelection}
+            devices={devices}
             surveyLocationId={locationId}
           />
         </Paper>

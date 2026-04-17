@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Autocomplete, Stack, Box, Typography, IconButton } from '@mui/material';
 import { Close, PhotoCamera, CloudUpload } from '@mui/icons-material';
-import type { Species, BreedingStatusCode, LocationWithBoundary, Location } from '../../services/api';
+import type { Species, BreedingStatusCode, LocationWithBoundary, Location, Device } from '../../services/api';
 import { imagesAPI } from '../../services/api';
 import { getSpeciesIcon } from '../../config';
 import MultiLocationMapPicker, { type DraftIndividualLocation } from './MultiLocationMapPicker';
@@ -11,6 +11,7 @@ export interface SightingData {
   count: number;
   individuals?: DraftIndividualLocation[];
   location_id?: number | null; // Location ID when location is at sighting level
+  device_id?: number | null; // Device ID when sighting inherits location from a device
   notes?: string | null; // Optional notes for this sighting
   pendingPhotos?: File[];
   existingImageIds?: number[];
@@ -32,6 +33,8 @@ interface AddSightingModalProps {
   allowGeolocation?: boolean; // Whether GPS location picker is shown
   allowSightingNotes?: boolean; // Whether notes field is shown
   allowSightingPhotoUpload?: boolean; // Whether photo upload is shown
+  allowSightingDeviceSelection?: boolean; // When true, show device dropdown that supplies the sighting's location
+  devices?: Device[]; // Available devices for sighting-level selection
   surveyLocationId?: number | null; // Survey-level location ID for initial map zoom
 }
 
@@ -57,6 +60,8 @@ export function AddSightingModal({
   allowGeolocation = true,
   allowSightingNotes = true,
   allowSightingPhotoUpload = false,
+  allowSightingDeviceSelection = false,
+  devices = [],
   surveyLocationId,
 }: AddSightingModalProps) {
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<number | null>(initialData?.species_id || null);
@@ -66,6 +71,9 @@ export function AddSightingModal({
   );
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(
     initialData?.location_id || null
+  );
+  const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(
+    initialData?.device_id || null
   );
   const [notes, setNotes] = useState<string>(initialData?.notes || '');
   const [pendingPhotos, setPendingPhotos] = useState<File[]>(initialData?.pendingPhotos || []);
@@ -104,6 +112,7 @@ export function AddSightingModal({
       setCount(initialData.count);
       setIndividuals(initialData.individuals || []);
       setSelectedLocationId(initialData.location_id || null);
+      setSelectedDeviceId(initialData.device_id || null);
       setNotes(initialData.notes || '');
       setPendingPhotos(initialData.pendingPhotos || []);
       setExistingImageIds(initialData.existingImageIds || []);
@@ -113,6 +122,7 @@ export function AddSightingModal({
       setCount(1);
       setIndividuals([]);
       setSelectedLocationId(null);
+      setSelectedDeviceId(null);
       setNotes('');
       setPendingPhotos([]);
       setExistingImageIds([]);
@@ -142,6 +152,7 @@ export function AddSightingModal({
         count: Math.max(1, count),
         individuals: individuals.length > 0 ? individuals : undefined,
         location_id: locationAtSightingLevel ? selectedLocationId : undefined,
+        device_id: allowSightingDeviceSelection ? selectedDeviceId : undefined,
         notes: notes.trim() || null,
         pendingPhotos: pendingPhotos.length > 0 ? pendingPhotos : undefined,
         existingImageIds: existingImageIds.length > 0 ? existingImageIds : undefined,
@@ -152,6 +163,7 @@ export function AddSightingModal({
       setCount(1);
       setIndividuals([]);
       setSelectedLocationId(null);
+      setSelectedDeviceId(null);
       setNotes('');
       setPendingPhotos([]);
       setExistingImageIds([]);
@@ -166,6 +178,7 @@ export function AddSightingModal({
     setCount(initialData?.count || 1);
     setIndividuals(initialData?.individuals || []);
     setSelectedLocationId(initialData?.location_id || null);
+    setSelectedDeviceId(initialData?.device_id || null);
     setNotes(initialData?.notes || '');
     setPendingPhotos(initialData?.pendingPhotos || []);
     setExistingImageIds(initialData?.existingImageIds || []);
@@ -221,9 +234,12 @@ export function AddSightingModal({
 
   const selectedSpecies = species.find(s => s.id === selectedSpeciesId);
   const selectedLocation = locations.find(l => l.id === selectedLocationId);
-  // Require location when locationAtSightingLevel is true
+  const selectedDevice = devices.find(d => d.id === selectedDeviceId);
+  const getDeviceLabel = (d: Device): string => d.name ? `${d.name} (${d.device_id})` : d.device_id;
+  // Require location / device when their respective mode is on
   const canSave = selectedSpeciesId !== null && count > 0 &&
-    (!locationAtSightingLevel || selectedLocationId !== null);
+    (!locationAtSightingLevel || selectedLocationId !== null) &&
+    (!allowSightingDeviceSelection || selectedDeviceId !== null);
 
   return (
     <Dialog
@@ -351,8 +367,40 @@ export function AddSightingModal({
             }}
           />
 
+          {/* Device Dropdown - when device selection is on */}
+          {allowSightingDeviceSelection && (
+            <Autocomplete
+              options={devices}
+              getOptionLabel={getDeviceLabel}
+              value={selectedDevice || null}
+              onChange={(_, newValue) => setSelectedDeviceId(newValue?.id || null)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Device *"
+                  placeholder="Select device"
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      fontSize: '16px',
+                    }
+                  }}
+                />
+              )}
+              ListboxProps={{
+                sx: {
+                  maxHeight: { xs: '40vh', sm: '300px' },
+                  '& .MuiAutocomplete-option': {
+                    py: 1.5,
+                    px: 2,
+                    fontSize: '16px',
+                  }
+                }
+              }}
+            />
+          )}
+
           {/* Location Dropdown - when location is at sighting level */}
-          {locationAtSightingLevel && (
+          {!allowSightingDeviceSelection && locationAtSightingLevel && (
             <Autocomplete
               options={locations}
               getOptionLabel={(option) => option.name}
@@ -384,7 +432,7 @@ export function AddSightingModal({
           )}
 
           {/* Individual GPS Locations - only show if geolocation is allowed */}
-          {allowGeolocation && (
+          {allowGeolocation && !allowSightingDeviceSelection && (
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>GPS Location (Optional)</Typography>
               <MultiLocationMapPicker

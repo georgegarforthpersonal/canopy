@@ -337,6 +337,7 @@ export interface Sighting {
   species_scientific_name?: string | null;
   individuals?: IndividualLocation[]; // Individual locations with breeding status
   location_id?: number | null; // Location ID when location is at sighting level
+  device_id?: number | null; // Device ID when sighting inherits location from a device
   notes?: string | null; // Optional notes for this sighting
   image_ids?: number[]; // Linked camera trap image IDs
   audio_clips?: SightingAudioClip[]; // Linked audio detection clips
@@ -390,6 +391,7 @@ export interface SightingCreateRequest {
   count: number;
   individuals?: Omit<IndividualLocation, 'id'>[];
   location_id?: number | null; // Location ID when location is at sighting level
+  device_id?: number | null; // Device ID when sighting inherits location from a device
   notes?: string | null; // Optional notes for this sighting
   image_ids?: number[]; // Camera trap image IDs to link
   audio_detections?: AudioDetectionCreateRequest[]; // Bird detections to link
@@ -483,6 +485,8 @@ export interface SurveyType {
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
   allow_show_description: boolean;
+  allow_sighting_device_selection: boolean;
+  sighting_device_type: DeviceType | null;
   icon: string | null;
   color: string | null;
   is_active: boolean;
@@ -512,6 +516,8 @@ export interface SurveyTypeCreate {
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
   allow_show_description: boolean;
+  allow_sighting_device_selection: boolean;
+  sighting_device_type?: DeviceType | null;
   icon?: string;
   color?: string;
   location_ids: number[];
@@ -534,6 +540,8 @@ export interface SurveyTypeUpdate {
   allow_sun_percentage?: boolean;
   allow_temperature?: boolean;
   allow_show_description?: boolean;
+  allow_sighting_device_selection?: boolean;
+  sighting_device_type?: DeviceType | null;
   icon?: string;
   color?: string;
   is_active?: boolean;
@@ -754,7 +762,7 @@ export const surveyorsAPI = {
 // Device Types (Audio Recorder & Camera Trap Devices)
 // ============================================================================
 
-export type DeviceType = 'audio_recorder' | 'camera_trap';
+export type DeviceType = 'audio_recorder' | 'camera_trap' | 'refugia';
 
 export interface Device {
   id: number;
