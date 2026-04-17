@@ -245,6 +245,7 @@ export function SurveyDetailPage() {
   const locationAtSightingLevel = surveyType?.location_at_sighting_level ?? false;
   const allowGeolocation = surveyType?.allow_geolocation ?? true;
   const allowSightingNotes = surveyType?.allow_sighting_notes ?? true;
+  const allowSightingPhotoUpload = surveyType?.allow_sighting_photo_upload ?? false;
   const showStartEndTime = surveyType?.allow_start_end_time ?? false;
   const showSunPercentage = surveyType?.allow_sun_percentage ?? false;
   const showTemperature = surveyType?.allow_temperature ?? false;
@@ -320,6 +321,8 @@ export function SurveyDetailPage() {
         ...ind,
         tempId: `existing-ind-${ind.id}`,
       })),
+      // Include existing image IDs for photo management
+      existingImageIds: sighting.image_ids || [],
     }));
 
     // Add one empty row at the end
@@ -387,6 +390,28 @@ export function SurveyDetailPage() {
 
       // Update existing sightings and add new ones
       for (const sighting of validSightings) {
+        // Upload any pending photos for this sighting
+        let newPhotoIds: number[] = [];
+        if (allowSightingPhotoUpload && sighting.pendingPhotos && sighting.pendingPhotos.length > 0) {
+          const uploaded = await imagesAPI.uploadFilesWithMetadata(
+            Number(id),
+            sighting.pendingPhotos,
+            undefined,
+            true // skipProcessing
+          );
+          newPhotoIds = uploaded.map((img) => img.id);
+        }
+
+        // Compute final image_ids (existing - removed + new)
+        const finalImageIds = allowSightingPhotoUpload
+          ? [
+              ...(sighting.existingImageIds || []).filter(
+                (imgId) => !(sighting.removedImageIds || []).includes(imgId)
+              ),
+              ...newPhotoIds,
+            ]
+          : undefined;
+
         if (sighting.id) {
           // Update existing sighting
           await surveysAPI.updateSighting(Number(id), sighting.id, {
@@ -394,6 +419,7 @@ export function SurveyDetailPage() {
             count: sighting.count,
             location_id: locationAtSightingLevel ? sighting.location_id : undefined,
             notes: sighting.notes,
+            image_ids: finalImageIds,
           });
 
           // Sync individual locations for this existing sighting
@@ -458,6 +484,7 @@ export function SurveyDetailPage() {
               breeding_status_code: ind.breeding_status_code,
               notes: ind.notes,
             })),
+            image_ids: finalImageIds,
           });
         }
       }
@@ -792,6 +819,7 @@ export function SurveyDetailPage() {
               locations={locations}
               allowGeolocation={allowGeolocation}
               allowSightingNotes={allowSightingNotes}
+              allowSightingPhotoUpload={allowSightingPhotoUpload}
               surveyLocationId={editLocationId}
             />
           ) : (

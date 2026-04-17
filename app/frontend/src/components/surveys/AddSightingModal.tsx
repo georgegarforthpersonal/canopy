@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Autocomplete, Stack, Box, Typography, IconButton } from '@mui/material';
-import { Close } from '@mui/icons-material';
+import { Close, PhotoCamera, CloudUpload } from '@mui/icons-material';
 import type { Species, BreedingStatusCode, LocationWithBoundary, Location } from '../../services/api';
+import { imagesAPI } from '../../services/api';
 import { getSpeciesIcon } from '../../config';
 import MultiLocationMapPicker, { type DraftIndividualLocation } from './MultiLocationMapPicker';
 
@@ -11,6 +12,9 @@ export interface SightingData {
   individuals?: DraftIndividualLocation[];
   location_id?: number | null; // Location ID when location is at sighting level
   notes?: string | null; // Optional notes for this sighting
+  pendingPhotos?: File[];
+  existingImageIds?: number[];
+  removedImageIds?: number[];
 }
 
 interface AddSightingModalProps {
@@ -27,6 +31,7 @@ interface AddSightingModalProps {
   locations?: Location[]; // Available locations for sighting-level selection
   allowGeolocation?: boolean; // Whether GPS location picker is shown
   allowSightingNotes?: boolean; // Whether notes field is shown
+  allowSightingPhotoUpload?: boolean; // Whether photo upload is shown
   surveyLocationId?: number | null; // Survey-level location ID for initial map zoom
 }
 
@@ -51,6 +56,7 @@ export function AddSightingModal({
   locations = [],
   allowGeolocation = true,
   allowSightingNotes = true,
+  allowSightingPhotoUpload = false,
   surveyLocationId,
 }: AddSightingModalProps) {
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<number | null>(initialData?.species_id || null);
@@ -62,6 +68,28 @@ export function AddSightingModal({
     initialData?.location_id || null
   );
   const [notes, setNotes] = useState<string>(initialData?.notes || '');
+  const [pendingPhotos, setPendingPhotos] = useState<File[]>(initialData?.pendingPhotos || []);
+  const [existingImageIds, setExistingImageIds] = useState<number[]>(initialData?.existingImageIds || []);
+  const [removedImageIds, setRemovedImageIds] = useState<number[]>(initialData?.removedImageIds || []);
+  const [existingImageUrls, setExistingImageUrls] = useState<Map<number, string>>(new Map());
+
+  // Load preview URLs for existing images
+  useEffect(() => {
+    if (existingImageIds.length === 0) return;
+    const loadUrls = async () => {
+      const urls = new Map<number, string>();
+      await Promise.all(
+        existingImageIds.map(async (imgId) => {
+          try {
+            const res = await imagesAPI.getPreviewUrl(imgId);
+            urls.set(imgId, res.preview_url);
+          } catch { /* ignore */ }
+        })
+      );
+      setExistingImageUrls(urls);
+    };
+    loadUrls();
+  }, [existingImageIds]);
 
   // Check if selected species is a bird (for breeding status codes)
   const isBirdSpecies = useMemo(() => {
@@ -77,12 +105,18 @@ export function AddSightingModal({
       setIndividuals(initialData.individuals || []);
       setSelectedLocationId(initialData.location_id || null);
       setNotes(initialData.notes || '');
+      setPendingPhotos(initialData.pendingPhotos || []);
+      setExistingImageIds(initialData.existingImageIds || []);
+      setRemovedImageIds(initialData.removedImageIds || []);
     } else {
       setSelectedSpeciesId(null);
       setCount(1);
       setIndividuals([]);
       setSelectedLocationId(null);
       setNotes('');
+      setPendingPhotos([]);
+      setExistingImageIds([]);
+      setRemovedImageIds([]);
     }
   }, [initialData, open]);
 
@@ -109,6 +143,9 @@ export function AddSightingModal({
         individuals: individuals.length > 0 ? individuals : undefined,
         location_id: locationAtSightingLevel ? selectedLocationId : undefined,
         notes: notes.trim() || null,
+        pendingPhotos: pendingPhotos.length > 0 ? pendingPhotos : undefined,
+        existingImageIds: existingImageIds.length > 0 ? existingImageIds : undefined,
+        removedImageIds: removedImageIds.length > 0 ? removedImageIds : undefined,
       });
       // Reset for next entry
       setSelectedSpeciesId(null);
@@ -116,6 +153,9 @@ export function AddSightingModal({
       setIndividuals([]);
       setSelectedLocationId(null);
       setNotes('');
+      setPendingPhotos([]);
+      setExistingImageIds([]);
+      setRemovedImageIds([]);
       onClose();
     }
   };
@@ -127,8 +167,57 @@ export function AddSightingModal({
     setIndividuals(initialData?.individuals || []);
     setSelectedLocationId(initialData?.location_id || null);
     setNotes(initialData?.notes || '');
+    setPendingPhotos(initialData?.pendingPhotos || []);
+    setExistingImageIds(initialData?.existingImageIds || []);
+    setRemovedImageIds(initialData?.removedImageIds || []);
     onClose();
   };
+
+  const handlePhotoFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp'];
+    const validFiles = Array.from(files).filter((f) => {
+      const ext = f.name.toLowerCase().substring(f.name.lastIndexOf('.'));
+      return validExtensions.includes(ext);
+    });
+    if (validFiles.length > 0) {
+      setPendingPhotos((prev) => [...prev, ...validFiles]);
+    }
+    event.target.value = '';
+  };
+
+  // Create and manage object URLs for pending photo previews to avoid memory leaks
+  const pendingPhotoUrls = useRef<Map<File, string>>(new Map());
+  const getPendingPhotoUrl = (file: File): string => {
+    let url = pendingPhotoUrls.current.get(file);
+    if (!url) {
+      url = URL.createObjectURL(file);
+      pendingPhotoUrls.current.set(file, url);
+    }
+    return url;
+  };
+  // Revoke URLs for files no longer in pendingPhotos
+  useEffect(() => {
+    const currentFiles = new Set(pendingPhotos);
+    for (const [file, url] of pendingPhotoUrls.current) {
+      if (!currentFiles.has(file)) {
+        URL.revokeObjectURL(url);
+        pendingPhotoUrls.current.delete(file);
+      }
+    }
+  }, [pendingPhotos]);
+  // Revoke all URLs on unmount
+  useEffect(() => {
+    return () => {
+      for (const url of pendingPhotoUrls.current.values()) {
+        URL.revokeObjectURL(url);
+      }
+      pendingPhotoUrls.current.clear();
+    };
+  }, []);
+
+  const activeExistingIds = existingImageIds.filter((id) => !removedImageIds.includes(id));
 
   const selectedSpecies = species.find(s => s.id === selectedSpeciesId);
   const selectedLocation = locations.find(l => l.id === selectedLocationId);
@@ -327,6 +416,106 @@ export function AddSightingModal({
                 }
               }}
             />
+          )}
+
+          {/* Photo Upload */}
+          {allowSightingPhotoUpload && (
+            <Box>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                <Typography variant="subtitle2">Photos (Optional)</Typography>
+                <Button
+                  component="label"
+                  variant="outlined"
+                  size="small"
+                  startIcon={<CloudUpload />}
+                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                >
+                  Add Photos
+                  <input
+                    type="file"
+                    hidden
+                    multiple
+                    accept=".jpg,.jpeg,.png,.tiff,.tif,.bmp"
+                    onChange={handlePhotoFileSelect}
+                  />
+                </Button>
+              </Stack>
+
+              {(activeExistingIds.length > 0 || pendingPhotos.length > 0) ? (
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {activeExistingIds.map((imgId) => (
+                    <Box key={`existing-${imgId}`} sx={{ position: 'relative' }}>
+                      <Box
+                        component="img"
+                        src={existingImageUrls.get(imgId) || ''}
+                        alt=""
+                        sx={{
+                          width: 72,
+                          height: 54,
+                          objectFit: 'cover',
+                          borderRadius: 0.5,
+                          bgcolor: 'grey.200',
+                        }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => setRemovedImageIds((prev) => [...prev, imgId])}
+                        sx={{
+                          position: 'absolute',
+                          top: -6,
+                          right: -6,
+                          bgcolor: 'error.main',
+                          color: 'white',
+                          width: 18,
+                          height: 18,
+                          '&:hover': { bgcolor: 'error.dark' },
+                        }}
+                      >
+                        <Close sx={{ fontSize: 12 }} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                  {pendingPhotos.map((file, idx) => (
+                    <Box key={`pending-${idx}`} sx={{ position: 'relative' }}>
+                      <Box
+                        component="img"
+                        src={getPendingPhotoUrl(file)}
+                        alt={file.name}
+                        sx={{
+                          width: 72,
+                          height: 54,
+                          objectFit: 'cover',
+                          borderRadius: 0.5,
+                        }}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => setPendingPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                        sx={{
+                          position: 'absolute',
+                          top: -6,
+                          right: -6,
+                          bgcolor: 'error.main',
+                          color: 'white',
+                          width: 18,
+                          height: 18,
+                          '&:hover': { bgcolor: 'error.dark' },
+                        }}
+                      >
+                        <Close sx={{ fontSize: 12 }} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Box sx={{ textAlign: 'center', py: 2, border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
+                  <PhotoCamera sx={{ fontSize: 32, color: 'text.disabled', mb: 0.5 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    No photos added yet
+                  </Typography>
+                </Box>
+              )}
+            </Box>
           )}
         </Stack>
       </DialogContent>

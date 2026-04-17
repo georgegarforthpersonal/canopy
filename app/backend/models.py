@@ -407,6 +407,7 @@ class SurveyTypeBase(SQLModel):
     allow_sighting_notes: bool = Field(default=True, description="Whether notes can be entered for individual sightings")
     allow_audio_upload: bool = Field(default=False, description="Whether audio files can be uploaded for this survey type")
     allow_image_upload: bool = Field(default=False, description="Whether camera trap images can be uploaded for this survey type")
+    allow_sighting_photo_upload: bool = Field(default=False, description="Whether photos can be attached to individual sightings for documentation")
     allow_start_end_time: bool = Field(default=False, description="Whether start/end time fields are shown for this survey type")
     allow_sun_percentage: bool = Field(default=False, description="Whether sun percentage field is shown for this survey type")
     allow_temperature: bool = Field(default=False, description="Whether temperature field is shown for this survey type")
@@ -456,6 +457,7 @@ class SurveyTypeUpdate(SQLModel):
     allow_sighting_notes: Optional[bool] = None
     allow_audio_upload: Optional[bool] = None
     allow_image_upload: Optional[bool] = None
+    allow_sighting_photo_upload: Optional[bool] = None
     allow_start_end_time: Optional[bool] = None
     allow_sun_percentage: Optional[bool] = None
     allow_temperature: Optional[bool] = None
@@ -602,6 +604,7 @@ class SightingUpdate(SQLModel):
     count: Optional[int] = Field(None, gt=0)
     location_id: Optional[int] = Field(None, description="Location ID (for sighting-level locations)")
     notes: Optional[str] = Field(None, description="Optional notes for this sighting")
+    image_ids: Optional[List[int]] = Field(None, description="Camera trap image IDs to link via junction table")
 
 
 class SightingRead(SightingBase):

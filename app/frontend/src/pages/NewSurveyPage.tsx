@@ -308,11 +308,29 @@ export function NewSurveyPage() {
 
       const newSurvey = await surveysAPI.create(surveyData);
 
-      // Step 2: Add sightings (with individual locations if provided)
+      // Step 2: Upload sighting photos if any (for sighting photo upload survey types)
       const validSightings = draftSightings.filter(
         (s) => s.species_id !== null && s.count > 0
       );
 
+      const sightingPhotoMap = new Map<string, number[]>();
+      if (allowSightingPhotoUpload) {
+        await Promise.all(
+          validSightings
+            .filter((s) => s.pendingPhotos && s.pendingPhotos.length > 0)
+            .map(async (sighting) => {
+              const uploaded = await imagesAPI.uploadFilesWithMetadata(
+                newSurvey.id,
+                sighting.pendingPhotos!,
+                undefined,
+                true // skipProcessing
+              );
+              sightingPhotoMap.set(sighting.tempId, uploaded.map((img) => img.id));
+            })
+        );
+      }
+
+      // Step 3: Add sightings (with individual locations if provided)
       await Promise.all(
         validSightings.map((sighting) =>
           surveysAPI.addSighting(newSurvey.id, {
@@ -328,11 +346,12 @@ export function NewSurveyPage() {
               breeding_status_code: ind.breeding_status_code,
               notes: ind.notes,
             })),
+            image_ids: sightingPhotoMap.get(sighting.tempId),
           })
         )
       );
 
-      // Step 3: Upload image files if any (for camera trap surveys)
+      // Step 4: Upload image files if any (for camera trap surveys)
       if (pendingImageFiles.length > 0) {
         await imagesAPI.uploadFiles(newSurvey.id, pendingImageFiles);
       }
@@ -433,6 +452,7 @@ export function NewSurveyPage() {
   const allowGeolocation = selectedSurveyType?.allow_geolocation ?? true;
   const allowSightingNotes = selectedSurveyType?.allow_sighting_notes ?? true;
   const allowImageUpload = selectedSurveyType?.allow_image_upload ?? false;
+  const allowSightingPhotoUpload = selectedSurveyType?.allow_sighting_photo_upload ?? false;
   const showStartEndTime = selectedSurveyType?.allow_start_end_time ?? false;
   const showSunPercentage = selectedSurveyType?.allow_sun_percentage ?? false;
   const showTemperature = selectedSurveyType?.allow_temperature ?? false;
@@ -688,6 +708,7 @@ export function NewSurveyPage() {
             locations={locations}
             allowGeolocation={allowGeolocation}
             allowSightingNotes={allowSightingNotes}
+            allowSightingPhotoUpload={allowSightingPhotoUpload}
             surveyLocationId={locationId}
           />
         </Paper>

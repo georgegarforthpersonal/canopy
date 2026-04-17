@@ -121,6 +121,7 @@ export function AdminPage() {
   const [formAllowSightingNotes, setFormAllowSightingNotes] = useState(true);
   const [formAllowAudioUpload, setFormAllowAudioUpload] = useState(false);
   const [formAllowImageUpload, setFormAllowImageUpload] = useState(false);
+  const [formAllowSightingPhotoUpload, setFormAllowSightingPhotoUpload] = useState(false);
   const [formAllowStartEndTime, setFormAllowStartEndTime] = useState(false);
   const [formAllowSunPercentage, setFormAllowSunPercentage] = useState(false);
   const [formAllowTemperature, setFormAllowTemperature] = useState(false);
@@ -321,6 +322,7 @@ export function AdminPage() {
       setFormAllowSightingNotes(details.allow_sighting_notes);
       setFormAllowAudioUpload(details.allow_audio_upload);
       setFormAllowImageUpload(details.allow_image_upload);
+      setFormAllowSightingPhotoUpload(details.allow_sighting_photo_upload);
       setFormAllowStartEndTime(details.allow_start_end_time);
       setFormAllowSunPercentage(details.allow_sun_percentage);
       setFormAllowTemperature(details.allow_temperature);
@@ -342,6 +344,7 @@ export function AdminPage() {
     setFormAllowSightingNotes(true);
     setFormAllowAudioUpload(false);
     setFormAllowImageUpload(false);
+    setFormAllowSightingPhotoUpload(false);
     setFormAllowStartEndTime(false);
     setFormAllowSunPercentage(false);
     setFormAllowTemperature(false);
@@ -378,6 +381,7 @@ export function AdminPage() {
         allow_sighting_notes: formAllowSightingNotes,
         allow_audio_upload: formAllowAudioUpload,
         allow_image_upload: formAllowImageUpload,
+        allow_sighting_photo_upload: formAllowSightingPhotoUpload,
         allow_start_end_time: formAllowStartEndTime,
         allow_sun_percentage: formAllowSunPercentage,
         allow_temperature: formAllowTemperature,
@@ -1162,6 +1166,25 @@ export function AdminPage() {
               {formAllowImageUpload
                 ? 'Users can upload camera trap images for analysis'
                 : 'Image upload is disabled for this survey type'}
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formAllowSightingPhotoUpload}
+                  onChange={(e) => setFormAllowSightingPhotoUpload(e.target.checked)}
+                  disabled={savingSurveyType || formAllowImageUpload}
+                />
+              }
+              label="Allow sighting photo upload"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+              {formAllowImageUpload
+                ? 'Not available for camera trap survey types'
+                : formAllowSightingPhotoUpload
+                ? 'Users can attach photos to individual sightings for documentation'
+                : 'Sighting photo upload is disabled for this survey type'}
             </Typography>
           </Box>
           <Box sx={{ mt: 2 }}>
