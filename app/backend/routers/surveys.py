@@ -34,6 +34,7 @@ from models import (
     SightingImage, SightingAudioClip,
     AudioRecording, AudioDetection,
     CameraTrapImage,
+    Device,
     Organisation
 )
 from services.r2_storage import delete_media_file
@@ -608,12 +609,29 @@ async def create_sighting(
                 detail=f"Sum of individual counts ({total_individual_count}) exceeds sighting count ({sighting.count})"
             )
 
+    # Validate device_id belongs to this organisation, and fetch its point
+    device_point: Optional[tuple[float, float]] = None
+    if sighting.device_id is not None:
+        device_row = db.execute(
+            text("""
+                SELECT id, ST_Y(point_geometry) AS latitude, ST_X(point_geometry) AS longitude
+                FROM device
+                WHERE id = :id AND organisation_id = :org_id
+            """),
+            {"id": sighting.device_id, "org_id": org.id}
+        ).fetchone()
+        if not device_row:
+            raise HTTPException(status_code=400, detail=f"Device {sighting.device_id} not found")
+        if device_row.latitude is not None and device_row.longitude is not None:
+            device_point = (device_row.latitude, device_row.longitude)
+
     # Create sighting
     db_sighting = Sighting(
         survey_id=survey_id,
         species_id=sighting.species_id,
         count=sighting.count,
-        location_id=sighting.location_id
+        location_id=sighting.location_id,
+        device_id=sighting.device_id,
     )
 
     db.add(db_sighting)
@@ -634,6 +652,22 @@ async def create_sighting(
                 code=ind.breeding_status_code,
                 notes=ind.notes,
                 camera_trap_image_id=ind.camera_trap_image_id
+            )
+        )
+
+    # Auto-create an individual point from the device's geometry so the
+    # sighting carries a location even though the user didn't enter one.
+    if device_point is not None and not sighting.individuals:
+        lat, lng = device_point
+        db.execute(
+            text("""
+                INSERT INTO sighting_individual (sighting_id, coordinates, count)
+                VALUES (:sighting_id, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), :count)
+            """).bindparams(
+                sighting_id=db_sighting.id,
+                lng=lng,
+                lat=lat,
+                count=sighting.count,
             )
         )
     # Create sighting_image junction records
