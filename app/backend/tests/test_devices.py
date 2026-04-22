@@ -114,6 +114,8 @@ class TestCreateDevice:
                 "device_id": "NEW001",
                 "name": "New Device",
                 "device_type": "audio_recorder",
+                "latitude": 51.5,
+                "longitude": -0.12,
             },
             headers=auth_headers,
         )
@@ -122,6 +124,8 @@ class TestCreateDevice:
         data = response.json()
         assert data["device_id"] == "NEW001"
         assert data["name"] == "New Device"
+        assert data["latitude"] == 51.5
+        assert data["longitude"] == -0.12
 
     def test_create_device_duplicate(
         self, client: TestClient, auth_headers: dict, create_device
@@ -131,16 +135,55 @@ class TestCreateDevice:
 
         response = client.post(
             "/api/devices",
-            json={"device_id": "DUPE001", "device_type": "audio_recorder"},
+            json={
+                "device_id": "DUPE001",
+                "name": "Duplicate",
+                "device_type": "audio_recorder",
+                "latitude": 51.5,
+                "longitude": -0.12,
+            },
             headers=auth_headers,
         )
         assert response.status_code == 409
+
+    def test_create_device_requires_coordinates(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """Should return 422 when latitude/longitude are missing."""
+        response = client.post(
+            "/api/devices",
+            json={"device_id": "NOCOORDS", "name": "No Coords", "device_type": "audio_recorder"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
+
+    def test_create_device_requires_name(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """Should return 422 when name is missing."""
+        response = client.post(
+            "/api/devices",
+            json={
+                "device_id": "NONAME",
+                "device_type": "audio_recorder",
+                "latitude": 51.5,
+                "longitude": -0.12,
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
 
     def test_create_device_unauthorized(self, client: TestClient):
         """Should return 401 without authentication."""
         response = client.post(
             "/api/devices",
-            json={"device_id": "TEST", "device_type": "audio_recorder"},
+            json={
+                "device_id": "TEST",
+                "name": "Test",
+                "device_type": "audio_recorder",
+                "latitude": 51.5,
+                "longitude": -0.12,
+            },
         )
         assert response.status_code == 401
 

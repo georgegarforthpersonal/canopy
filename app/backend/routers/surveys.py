@@ -34,6 +34,8 @@ from models import (
     SightingImage, SightingAudioClip,
     AudioRecording, AudioDetection,
     CameraTrapImage,
+    Device,
+    SurveyType,
     Organisation
 )
 from services.r2_storage import delete_media_file
@@ -41,6 +43,37 @@ from services.r2_storage import delete_media_file
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _sync_device_individual(db: Session, sighting_id: int, device_id: int, count: int) -> None:
+    """Materialise a sighting_individual row at the attached device's current coordinates.
+
+    Device-attach surveys have no per-individual UI, so every sighting_individual
+    for them is auto-created here. We identify auto rows heuristically (no
+    breeding_status_code, notes, or camera_trap_image_id) and replace them on
+    every sync so that edits to device_id or count stay in lockstep with the
+    stored geometry — otherwise exports/GIS consumers see stale points.
+    """
+    db.execute(
+        text("""
+            DELETE FROM sighting_individual
+            WHERE sighting_id = :sighting_id
+              AND breeding_status_code IS NULL
+              AND notes IS NULL
+              AND camera_trap_image_id IS NULL
+        """),
+        {"sighting_id": sighting_id},
+    )
+    db.execute(
+        text("""
+            INSERT INTO sighting_individual (sighting_id, coordinates, count)
+            SELECT :sighting_id, point_geometry, :count
+            FROM device
+            WHERE id = :device_id
+        """),
+        {"sighting_id": sighting_id, "device_id": device_id, "count": count},
+    )
+
 
 # ============================================================================
 # Breeding Status Codes (BTO breeding evidence codes)
@@ -497,6 +530,7 @@ async def get_survey_sightings(
         Sighting.survey_id,
         Sighting.species_id,
         Sighting.location_id,
+        Sighting.device_id,
         Sighting.count,
         Sighting.notes,
         Species.name.label('species_name'),  # type: ignore[union-attr]
@@ -548,6 +582,7 @@ async def get_survey_sightings(
             "species_id": row.species_id,
             "location_id": row.location_id,
             "location_name": row.location_name,
+            "device_id": row.device_id,
             "count": row.count,
             "notes": row.notes,
             "species_name": row.species_name,
@@ -608,12 +643,48 @@ async def create_sighting(
                 detail=f"Sum of individual counts ({total_individual_count}) exceeds sighting count ({sighting.count})"
             )
 
+    # Device-attach mode consistency check: reject device_id unless the survey type
+    # opts in, and require the device's type to match the configured sighting_device_type.
+    survey_type = db.query(SurveyType).filter(SurveyType.id == survey.survey_type_id).first()
+    if sighting.device_id is not None:
+        if not (survey_type and survey_type.allow_sighting_device_selection):
+            raise HTTPException(
+                status_code=400,
+                detail="This survey type does not allow attaching a device to sightings"
+            )
+        device_row = db.execute(
+            text("""
+                SELECT id, device_type, ST_Y(point_geometry) AS latitude, ST_X(point_geometry) AS longitude
+                FROM device
+                WHERE id = :id AND organisation_id = :org_id
+            """),
+            {"id": sighting.device_id, "org_id": org.id}
+        ).fetchone()
+        if not device_row:
+            raise HTTPException(status_code=400, detail=f"Device {sighting.device_id} not found")
+        expected_type = survey_type.sighting_device_type
+        # sighting_device_type is stored as a raw String column, so normalise to the
+        # enum's string value whether SQLAlchemy hands us the enum or the raw string.
+        expected_str = expected_type.value if hasattr(expected_type, "value") else expected_type
+        if expected_str and device_row.device_type != expected_str:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Device type '{device_row.device_type}' does not match survey type's "
+                    f"configured device type '{expected_str}'"
+                )
+            )
+        device_point: Optional[tuple[float, float]] = (device_row.latitude, device_row.longitude)
+    else:
+        device_point = None
+
     # Create sighting
     db_sighting = Sighting(
         survey_id=survey_id,
         species_id=sighting.species_id,
         count=sighting.count,
-        location_id=sighting.location_id
+        location_id=sighting.location_id,
+        device_id=sighting.device_id,
     )
 
     db.add(db_sighting)
@@ -636,6 +707,12 @@ async def create_sighting(
                 camera_trap_image_id=ind.camera_trap_image_id
             )
         )
+
+    # Auto-create an individual point from the device's geometry so the
+    # sighting carries a location even though the user didn't enter one.
+    if sighting.device_id is not None and not sighting.individuals:
+        assert db_sighting.id is not None  # guaranteed by db.refresh above
+        _sync_device_individual(db, db_sighting.id, sighting.device_id, sighting.count)
     # Create sighting_image junction records
     if sighting.image_ids:
         existing_images = db.query(CameraTrapImage.id).filter(
@@ -708,7 +785,10 @@ async def create_sighting(
         "id": db_sighting.id,
         "survey_id": db_sighting.survey_id,
         "species_id": db_sighting.species_id,
+        "location_id": db_sighting.location_id,
+        "device_id": db_sighting.device_id,
         "count": db_sighting.count,
+        "notes": db_sighting.notes,
         "species_name": species.name if species else None,
         "species_scientific_name": species.scientific_name if species else None,
         "individuals": [
@@ -770,6 +850,25 @@ async def update_sighting(
 
     for field, value in update_data.items():
         setattr(db_sighting, field, value)
+
+    # Keep the auto-created sighting_individual in lockstep with device_id / count
+    # so downstream geometry consumers don't see stale points after edits.
+    if db_sighting.device_id is not None and (
+        "device_id" in update_data or "count" in update_data
+    ):
+        _sync_device_individual(db, db_sighting.id, db_sighting.device_id, db_sighting.count)
+    elif "device_id" in update_data and db_sighting.device_id is None:
+        # Device was cleared — remove the auto-created individual.
+        db.execute(
+            text("""
+                DELETE FROM sighting_individual
+                WHERE sighting_id = :sighting_id
+                  AND breeding_status_code IS NULL
+                  AND notes IS NULL
+                  AND camera_trap_image_id IS NULL
+            """),
+            {"sighting_id": sighting_id},
+        )
 
     # Sync sighting_image junction table if image_ids provided
     if image_ids is not None:

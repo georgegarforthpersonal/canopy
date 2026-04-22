@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Typography, TextField, Autocomplete, IconButton, Alert, Stack, Card, CardContent, Button, Chip, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, ViewList, Map as MapIcon, PhotoCamera, Close } from '@mui/icons-material';
-import type { Species, BreedingStatusCode, LocationWithBoundary, Location } from '../../services/api';
+import type { Species, BreedingStatusCode, LocationWithBoundary, Location, Device } from '../../services/api';
 import { imagesAPI } from '../../services/api';
 import { AddSightingModal } from './AddSightingModal';
 import type { SightingData } from './AddSightingModal';
 import { LocationModal } from './LocationModal';
 import { MapModeSightings } from './MapModeSightings';
+import { getSightingsGridConfig } from './sightingsGridConfig';
 import { getSpeciesIcon } from '../../config';
 import { useResponsive } from '../../hooks/useResponsive';
 import type { DraftIndividualLocation } from './MultiLocationMapPicker';
@@ -67,6 +68,8 @@ export interface DraftSighting {
   individuals?: DraftIndividualLocation[];
   // Location ID when location is at sighting level
   location_id?: number | null;
+  // Device ID when sighting inherits location from a device
+  device_id?: number | null;
   // Optional notes for this sighting
   notes?: string | null;
   // Pending photo files to upload on save
@@ -90,6 +93,8 @@ interface SightingsEditorProps {
   allowGeolocation?: boolean; // Whether geolocation is allowed (controls geolocation button visibility)
   allowSightingNotes?: boolean; // Whether notes can be entered for individual sightings
   allowSightingPhotoUpload?: boolean; // Whether photos can be attached to individual sightings
+  allowSightingDeviceSelection?: boolean; // When true, each sighting picks a device that supplies its location
+  devices?: Device[]; // Available devices (already filtered by configured device type) when device selection is on
   surveyLocationId?: number | null; // Survey-level location ID for initial map zoom
 }
 
@@ -111,6 +116,8 @@ export function SightingsEditor({
   allowGeolocation = true,
   allowSightingNotes = true,
   allowSightingPhotoUpload = false,
+  allowSightingDeviceSelection = false,
+  devices = [],
   surveyLocationId,
 }: SightingsEditorProps) {
   const { isMobile } = useResponsive();
@@ -164,6 +171,7 @@ export function SightingsEditor({
               count: sightingData.count,
               individuals: sightingData.individuals,
               location_id: sightingData.location_id,
+              device_id: sightingData.device_id,
               notes: sightingData.notes,
               pendingPhotos: sightingData.pendingPhotos,
               existingImageIds: sightingData.existingImageIds,
@@ -181,6 +189,7 @@ export function SightingsEditor({
           count: sightingData.count,
           individuals: sightingData.individuals,
           location_id: sightingData.location_id,
+          device_id: sightingData.device_id,
           notes: sightingData.notes,
           pendingPhotos: sightingData.pendingPhotos,
         },
@@ -246,6 +255,11 @@ export function SightingsEditor({
     if (!locationId) return '';
     const loc = locations.find((l) => l.id === locationId);
     return loc?.name || '';
+  };
+
+  const getDeviceDisplayName = (deviceId: number | null | undefined): string => {
+    if (!deviceId) return '';
+    return devices.find((x) => x.id === deviceId)?.name || '';
   };
 
   // Location modal handlers
@@ -320,7 +334,9 @@ export function SightingsEditor({
   const editingSighting = editingTempId ? sightings.find((s) => s.tempId === editingTempId) : null;
   const locationEditingSighting = locationEditingTempId ? sightings.find((s) => s.tempId === locationEditingTempId) : null;
 
-  const viewModeToggle = allowGeolocation ? (
+  const canShowMap = allowGeolocation || allowSightingDeviceSelection;
+
+  const viewModeToggle = canShowMap ? (
     <ToggleButtonGroup
       value={viewMode}
       exclusive
@@ -342,7 +358,7 @@ export function SightingsEditor({
   ) : null;
 
   // Map mode UI (shared between mobile and desktop)
-  if (viewMode === 'map' && allowGeolocation) {
+  if (viewMode === 'map' && canShowMap) {
     return (
       <>
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
@@ -365,6 +381,8 @@ export function SightingsEditor({
           onSightingsChange={onSightingsChange}
           locationsWithBoundaries={locationsWithBoundaries}
           surveyLocationId={surveyLocationId}
+          devices={devices}
+          allowSightingDeviceSelection={allowSightingDeviceSelection}
         />
       </>
     );
@@ -479,6 +497,19 @@ export function SightingsEditor({
                                 }}
                               />
                             )}
+                            {allowSightingDeviceSelection && sighting.device_id && (
+                              <Chip
+                                label={getDeviceDisplayName(sighting.device_id)}
+                                size="small"
+                                sx={{
+                                  height: 24,
+                                  fontSize: '0.75rem',
+                                  bgcolor: 'grey.200',
+                                  color: 'text.primary',
+                                  fontWeight: 500,
+                                }}
+                              />
+                            )}
                             {allowSightingNotes && sighting.notes && (
                               <Tooltip title={sighting.notes} arrow>
                                 <Chip
@@ -569,6 +600,7 @@ export function SightingsEditor({
                   count: editingSighting.count,
                   individuals: editingSighting.individuals,
                   location_id: editingSighting.location_id,
+                  device_id: editingSighting.device_id,
                   notes: editingSighting.notes,
                   pendingPhotos: editingSighting.pendingPhotos,
                   existingImageIds: editingSighting.existingImageIds,
@@ -583,6 +615,8 @@ export function SightingsEditor({
           allowGeolocation={allowGeolocation}
           allowSightingNotes={allowSightingNotes}
           allowSightingPhotoUpload={allowSightingPhotoUpload}
+          allowSightingDeviceSelection={allowSightingDeviceSelection}
+          devices={devices}
           surveyLocationId={surveyLocationId}
         />
       </>
@@ -607,44 +641,15 @@ export function SightingsEditor({
 
       {/* Calculate grid columns based on which fields are shown */}
       {(() => {
-        // Build grid columns dynamically: Species, [Location], [GPS/Spacer], Count, [Notes], Delete
-        const getGridColumns = () => {
-          const cols: string[] = [];
-
-          // Species column - flexible
-          cols.push(locationAtSightingLevel ? '2fr' : '2.5fr');
-
-          // Location column (if at sighting level)
-          if (locationAtSightingLevel) {
-            cols.push('1.2fr');
-          }
-
-          // GPS column (if allowed) or spacer (if no location and no GPS)
-          if (allowGeolocation) {
-            cols.push('70px');
-          } else if (!locationAtSightingLevel) {
-            cols.push('70px'); // spacer
-          }
-
-          // Count column - fixed small width
-          cols.push('60px');
-
-          // Notes column (if allowed) - flexible
-          if (allowSightingNotes) {
-            cols.push('2fr');
-          }
-
-          // Photos column (if sighting photo upload is allowed)
-          if (allowSightingPhotoUpload) {
-            cols.push('80px');
-          }
-
-          // Delete button - fixed small width
-          cols.push('40px');
-
-          return cols.join(' ');
-        };
-        const gridColumns = getGridColumns();
+        const gridConfig = getSightingsGridConfig({
+          locationAtSightingLevel,
+          allowGeolocation,
+          allowSightingDeviceSelection,
+          showNotesColumn: allowSightingNotes,
+          showPhotosColumn: allowSightingPhotoUpload,
+          includeDeleteColumn: true,
+        });
+        const { gridColumns } = gridConfig;
 
         return sightings.length > 0 ? (
         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
@@ -662,17 +667,22 @@ export function SightingsEditor({
             <Typography variant="body2" fontWeight={600} color="text.secondary">
               SPECIES *
             </Typography>
-            {locationAtSightingLevel && (
+            {gridConfig.showDevice && (
+              <Typography variant="body2" fontWeight={600} color="text.secondary">
+                DEVICE *
+              </Typography>
+            )}
+            {gridConfig.showLocation && (
               <Typography variant="body2" fontWeight={600} color="text.secondary">
                 LOCATION *
               </Typography>
             )}
-            {allowGeolocation && (
+            {gridConfig.showGps && (
               <Typography variant="body2" fontWeight={600} color="text.secondary" textAlign="center">
                 GPS
               </Typography>
             )}
-            {!allowGeolocation && !locationAtSightingLevel && (
+            {gridConfig.showSpacer && (
               <Box /> // Empty spacer to maintain grid alignment
             )}
             <Typography variant="body2" fontWeight={600} color="text.secondary">
@@ -820,8 +830,35 @@ export function SightingsEditor({
                   size="small"
                 />
 
+                {/* Device Dropdown Column - when device selection is on */}
+                {gridConfig.showDevice && (
+                  <Autocomplete
+                    options={devices}
+                    getOptionLabel={(d) => d.name}
+                    value={devices.find((d) => d.id === sighting.device_id) || null}
+                    onChange={(_, newValue) =>
+                      updateSighting(sighting.tempId, 'device_id', newValue?.id || null)
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        placeholder={isEmptyLastRow ? '' : 'Select device'}
+                        size="small"
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            fontSize: '0.875rem',
+                            padding: '8.5px 14px'
+                          }
+                        }}
+                      />
+                    )}
+                    size="small"
+                    disabled={isEmptyLastRow}
+                  />
+                )}
+
                 {/* Location Dropdown Column - when location is at sighting level */}
-                {locationAtSightingLevel && (
+                {gridConfig.showLocation && (
                   <Autocomplete
                     options={locations}
                     getOptionLabel={(option) => option.name}
@@ -848,7 +885,7 @@ export function SightingsEditor({
                 )}
 
                 {/* GPS Location Column - for individual geolocation */}
-                {allowGeolocation && (
+                {gridConfig.showGps && (
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                     <Tooltip title={locationTooltip} arrow>
                       <IconButton
@@ -871,7 +908,7 @@ export function SightingsEditor({
                     </Tooltip>
                   </Box>
                 )}
-                {!allowGeolocation && !locationAtSightingLevel && (
+                {gridConfig.showSpacer && (
                   <Box /> // Empty spacer to maintain grid alignment
                 )}
 

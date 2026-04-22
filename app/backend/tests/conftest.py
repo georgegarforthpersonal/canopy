@@ -311,6 +311,8 @@ def create_device(db_session: Session, test_org: Organisation):
         name: str = "Test Device",
         device_type: DeviceType = DeviceType.audio_recorder,
         is_active: bool = True,
+        latitude: float = 51.5,
+        longitude: float = -0.12,
     ) -> Device:
         device = Device(
             device_id=device_id,
@@ -318,6 +320,7 @@ def create_device(db_session: Session, test_org: Organisation):
             device_type=device_type,
             organisation_id=test_org.id,
             is_active=is_active,
+            point_geometry=f"SRID=4326;POINT({longitude} {latitude})",
         )
         db_session.add(device)
         db_session.commit()

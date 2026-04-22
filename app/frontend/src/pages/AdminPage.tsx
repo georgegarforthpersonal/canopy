@@ -126,6 +126,8 @@ export function AdminPage() {
   const [formAllowSunPercentage, setFormAllowSunPercentage] = useState(false);
   const [formAllowTemperature, setFormAllowTemperature] = useState(false);
   const [formAllowShowDescription, setFormAllowShowDescription] = useState(false);
+  const [formAllowSightingDeviceSelection, setFormAllowSightingDeviceSelection] = useState(false);
+  const [formSightingDeviceType, setFormSightingDeviceType] = useState<DeviceType | null>(null);
   const [formColor, setFormColor] = useState<string | null>(null);
   const [formSelectedLocations, setFormSelectedLocations] = useState<Location[]>([]);
   const [formSelectedSpeciesTypes, setFormSelectedSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
@@ -327,6 +329,8 @@ export function AdminPage() {
       setFormAllowSunPercentage(details.allow_sun_percentage);
       setFormAllowTemperature(details.allow_temperature);
       setFormAllowShowDescription(details.allow_show_description);
+      setFormAllowSightingDeviceSelection(details.allow_sighting_device_selection);
+      setFormSightingDeviceType(details.sighting_device_type);
       setFormColor(details.color);
       setFormSelectedLocations(details.locations);
       setFormSelectedSpeciesTypes(details.species_types);
@@ -349,6 +353,8 @@ export function AdminPage() {
     setFormAllowSunPercentage(false);
     setFormAllowTemperature(false);
     setFormAllowShowDescription(false);
+    setFormAllowSightingDeviceSelection(false);
+    setFormSightingDeviceType(null);
     setFormColor(null);
     setFormSelectedLocations([]);
     setFormSelectedSpeciesTypes([]);
@@ -360,10 +366,6 @@ export function AdminPage() {
       setSurveyTypeFormError('Name is required');
       return;
     }
-    if (formSelectedLocations.length === 0 && !formAllowImageUpload) {
-      setSurveyTypeFormError('At least one location must be selected');
-      return;
-    }
     if (formSelectedSpeciesTypes.length === 0) {
       setSurveyTypeFormError('At least one species type must be selected');
       return;
@@ -372,6 +374,12 @@ export function AdminPage() {
     try {
       setSavingSurveyType(true);
       setSurveyTypeFormError(null);
+
+      if (formAllowSightingDeviceSelection && !formSightingDeviceType) {
+        setSurveyTypeFormError('Device type is required when "Attach device to sighting" is enabled');
+        setSavingSurveyType(false);
+        return;
+      }
 
       const data = {
         name: formName.trim(),
@@ -386,6 +394,8 @@ export function AdminPage() {
         allow_sun_percentage: formAllowSunPercentage,
         allow_temperature: formAllowTemperature,
         allow_show_description: formAllowShowDescription,
+        allow_sighting_device_selection: formAllowSightingDeviceSelection,
+        sighting_device_type: formAllowSightingDeviceSelection ? formSightingDeviceType : null,
         color: formColor || undefined,
         location_ids: formSelectedLocations.map((l) => l.id),
         species_type_ids: formSelectedSpeciesTypes.map((st) => st.id),
@@ -433,14 +443,14 @@ export function AdminPage() {
   };
 
   // Device handlers
-  const handleOpenAddDevice = (lat?: number, lng?: number) => {
+  const handleOpenAddDevice = () => {
     setDeviceDialogMode('add');
     setEditingDevice(null);
     setFormDeviceId('');
     setFormDeviceName('');
     setFormDeviceType('audio_recorder');
-    setFormDeviceLatitude(lat);
-    setFormDeviceLongitude(lng);
+    setFormDeviceLatitude(undefined);
+    setFormDeviceLongitude(undefined);
     setFormDeviceLocationId(null);
     setDeviceFormError(null);
     setDeviceDialogOpen(true);
@@ -464,21 +474,37 @@ export function AdminPage() {
       setDeviceFormError('Device ID is required');
       return;
     }
+    if (!formDeviceName.trim()) {
+      setDeviceFormError('Device name is required');
+      return;
+    }
+    if (deviceDialogMode === 'add' && (formDeviceLatitude === undefined || formDeviceLongitude === undefined)) {
+      setDeviceFormError('Latitude and longitude are required');
+      return;
+    }
     try {
       setSavingDevice(true);
       setDeviceFormError(null);
-      const data: DeviceCreate | DeviceUpdate = {
-        device_id: formDeviceId.trim(),
-        name: formDeviceName.trim() || undefined,
-        device_type: formDeviceType,
-        latitude: formDeviceLatitude,
-        longitude: formDeviceLongitude,
-        location_id: formDeviceLocationId ?? undefined,
-      };
       if (deviceDialogMode === 'add') {
-        await devicesAPI.create(data as DeviceCreate);
+        const data: DeviceCreate = {
+          device_id: formDeviceId.trim(),
+          name: formDeviceName.trim(),
+          device_type: formDeviceType,
+          latitude: formDeviceLatitude!,
+          longitude: formDeviceLongitude!,
+          location_id: formDeviceLocationId ?? undefined,
+        };
+        await devicesAPI.create(data);
       } else if (editingDevice) {
-        await devicesAPI.update(editingDevice.id, data as DeviceUpdate);
+        const data: DeviceUpdate = {
+          device_id: formDeviceId.trim(),
+          name: formDeviceName.trim(),
+          device_type: formDeviceType,
+          latitude: formDeviceLatitude,
+          longitude: formDeviceLongitude,
+          location_id: formDeviceLocationId ?? undefined,
+        };
+        await devicesAPI.update(editingDevice.id, data);
       }
       setDeviceDialogOpen(false);
       await loadDevices();
@@ -817,7 +843,6 @@ export function AdminPage() {
             setDeactivateDeviceDialogOpen(true);
           }}
           onReactivateDevice={handleReactivateDevice}
-          onAddDeviceAtLocation={handleOpenAddDevice}
         />
 
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
@@ -867,9 +892,17 @@ export function AdminPage() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={device.device_type === 'camera_trap' ? 'Camera Trap' : 'Audio Recorder'}
+                        label={
+                          device.device_type === 'camera_trap' ? 'Camera Trap'
+                          : device.device_type === 'refugia' ? 'Refugia'
+                          : 'Audio Recorder'
+                        }
                         size="small"
-                        color={device.device_type === 'camera_trap' ? 'primary' : 'secondary'}
+                        color={
+                          device.device_type === 'camera_trap' ? 'primary'
+                          : device.device_type === 'refugia' ? 'success'
+                          : 'secondary'
+                        }
                         variant="outlined"
                       />
                     </TableCell>
@@ -1089,13 +1122,15 @@ export function AdminPage() {
                 <Switch
                   checked={formLocationAtSightingLevel}
                   onChange={(e) => setFormLocationAtSightingLevel(e.target.checked)}
-                  disabled={savingSurveyType}
+                  disabled={savingSurveyType || formAllowSightingDeviceSelection}
                 />
               }
               label="Location at sighting level"
             />
             <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formLocationAtSightingLevel
+              {formAllowSightingDeviceSelection
+                ? 'Disabled — the device supplies the location for each sighting'
+                : formLocationAtSightingLevel
                 ? 'Each sighting can have its own location'
                 : 'Location is set once for the entire survey'}
             </Typography>
@@ -1106,16 +1141,59 @@ export function AdminPage() {
                 <Switch
                   checked={formAllowGeolocation}
                   onChange={(e) => setFormAllowGeolocation(e.target.checked)}
-                  disabled={savingSurveyType}
+                  disabled={savingSurveyType || formAllowSightingDeviceSelection}
                 />
               }
               label="Allow geolocation"
             />
             <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowGeolocation
+              {formAllowSightingDeviceSelection
+                ? 'Disabled — the device supplies the location for each sighting'
+                : formAllowGeolocation
                 ? 'Users can add GPS coordinates to sightings'
                 : 'GPS coordinates are disabled for this survey type'}
             </Typography>
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={formAllowSightingDeviceSelection}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    setFormAllowSightingDeviceSelection(enabled);
+                    if (enabled) {
+                      setFormLocationAtSightingLevel(false);
+                      setFormAllowGeolocation(false);
+                    } else {
+                      setFormSightingDeviceType(null);
+                    }
+                  }}
+                  disabled={savingSurveyType}
+                />
+              }
+              label="Attach device to sighting"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+              {formAllowSightingDeviceSelection
+                ? 'Each sighting is attached to a device and inherits its location'
+                : 'Sightings are not attached to a specific device'}
+            </Typography>
+            {formAllowSightingDeviceSelection && (
+              <FormControl fullWidth margin="normal" sx={{ ml: 4, width: 'calc(100% - 32px)' }} size="small">
+                <InputLabel>Device Type</InputLabel>
+                <Select
+                  value={formSightingDeviceType ?? ''}
+                  label="Device Type"
+                  onChange={(e) => setFormSightingDeviceType((e.target.value || null) as DeviceType | null)}
+                  disabled={savingSurveyType}
+                >
+                  <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
+                  <MenuItem value="camera_trap">Camera Trap</MenuItem>
+                  <MenuItem value="refugia">Refugia</MenuItem>
+                </Select>
+              </FormControl>
+            )}
           </Box>
           <Box sx={{ mt: 2 }}>
             <FormControlLabel
@@ -1264,7 +1342,7 @@ export function AdminPage() {
               onChange={(_, newValue) => setFormSelectedLocations(newValue)}
               disabled={savingSurveyType}
               renderInput={(params) => (
-                <TextField {...params} margin="normal" label="Available Locations" placeholder="Select locations" required />
+                <TextField {...params} margin="normal" label="Available Locations" placeholder="Select locations (leave empty to omit the location field from surveys)" />
               )}
               sx={{ mt: 2 }}
             />
@@ -1364,6 +1442,7 @@ export function AdminPage() {
             >
               <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
               <MenuItem value="camera_trap">Camera Trap</MenuItem>
+              <MenuItem value="refugia">Refugia</MenuItem>
             </Select>
           </FormControl>
           <TextField
@@ -1405,6 +1484,7 @@ export function AdminPage() {
                 setFormDeviceLatitude(lat ?? undefined);
                 setFormDeviceLongitude(lng ?? undefined);
               }}
+              locationBoundaries={allLocationsWithBoundaries}
               locationBoundary={
                 formDeviceLocationId
                   ? allLocationsWithBoundaries.find((l) => l.id === formDeviceLocationId) ?? null

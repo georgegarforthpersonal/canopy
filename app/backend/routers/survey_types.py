@@ -11,7 +11,7 @@ Endpoints:
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import List
+from typing import List, Union
 from sqlalchemy.orm import Session
 from database.connection import get_db
 from auth import require_admin
@@ -25,6 +25,32 @@ from models import (
 )
 
 router = APIRouter()
+
+
+def _validate_sighting_device_selection(payload: Union[SurveyType, SurveyTypeCreate]) -> None:
+    """Validate that sighting device selection config is internally consistent.
+
+    - When enabled, sighting_device_type must be set.
+    - When enabled, location_at_sighting_level and allow_geolocation must be False
+      (the device supplies location for each sighting).
+    """
+    if not payload.allow_sighting_device_selection:
+        return
+    if not payload.sighting_device_type:
+        raise HTTPException(
+            status_code=400,
+            detail="sighting_device_type is required when allow_sighting_device_selection is enabled"
+        )
+    if payload.location_at_sighting_level:
+        raise HTTPException(
+            status_code=400,
+            detail="location_at_sighting_level must be disabled when using sighting device selection"
+        )
+    if payload.allow_geolocation:
+        raise HTTPException(
+            status_code=400,
+            detail="allow_geolocation must be disabled when using sighting device selection"
+        )
 
 
 @router.get("/species-types", response_model=List[SpeciesTypeRead])
@@ -108,6 +134,8 @@ async def get_survey_type(
         allow_sun_percentage=survey_type.allow_sun_percentage,
         allow_temperature=survey_type.allow_temperature,
         allow_show_description=survey_type.allow_show_description,
+        allow_sighting_device_selection=survey_type.allow_sighting_device_selection,
+        sighting_device_type=survey_type.sighting_device_type,
         icon=survey_type.icon,
         color=survey_type.color,
         is_active=survey_type.is_active,
@@ -150,6 +178,8 @@ async def create_survey_type(
         if invalid_ids:
             raise HTTPException(status_code=400, detail=f"Invalid species type IDs: {invalid_ids}")
 
+    _validate_sighting_device_selection(survey_type)
+
     # Create survey type
     db_survey_type = SurveyType(
         name=survey_type.name,
@@ -164,6 +194,8 @@ async def create_survey_type(
         allow_sun_percentage=survey_type.allow_sun_percentage,
         allow_temperature=survey_type.allow_temperature,
         allow_show_description=survey_type.allow_show_description,
+        allow_sighting_device_selection=survey_type.allow_sighting_device_selection,
+        sighting_device_type=survey_type.sighting_device_type,
         icon=survey_type.icon,
         color=survey_type.color,
         organisation_id=org.id
@@ -214,6 +246,8 @@ async def update_survey_type(
     update_data = survey_type.model_dump(exclude_unset=True, exclude={'location_ids', 'species_type_ids'})
     for field, value in update_data.items():
         setattr(db_survey_type, field, value)
+
+    _validate_sighting_device_selection(db_survey_type)
 
     # Update location links if provided
     if survey_type.location_ids is not None:

@@ -10,6 +10,7 @@ import LayersIcon from '@mui/icons-material/Layers';
 import 'leaflet/dist/leaflet.css';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
+import FieldBoundaryOverlay from './FieldBoundaryOverlay';
 
 // Fix for default marker icon in React Leaflet
 import L from 'leaflet';
@@ -31,8 +32,10 @@ interface LocationMapPickerProps {
   onChange: (lat: number | null, lng: number | null) => void;
   label?: string;
   helperText?: string;
-  /** Optional location boundary to display on the map */
+  /** Optional location boundary used to fit-bounds when it changes (e.g. the selected associated location) */
   locationBoundary?: LocationWithBoundary | null;
+  /** Optional list of all boundaries to render as reference overlays on the map */
+  locationBoundaries?: LocationWithBoundary[];
 }
 
 // Component to handle map clicks
@@ -70,6 +73,7 @@ export default function LocationMapPicker({
   label = 'Location',
   helperText = 'Click on the map to set the location',
   locationBoundary,
+  locationBoundaries,
 }: LocationMapPickerProps) {
   const [position, setPosition] = useState<LatLng | null>(
     latitude && longitude ? new LatLng(latitude, longitude) : null
@@ -203,20 +207,24 @@ export default function LocationMapPicker({
             {position && <Marker position={position} />}
             <MapResizeHandler isFullscreen={isFullscreen} />
             <BoundaryFitter boundary={locationBoundary} />
-            {/* Render location boundary if provided */}
-            {locationBoundary?.boundary_geometry && locationBoundary.boundary_geometry.length > 0 && (
-              <Polygon
-                positions={locationBoundary.boundary_geometry.map(
-                  ([lng, lat]) => [lat, lng] as [number, number]
-                )}
-                pathOptions={{
-                  fillColor: locationBoundary.boundary_fill_color || '#3388ff',
-                  fillOpacity: locationBoundary.boundary_fill_opacity || 0.2,
-                  color: locationBoundary.boundary_stroke_color || '#3388ff',
-                  weight: 2,
-                }}
-                interactive={false}
-              />
+            {/* Render boundaries — prefer the full list overlay, fall back to single boundary */}
+            {locationBoundaries && locationBoundaries.length > 0 ? (
+              <FieldBoundaryOverlay locations={locationBoundaries} />
+            ) : (
+              locationBoundary?.boundary_geometry && locationBoundary.boundary_geometry.length > 0 && (
+                <Polygon
+                  positions={locationBoundary.boundary_geometry.map(
+                    ([lng, lat]) => [lat, lng] as [number, number]
+                  )}
+                  pathOptions={{
+                    fillColor: locationBoundary.boundary_fill_color || '#3388ff',
+                    fillOpacity: locationBoundary.boundary_fill_opacity || 0.2,
+                    color: locationBoundary.boundary_stroke_color || '#3388ff',
+                    weight: 2,
+                  }}
+                  interactive={false}
+                />
+              )
             )}
           </MapContainer>
         </Box>

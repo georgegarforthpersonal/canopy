@@ -1,5 +1,6 @@
 import type { DraftSighting } from './SightingsEditor';
 import type { DraftIndividualLocation } from './MultiLocationMapPicker';
+import type { Device } from '../../services/api';
 
 /**
  * Represents a single marker on the map: one species at one GPS location.
@@ -57,6 +58,67 @@ export function groupMarkersByLocation(markers: MapMarker[]): GroupedMarker[] {
   }
 
   return Array.from(groups.values());
+}
+
+/**
+ * Entry within a device-grouped marker: one species recorded at a device.
+ */
+export interface DeviceSpeciesEntry {
+  sightingTempId: string;
+  species_id: number;
+  count: number;
+}
+
+/**
+ * Markers grouped at a single device's coordinates.
+ */
+export interface DeviceGroup {
+  device: Device;
+  latitude: number;
+  longitude: number;
+  entries: DeviceSpeciesEntry[];
+}
+
+/**
+ * Group draft sightings by the device they're attached to, placing each group at the
+ * device's coordinates. Sightings whose device isn't in the visible list (e.g. it was
+ * deactivated and isn't referenced by any other sighting) are returned as unmappable.
+ */
+export function getDeviceGroupsFromSightings(
+  draftSightings: DraftSighting[],
+  devices: Device[]
+): { groups: DeviceGroup[]; unmappable: number } {
+  const devicesById = new Map(devices.map((d) => [d.id, d]));
+  const groupsByDevice = new Map<number, DeviceGroup>();
+  let unmappable = 0;
+
+  for (const sighting of draftSightings) {
+    if (sighting.species_id == null || sighting.device_id == null) continue;
+
+    const device = devicesById.get(sighting.device_id);
+    if (!device) {
+      unmappable += 1;
+      continue;
+    }
+
+    let group = groupsByDevice.get(device.id);
+    if (!group) {
+      group = {
+        device,
+        latitude: device.latitude,
+        longitude: device.longitude,
+        entries: [],
+      };
+      groupsByDevice.set(device.id, group);
+    }
+    group.entries.push({
+      sightingTempId: sighting.tempId,
+      species_id: sighting.species_id,
+      count: sighting.count,
+    });
+  }
+
+  return { groups: Array.from(groupsByDevice.values()), unmappable };
 }
 
 /**

@@ -6,6 +6,7 @@ Tests CRUD operations for the /api/surveys endpoints.
 
 from datetime import date
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 
 class TestGetSurveys:
@@ -230,3 +231,104 @@ class TestSurveySightings:
         """Should return 404 for non-existent survey."""
         response = client.get("/api/surveys/99999/sightings", headers=auth_headers)
         assert response.status_code == 404
+
+
+class TestSightingDeviceAttach:
+    """Tests for create_sighting in device-attach (refugia-style) mode."""
+
+    @staticmethod
+    def _device_survey_type(db_session, test_org):
+        """Create a survey type that requires device selection on sightings."""
+        from models import SurveyType, DeviceType
+        st = SurveyType(
+            name="Refugia check",
+            organisation_id=test_org.id,
+            allow_sighting_device_selection=True,
+            sighting_device_type=DeviceType.refugia,
+            location_at_sighting_level=False,
+            allow_geolocation=False,
+        )
+        db_session.add(st)
+        db_session.commit()
+        db_session.refresh(st)
+        return st
+
+    def test_create_sighting_with_matching_device(
+        self, client, auth_headers, db_session, test_org,
+        create_survey, create_surveyor, create_species, create_device,
+    ):
+        """Should accept device_id when type matches and auto-materialise a sighting_individual."""
+        from models import DeviceType
+        st = self._device_survey_type(db_session, test_org)
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id], survey_type_id=st.id)
+        species = create_species(name="Slow Worm")
+        device = create_device(
+            device_id="REF001",
+            device_type=DeviceType.refugia,
+            latitude=52.0,
+            longitude=-1.0,
+        )
+
+        response = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={"species_id": species.id, "count": 3, "device_id": device.id},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201, response.text
+        data = response.json()
+        assert data["device_id"] == device.id
+        assert data["count"] == 3
+
+        # The auto-created sighting_individual should sit at the device's coords.
+        ind_row = db_session.execute(
+            text(
+                "SELECT count, ST_Y(coordinates) AS lat, ST_X(coordinates) AS lng "
+                "FROM sighting_individual WHERE sighting_id = :sid"
+            ),
+            {"sid": data["id"]},
+        ).fetchone()
+        assert ind_row is not None
+        assert ind_row.count == 3
+        assert ind_row.lat == 52.0
+        assert ind_row.lng == -1.0
+
+    def test_create_sighting_rejects_mismatched_device_type(
+        self, client, auth_headers, db_session, test_org,
+        create_survey, create_surveyor, create_species, create_device,
+    ):
+        """Should 400 when the attached device's type doesn't match the survey type."""
+        from models import DeviceType
+        st = self._device_survey_type(db_session, test_org)
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id], survey_type_id=st.id)
+        species = create_species(name="Slow Worm")
+        device = create_device(
+            device_id="CAM001",
+            device_type=DeviceType.camera_trap,
+        )
+
+        response = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={"species_id": species.id, "count": 1, "device_id": device.id},
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+        assert "does not match" in response.json()["detail"]
+
+    def test_create_sighting_rejects_device_when_feature_disabled(
+        self, client, auth_headers, create_survey, create_surveyor,
+        create_species, create_device,
+    ):
+        """Should 400 when sending device_id to a survey type that doesn't allow it."""
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id])  # default survey type — no device selection
+        species = create_species(name="Slow Worm")
+        device = create_device(device_id="ANY001")
+
+        response = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={"species_id": species.id, "count": 1, "device_id": device.id},
+            headers=auth_headers,
+        )
+        assert response.status_code == 400

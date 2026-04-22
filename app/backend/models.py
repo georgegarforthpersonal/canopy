@@ -26,6 +26,7 @@ class DeviceType(str, PyEnum):
     """Type of recording device"""
     audio_recorder = "audio_recorder"
     camera_trap = "camera_trap"
+    refugia = "refugia"
 
 
 # ============================================================================
@@ -72,7 +73,7 @@ class OrganisationRead(OrganisationBase):
 class DeviceBase(SQLModel):
     """Base device fields"""
     device_id: str = Field(max_length=50, description="Device serial number from audio filenames")
-    name: Optional[str] = Field(None, max_length=255, description="Friendly name for the device")
+    name: str = Field(max_length=255, description="Friendly name for the device (shown to end users)")
     device_type: DeviceType = Field(default=DeviceType.audio_recorder, description="Type of device")
 
 
@@ -88,13 +89,13 @@ class Device(DeviceBase, table=True):  # type: ignore[call-arg]
     location_id: Optional[int] = Field(None, foreign_key="location.id", description="Associated location area")
     is_active: bool = Field(default=True, description="Whether device is active")
 
-    # PostGIS Point geometry (stored as text, cast in queries)
-    point_geometry: Optional[str] = Field(
-        default=None,
+    # PostGIS Point geometry (stored as text, cast in queries).
+    # NOT NULL: every device must be mappable so sightings can inherit coordinates.
+    point_geometry: str = Field(
         sa_column=sa.Column(
             "point_geometry",
             sa.Text,  # PostGIS geometry stored as text, cast in queries
-            nullable=True
+            nullable=False
         )
     )
 
@@ -116,8 +117,8 @@ class Device(DeviceBase, table=True):  # type: ignore[call-arg]
 
 class DeviceCreate(DeviceBase):
     """Model for creating a new device"""
-    latitude: Optional[float] = Field(None, ge=-90, le=90, description="Latitude coordinate")
-    longitude: Optional[float] = Field(None, ge=-180, le=180, description="Longitude coordinate")
+    latitude: float = Field(ge=-90, le=90, description="Latitude coordinate")
+    longitude: float = Field(ge=-180, le=180, description="Longitude coordinate")
     location_id: Optional[int] = Field(None, description="Associated location ID")
 
 
@@ -135,8 +136,8 @@ class DeviceUpdate(SQLModel):
 class DeviceRead(DeviceBase):
     """Model for reading a device"""
     id: int
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    latitude: float
+    longitude: float
     location_id: Optional[int] = None
     location_name: Optional[str] = None
     is_active: bool
@@ -412,6 +413,12 @@ class SurveyTypeBase(SQLModel):
     allow_sun_percentage: bool = Field(default=False, description="Whether sun percentage field is shown for this survey type")
     allow_temperature: bool = Field(default=False, description="Whether temperature field is shown for this survey type")
     allow_show_description: bool = Field(default=False, description="Whether survey type description is displayed to surveyors")
+    allow_sighting_device_selection: bool = Field(default=False, description="If true, each sighting is attached to a device and inherits its location")
+    sighting_device_type: Optional[DeviceType] = Field(
+        default=None,
+        sa_column=sa.Column("sighting_device_type", sa.String(20), nullable=True),
+        description="Device type used for sighting device selection (required when allow_sighting_device_selection is true)"
+    )
     icon: Optional[str] = Field(None, max_length=50, description="Lucide icon identifier (deprecated)")
     color: Optional[str] = Field(None, max_length=20, description="Notion-style color key (e.g., 'blue', 'purple')")
 
@@ -462,6 +469,8 @@ class SurveyTypeUpdate(SQLModel):
     allow_sun_percentage: Optional[bool] = None
     allow_temperature: Optional[bool] = None
     allow_show_description: Optional[bool] = None
+    allow_sighting_device_selection: Optional[bool] = None
+    sighting_device_type: Optional[DeviceType] = None
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
@@ -581,6 +590,7 @@ class Sighting(SightingBase, table=True):  # type: ignore[call-arg]
     id: Optional[int] = Field(default=None, primary_key=True)
     survey_id: int = Field(foreign_key="survey.id")
     location_id: Optional[int] = Field(None, foreign_key="location.id", description="Location ID (for sighting-level locations)")
+    device_id: Optional[int] = Field(None, foreign_key="device.id", description="Device ID (for sighting-level device selection)")
     notes: Optional[str] = Field(None, description="Optional notes for this sighting")
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -592,6 +602,7 @@ class Sighting(SightingBase, table=True):  # type: ignore[call-arg]
     survey: "Survey" = Relationship(back_populates="sightings")
     species: "Species" = Relationship(back_populates="sightings")
     location: Optional["Location"] = Relationship(back_populates="sightings")
+    device: Optional["Device"] = Relationship()
     individuals: List["SightingIndividual"] = Relationship(
         back_populates="sighting",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"}
@@ -603,6 +614,7 @@ class SightingUpdate(SQLModel):
     species_id: Optional[int] = Field(None, gt=0)
     count: Optional[int] = Field(None, gt=0)
     location_id: Optional[int] = Field(None, description="Location ID (for sighting-level locations)")
+    device_id: Optional[int] = Field(None, description="Device ID (for sighting-level device selection)")
     notes: Optional[str] = Field(None, description="Optional notes for this sighting")
     image_ids: Optional[List[int]] = Field(None, description="Camera trap image IDs to link via junction table")
 
@@ -612,6 +624,7 @@ class SightingRead(SightingBase):
     id: int
     survey_id: int
     location_id: Optional[int] = None
+    device_id: Optional[int] = None
     notes: Optional[str] = None
 
 
@@ -730,6 +743,7 @@ class AudioDetectionCreate(SQLModel):
 class SightingCreate(SightingBase):
     """Model for creating a sighting with individual locations"""
     location_id: Optional[int] = Field(None, description="Location ID (for sighting-level locations)")
+    device_id: Optional[int] = Field(None, description="Device ID (for sighting-level device selection)")
     notes: Optional[str] = Field(None, description="Optional notes for this sighting")
     individuals: List[IndividualLocationCreate] = Field(default_factory=list, description="Individual location points")
     image_ids: List[int] = Field(default_factory=list, description="Camera trap image IDs to link")

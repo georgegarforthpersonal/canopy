@@ -8,6 +8,8 @@ import {
   IconButton,
   Tooltip,
   Alert,
+  Typography,
+  Chip,
 } from '@mui/material';
 import LayersIcon from '@mui/icons-material/Layers';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
@@ -16,13 +18,21 @@ import 'leaflet/dist/leaflet.css';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
 
-import type { Species, BreedingStatusCode, LocationWithBoundary } from '../../services/api';
+import type { Species, BreedingStatusCode, LocationWithBoundary, Device } from '../../services/api';
 import type { DraftSighting } from './SightingsEditor';
 import type { DraftIndividualLocation } from './MultiLocationMapPicker';
-import { getMarkersFromSightings, groupMarkersByLocation, addSpeciesAtLocation, updateMarker, removeMarker } from './mapModeUtils';
-import type { MapMarker } from './mapModeUtils';
+import {
+  getMarkersFromSightings,
+  groupMarkersByLocation,
+  addSpeciesAtLocation,
+  updateMarker,
+  removeMarker,
+  getDeviceGroupsFromSightings,
+} from './mapModeUtils';
+import type { DeviceGroup } from './mapModeUtils';
 import { MarkerPopupContent, GroupedMarkerPopupContent } from './MarkerPopupContent';
 import FieldBoundaryOverlay from './FieldBoundaryOverlay';
+import { getDeviceIcon } from '../../utils/deviceIcon';
 
 interface MapModeSightingsProps {
   sightings: DraftSighting[];
@@ -32,6 +42,8 @@ interface MapModeSightingsProps {
   locationsWithBoundaries?: LocationWithBoundary[];
   readOnly?: boolean;
   surveyLocationId?: number | null;
+  devices?: Device[];
+  allowSightingDeviceSelection?: boolean;
 }
 
 function MapClickHandler({ onClick }: { onClick?: (latlng: LatLng) => void }) {
@@ -57,19 +69,19 @@ function MapClickHandler({ onClick }: { onClick?: (latlng: LatLng) => void }) {
   return null;
 }
 
-function FitBoundsToMarkers({ markers, surveyLocationId, locationsWithBoundaries }: { markers: MapMarker[]; surveyLocationId?: number | null; locationsWithBoundaries?: LocationWithBoundary[] }) {
+function FitBoundsToPoints({ points, surveyLocationId, locationsWithBoundaries }: { points: Array<{ latitude: number; longitude: number }>; surveyLocationId?: number | null; locationsWithBoundaries?: LocationWithBoundary[] }) {
   const map = useMap();
-  const hadInitialMarkersRef = useRef(markers.length > 0);
+  const hadInitialPointsRef = useRef(points.length > 0);
   const hasFittedRef = useRef(false);
 
   useEffect(() => {
-    if (!hasFittedRef.current && hadInitialMarkersRef.current && markers.length > 0) {
-      const bounds = markers.map((m) => [m.latitude, m.longitude] as [number, number]);
+    if (!hasFittedRef.current && hadInitialPointsRef.current && points.length > 0) {
+      const bounds = points.map((p) => [p.latitude, p.longitude] as [number, number]);
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
       hasFittedRef.current = true;
     }
 
-    if (!hasFittedRef.current && !hadInitialMarkersRef.current && surveyLocationId && locationsWithBoundaries) {
+    if (!hasFittedRef.current && !hadInitialPointsRef.current && surveyLocationId && locationsWithBoundaries) {
       const location = locationsWithBoundaries.find(l => l.id === surveyLocationId);
       if (location?.boundary_geometry && location.boundary_geometry.length > 0) {
         const bounds = location.boundary_geometry.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number]);
@@ -77,7 +89,7 @@ function FitBoundsToMarkers({ markers, surveyLocationId, locationsWithBoundaries
         hasFittedRef.current = true;
       }
     }
-  }, [markers, map, surveyLocationId, locationsWithBoundaries]);
+  }, [points, map, surveyLocationId, locationsWithBoundaries]);
 
   return null;
 }
@@ -119,21 +131,46 @@ export function MapModeSightings({
   locationsWithBoundaries,
   readOnly = false,
   surveyLocationId,
+  devices = [],
+  allowSightingDeviceSelection = false,
 }: MapModeSightingsProps) {
   const [mapType, setMapType] = useState<'street' | 'satellite'>('satellite');
   const [mapCenter] = useState<LatLng>(new LatLng(DEFAULT_MAP_CENTER[0], DEFAULT_MAP_CENTER[1]));
   const [addPopupPosition, setAddPopupPosition] = useState<{ lat: number; lng: number } | null>(null);
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
 
-  const markers = useMemo(() => getMarkersFromSightings(sightings), [sightings]);
+  // Device-attach mode: markers are driven by the attached device's coordinates.
+  // Non-device mode: markers are driven by per-individual GPS points.
+  const deviceGrouping = useMemo(
+    () => (allowSightingDeviceSelection ? getDeviceGroupsFromSightings(sightings, devices) : { groups: [] as DeviceGroup[], unmappable: 0 }),
+    [allowSightingDeviceSelection, sightings, devices]
+  );
+  const markers = useMemo(
+    () => (allowSightingDeviceSelection ? [] : getMarkersFromSightings(sightings)),
+    [allowSightingDeviceSelection, sightings]
+  );
   const groupedMarkers = useMemo(() => groupMarkersByLocation(markers), [markers]);
 
-  // Count sightings without GPS for the info banner
+  // In device-attach mode the map is always read-only for map-click add.
+  const mapIsReadOnly = readOnly || allowSightingDeviceSelection;
+
+  const fitPoints = useMemo(
+    () =>
+      allowSightingDeviceSelection
+        ? deviceGrouping.groups.map((g) => ({ latitude: g.latitude, longitude: g.longitude }))
+        : markers.map((m) => ({ latitude: m.latitude, longitude: m.longitude })),
+    [allowSightingDeviceSelection, deviceGrouping.groups, markers]
+  );
+
+  // Count sightings that can't be placed on the map for the info banner.
   const sightingsWithoutGps = useMemo(() => {
+    if (allowSightingDeviceSelection) {
+      return deviceGrouping.unmappable;
+    }
     return sightings.filter(
       (s) => s.species_id !== null && (!s.individuals || s.individuals.length === 0)
     ).length;
-  }, [sightings]);
+  }, [allowSightingDeviceSelection, deviceGrouping.unmappable, sightings]);
 
   const handleMapClick = useCallback((latlng: LatLng) => {
     setAddPopupPosition({ lat: latlng.lat, lng: latlng.lng });
@@ -237,16 +274,64 @@ export function MapModeSightings({
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
             )}
-            <MapClickHandler onClick={readOnly ? undefined : handleMapClick} />
-            <FitBoundsToMarkers markers={markers} surveyLocationId={surveyLocationId} locationsWithBoundaries={locationsWithBoundaries} />
+            <MapClickHandler onClick={mapIsReadOnly ? undefined : handleMapClick} />
+            <FitBoundsToPoints points={fitPoints} surveyLocationId={surveyLocationId} locationsWithBoundaries={locationsWithBoundaries} />
             <MapResizeHandler isFullscreen={isFullscreen} />
 
             {locationsWithBoundaries && locationsWithBoundaries.length > 0 && (
               <FieldBoundaryOverlay locations={locationsWithBoundaries} />
             )}
 
+            {/* Device-attach mode: one marker per device, popup lists species observed there */}
+            {allowSightingDeviceSelection && deviceGrouping.groups.map((group) => {
+              const icon = getDeviceIcon(group.device);
+              const totalIndividuals = group.entries.reduce((sum, e) => sum + e.count, 0);
+              return (
+                <Marker
+                  key={`device-${group.device.id}`}
+                  position={[group.latitude, group.longitude]}
+                  icon={icon}
+                >
+                  <Popup
+                    closeOnClick={false}
+                    autoPan={true}
+                    minWidth={200}
+                    maxWidth={320}
+                    className="map-mode-popup"
+                  >
+                    <Box sx={{ minWidth: 180, p: 0.5 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.75 }}>
+                        {group.device.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                        {group.entries.length} species · {totalIndividuals} individual{totalIndividuals === 1 ? '' : 's'}
+                      </Typography>
+                      <Stack spacing={0.5}>
+                        {group.entries.map((entry) => {
+                          const sp = species.find((s) => s.id === entry.species_id);
+                          const label = sp?.name || sp?.scientific_name || 'Unknown';
+                          return (
+                            <Stack key={entry.sightingTempId} direction="row" alignItems="center" spacing={0.75}>
+                              <Chip
+                                label={entry.count}
+                                size="small"
+                                sx={{ height: 18, fontSize: '0.7rem', minWidth: 28 }}
+                              />
+                              <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                                {label}
+                              </Typography>
+                            </Stack>
+                          );
+                        })}
+                      </Stack>
+                    </Box>
+                  </Popup>
+                </Marker>
+              );
+            })}
+
             {/* Existing markers - grouped by location */}
-            {groupedMarkers.map((group) => {
+            {!allowSightingDeviceSelection && groupedMarkers.map((group) => {
               // For icon, use first species code or show count if multiple species
               const firstMarker = group.markers[0];
               const firstSpecies = species.find((s) => s.id === firstMarker.species_id);
@@ -308,7 +393,7 @@ export function MapModeSightings({
             })}
 
             {/* Add popup (opens directly at click location, no marker needed) */}
-            {addPopupPosition && (
+            {!allowSightingDeviceSelection && addPopupPosition && (
               <Popup
                 position={[addPopupPosition.lat, addPopupPosition.lng]}
                 closeOnClick={false}
@@ -333,10 +418,12 @@ export function MapModeSightings({
         </Box>
       </Paper>
 
-      {/* Info banner for sightings without GPS */}
+      {/* Info banner for sightings that can't be placed on the map */}
       {sightingsWithoutGps > 0 && (
         <Alert severity="info" sx={{ mb: 1 }}>
-          {sightingsWithoutGps} sighting{sightingsWithoutGps > 1 ? 's have' : ' has'} no GPS location and {sightingsWithoutGps > 1 ? 'are' : 'is'} only visible in list mode.
+          {allowSightingDeviceSelection
+            ? `${sightingsWithoutGps} sighting${sightingsWithoutGps > 1 ? 's have' : ' has'} no mappable device and ${sightingsWithoutGps > 1 ? 'are' : 'is'} only visible in list mode.`
+            : `${sightingsWithoutGps} sighting${sightingsWithoutGps > 1 ? 's have' : ' has'} no GPS location and ${sightingsWithoutGps > 1 ? 'are' : 'is'} only visible in list mode.`}
         </Alert>
       )}
     </Box>
