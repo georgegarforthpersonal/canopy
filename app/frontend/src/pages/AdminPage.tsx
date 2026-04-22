@@ -366,10 +366,6 @@ export function AdminPage() {
       setSurveyTypeFormError('Name is required');
       return;
     }
-    if (formSelectedLocations.length === 0 && !formAllowImageUpload) {
-      setSurveyTypeFormError('At least one location must be selected');
-      return;
-    }
     if (formSelectedSpeciesTypes.length === 0) {
       setSurveyTypeFormError('At least one species type must be selected');
       return;
@@ -1331,7 +1327,7 @@ export function AdminPage() {
               onChange={(_, newValue) => setFormSelectedLocations(newValue)}
               disabled={savingSurveyType}
               renderInput={(params) => (
-                <TextField {...params} margin="normal" label="Available Locations" placeholder="Select locations" required />
+                <TextField {...params} margin="normal" label="Available Locations" placeholder="Select locations (leave empty to omit the location field from surveys)" />
               )}
               sx={{ mt: 2 }}
             />

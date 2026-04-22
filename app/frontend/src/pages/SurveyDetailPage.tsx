@@ -682,7 +682,7 @@ export function SurveyDetailPage() {
               onSunPercentageChange={setEditSunPercentage}
               onTemperatureCelsiusChange={setEditTemperatureCelsius}
               validationErrors={validationErrors}
-              hideLocation={locationAtSightingLevel}
+              hideLocation={locationAtSightingLevel || locations.length === 0}
               showStartEndTime={showStartEndTime}
               showSunPercentage={showSunPercentage}
               showTemperature={showTemperature}
@@ -713,8 +713,8 @@ export function SurveyDetailPage() {
                 <Typography variant="body1">{survey.surveyor_ids.map(id => getSurveyorName(id, surveyors)).join(', ')}</Typography>
               </Box>
 
-              {/* Location - only show if NOT at sighting level */}
-              {!locationAtSightingLevel && (
+              {/* Location - only show if NOT at sighting level and a location was saved */}
+              {!locationAtSightingLevel && survey.location_id != null && (
                 <>
                   <Divider />
 

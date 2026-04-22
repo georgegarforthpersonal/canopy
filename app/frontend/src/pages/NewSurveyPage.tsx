@@ -610,7 +610,7 @@ export function NewSurveyPage() {
             onSunPercentageChange={setSunPercentage}
             onTemperatureCelsiusChange={setTemperatureCelsius}
             validationErrors={validationErrors}
-            hideLocation={locationAtSightingLevel}
+            hideLocation={locationAtSightingLevel || locations.length === 0}
             showStartEndTime={showStartEndTime}
             showSunPercentage={showSunPercentage}
             showTemperature={showTemperature}
