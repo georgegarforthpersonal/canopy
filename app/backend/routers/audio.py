@@ -144,6 +144,7 @@ async def process_audio_files(
                             confidence=det.confidence,
                             start_time=det.start.strftime("%H:%M:%S"),
                             end_time=det.end.strftime("%H:%M:%S"),
+                            detection_timestamp=det.timestamp,
                         )
                     )
                 else:

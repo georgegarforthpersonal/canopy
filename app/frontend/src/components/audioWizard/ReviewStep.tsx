@@ -117,6 +117,7 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
                     startTime={det.start_time}
                     endTime={det.end_time}
                     confidence={det.confidence}
+                    timestamp={det.detection_timestamp}
                   />
                 ))}
               </Stack>

@@ -740,14 +740,19 @@ async def create_sighting(
         parts = det.end_time.split(":")
         end_t = time(int(parts[0]), int(parts[1]), int(parts[2]))
 
-        # Compute detection_timestamp from recording
-        recording = db.query(AudioRecording).filter(
-            AudioRecording.id == det.audio_recording_id
-        ).first()
-        detection_ts = datetime.now(timezone.utc)
-        if recording and recording.recording_timestamp:
-            start_seconds = start_t.hour * 3600 + start_t.minute * 60 + start_t.second
-            detection_ts = recording.recording_timestamp + timedelta(seconds=start_seconds)
+        # Prefer a client-supplied absolute timestamp (wizard passes BirdNET's
+        # computed wall-clock time through directly). Fall back to deriving it
+        # from the parent recording's timestamp for clients that don't send it.
+        if det.detection_timestamp is not None:
+            detection_ts = det.detection_timestamp
+        else:
+            recording = db.query(AudioRecording).filter(
+                AudioRecording.id == det.audio_recording_id
+            ).first()
+            detection_ts = datetime.now(timezone.utc)
+            if recording and recording.recording_timestamp:
+                start_seconds = start_t.hour * 3600 + start_t.minute * 60 + start_t.second
+                detection_ts = recording.recording_timestamp + timedelta(seconds=start_seconds)
 
         audio_det = AudioDetection(
             audio_recording_id=det.audio_recording_id,

@@ -738,6 +738,10 @@ class AudioDetectionCreate(SQLModel):
     confidence: float = Field(ge=0, le=1, description="Detection confidence")
     start_time: str = Field(description="Start time within audio file (HH:MM:SS)")
     end_time: str = Field(description="End time within audio file (HH:MM:SS)")
+    detection_timestamp: Optional[datetime] = Field(
+        None,
+        description="Absolute wall-clock time of the detection; if omitted, derived from recording_timestamp"
+    )
 
 
 class SightingCreate(SightingBase):
@@ -993,6 +997,10 @@ class AudioDetectionResult(SQLModel):
     confidence: float = Field(description="Detection confidence (0-1)")
     start_time: str = Field(description="Start time HH:MM:SS")
     end_time: str = Field(description="End time HH:MM:SS")
+    detection_timestamp: Optional[datetime] = Field(
+        None,
+        description="Absolute wall-clock time of the detection (recording start + start_time)"
+    )
 
 
 class FileProcessingResult(SQLModel):

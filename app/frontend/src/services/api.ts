@@ -384,6 +384,7 @@ export interface AudioDetectionCreateRequest {
   confidence: number;
   start_time: string; // HH:MM:SS
   end_time: string;   // HH:MM:SS
+  detection_timestamp?: string | null; // ISO datetime; backend falls back to recording-derived value if omitted
 }
 
 export interface SightingCreateRequest {
@@ -1299,6 +1300,7 @@ export interface AudioDetectionResult {
   confidence: number;
   start_time: string; // HH:MM:SS
   end_time: string;   // HH:MM:SS
+  detection_timestamp: string | null; // ISO datetime — absolute wall-clock time
 }
 
 export interface FileProcessingResult {

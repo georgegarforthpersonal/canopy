@@ -10,6 +10,16 @@ interface AudioClipPlayerProps {
   startTime: string; // HH:MM:SS format
   endTime: string;   // HH:MM:SS format
   confidence: number; // 0-1
+  /** Absolute wall-clock time of the detection. ISO string or null. */
+  timestamp?: string | null;
+}
+
+/** Format an ISO datetime as "YYYY-MM-DD HH:MM:SS" in the viewer's local time. */
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 /**
@@ -23,7 +33,8 @@ export function AudioClipPlayer({
   audioUrl,
   startTime,
   endTime,
-  confidence
+  confidence,
+  timestamp,
 }: AudioClipPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -162,9 +173,16 @@ export function AudioClipPlayer({
     }
   };
 
+  const baseTitle = `Play detection clip (${confidencePercent}% confidence)`;
+  const tooltipTitle = error
+    ? error
+    : timestamp
+      ? `${formatTimestamp(timestamp)} — ${baseTitle}`
+      : baseTitle;
+
   return (
     <Tooltip
-      title={error || `Play detection clip (${confidencePercent}% confidence)`}
+      title={tooltipTitle}
       arrow
     >
       <Box

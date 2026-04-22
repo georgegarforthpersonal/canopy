@@ -446,6 +446,9 @@ export function useAudioWizard() {
               confidence: det.confidence,
               start_time: formatDuration(detectionOffsetSeconds),
               end_time: formatDuration(detectionOffsetSeconds + detectionDuration),
+              // Absolute wall-clock time from BirdNET. Sent explicitly because
+              // the snippet's filename no longer carries the original timestamp.
+              detection_timestamp: det.detection_timestamp,
             };
           })
           .filter((d): d is NonNullable<typeof d> => d !== null);
