@@ -52,6 +52,34 @@ export const AUDIO_WIZARD_STEPS = ['Setup', 'Upload', 'Review', 'Save'] as const
 
 const UPLOAD_BATCH_SIZE = 10;
 
+// Seconds of audio to include either side of the BirdNET detection window
+// when extracting a snippet, so reviewers get context around the call.
+const SNIPPET_PADDING_SECONDS = 10;
+
+function secondsToTimeString(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function paddedSnippetRange(startTime: string, endTime: string): {
+  paddedStart: string;
+  paddedEnd: string;
+  detectionOffsetSeconds: number;
+} {
+  const startSec = parseTimeToSeconds(startTime);
+  const endSec = parseTimeToSeconds(endTime);
+  const paddedStartSec = Math.max(0, startSec - SNIPPET_PADDING_SECONDS);
+  const paddedEndSec = endSec + SNIPPET_PADDING_SECONDS;
+  return {
+    paddedStart: secondsToTimeString(paddedStartSec),
+    paddedEnd: secondsToTimeString(paddedEndSec),
+    detectionOffsetSeconds: startSec - paddedStartSec,
+  };
+}
+
 // ============================================================================
 // Hook
 // ============================================================================
@@ -368,7 +396,8 @@ export function useAudioWizard() {
         const sourceFile = audioFiles[det.fileIndex]?.file;
         if (!sourceFile) continue;
 
-        const snippetBlob = await extractWavSnippet(sourceFile, det.start_time, det.end_time);
+        const { paddedStart, paddedEnd } = paddedSnippetRange(det.start_time, det.end_time);
+        const snippetBlob = await extractWavSnippet(sourceFile, paddedStart, paddedEnd);
         snippetFiles.push(new File([snippetBlob], snippetFilename, { type: 'audio/wav' }));
 
         const extractPercent = 10 + Math.round(((i + 1) / totalSnippets) * 25);
@@ -405,15 +434,18 @@ export function useAudioWizard() {
             const snippetFilename = `snippet_${speciesData.speciesId}_${det.start_time.replace(/:/g, '')}_${det.fileIndex}.wav`;
             const recordingId = filenameToRecordingId.get(snippetFilename);
             if (!recordingId) return null;
+            // Snippet-relative times: the detection sits inside a padded clip,
+            // offset from the start by however much leading padding we kept.
+            const { detectionOffsetSeconds } = paddedSnippetRange(det.start_time, det.end_time);
+            const detectionDuration = det.end_time > det.start_time
+              ? parseTimeToSeconds(det.end_time) - parseTimeToSeconds(det.start_time)
+              : 3;
             return {
               audio_recording_id: recordingId,
               species_name: det.species_name,
               confidence: det.confidence,
-              // Snippet-relative times (file IS the clip)
-              start_time: '00:00:00',
-              end_time: det.end_time > det.start_time
-                ? formatDuration(parseTimeToSeconds(det.end_time) - parseTimeToSeconds(det.start_time))
-                : '00:00:03',
+              start_time: formatDuration(detectionOffsetSeconds),
+              end_time: formatDuration(detectionOffsetSeconds + detectionDuration),
             };
           })
           .filter((d): d is NonNullable<typeof d> => d !== null);
