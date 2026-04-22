@@ -44,6 +44,37 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def _sync_device_individual(db: Session, sighting_id: int, device_id: int, count: int) -> None:
+    """Materialise a sighting_individual row at the attached device's current coordinates.
+
+    Device-attach surveys have no per-individual UI, so every sighting_individual
+    for them is auto-created here. We identify auto rows heuristically (no
+    breeding_status_code, notes, or camera_trap_image_id) and replace them on
+    every sync so that edits to device_id or count stay in lockstep with the
+    stored geometry — otherwise exports/GIS consumers see stale points.
+    """
+    db.execute(
+        text("""
+            DELETE FROM sighting_individual
+            WHERE sighting_id = :sighting_id
+              AND breeding_status_code IS NULL
+              AND notes IS NULL
+              AND camera_trap_image_id IS NULL
+        """),
+        {"sighting_id": sighting_id},
+    )
+    db.execute(
+        text("""
+            INSERT INTO sighting_individual (sighting_id, coordinates, count)
+            SELECT :sighting_id, point_geometry, :count
+            FROM device
+            WHERE id = :device_id
+        """),
+        {"sighting_id": sighting_id, "device_id": device_id, "count": count},
+    )
+
+
 # ============================================================================
 # Breeding Status Codes (BTO breeding evidence codes)
 # IMPORTANT: This route must come BEFORE /{survey_id} to avoid route conflicts
@@ -675,19 +706,9 @@ async def create_sighting(
 
     # Auto-create an individual point from the device's geometry so the
     # sighting carries a location even though the user didn't enter one.
-    if device_point is not None and not sighting.individuals:
-        lat, lng = device_point
-        db.execute(
-            text("""
-                INSERT INTO sighting_individual (sighting_id, coordinates, count)
-                VALUES (:sighting_id, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), :count)
-            """).bindparams(
-                sighting_id=db_sighting.id,
-                lng=lng,
-                lat=lat,
-                count=sighting.count,
-            )
-        )
+    if sighting.device_id is not None and not sighting.individuals:
+        assert db_sighting.id is not None  # guaranteed by db.refresh above
+        _sync_device_individual(db, db_sighting.id, sighting.device_id, sighting.count)
     # Create sighting_image junction records
     if sighting.image_ids:
         existing_images = db.query(CameraTrapImage.id).filter(
@@ -822,6 +843,25 @@ async def update_sighting(
 
     for field, value in update_data.items():
         setattr(db_sighting, field, value)
+
+    # Keep the auto-created sighting_individual in lockstep with device_id / count
+    # so downstream geometry consumers don't see stale points after edits.
+    if db_sighting.device_id is not None and (
+        "device_id" in update_data or "count" in update_data
+    ):
+        _sync_device_individual(db, db_sighting.id, db_sighting.device_id, db_sighting.count)
+    elif "device_id" in update_data and db_sighting.device_id is None:
+        # Device was cleared — remove the auto-created individual.
+        db.execute(
+            text("""
+                DELETE FROM sighting_individual
+                WHERE sighting_id = :sighting_id
+                  AND breeding_status_code IS NULL
+                  AND notes IS NULL
+                  AND camera_trap_image_id IS NULL
+            """),
+            {"sighting_id": sighting_id},
+        )
 
     # Sync sighting_image junction table if image_ids provided
     if image_ids is not None:
