@@ -1447,7 +1447,8 @@ export function AdminPage() {
           </FormControl>
           <TextField
             margin="normal"
-            label="Name (optional)"
+            label="Name"
+            required
             fullWidth
             value={formDeviceName}
             onChange={(e) => setFormDeviceName(e.target.value)}
