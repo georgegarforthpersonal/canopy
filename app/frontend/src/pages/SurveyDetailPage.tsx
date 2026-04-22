@@ -11,6 +11,7 @@ import { SightingsEditor } from '../components/surveys/SightingsEditor';
 import type { DraftSighting } from '../components/surveys/SightingsEditor';
 import { AudioClipPlayer } from '../components/audio/AudioClipPlayer';
 import { MapModeSightings } from '../components/surveys/MapModeSightings';
+import { getSightingsGridConfig } from '../components/surveys/sightingsGridConfig';
 import { getSpeciesIcon } from '../config';
 import { PageHeader } from '../components/layout/PageHeader';
 import { getSurveyorName, formatDate } from '../utils/formatters';
@@ -923,32 +924,14 @@ export function SurveyDetailPage() {
                   (s: any) => s.notes && String(s.notes).trim() !== ''
                 );
 
-                // Build grid columns dynamically to match edit mode
-                const getGridColumns = () => {
-                  const cols: string[] = [];
-                  // Species column - flexible
-                  cols.push(locationAtSightingLevel || allowSightingDeviceSelection ? '2fr' : '2.5fr');
-                  // Device column (if device selection is on) — mutually exclusive with location/GPS
-                  if (allowSightingDeviceSelection) {
-                    cols.push('1.5fr');
-                  } else if (locationAtSightingLevel) {
-                    cols.push('1.2fr');
-                  }
-                  // GPS column (if allowed) or spacer (if no location, no GPS, no device)
-                  if (allowGeolocation && !allowSightingDeviceSelection) {
-                    cols.push('70px');
-                  } else if (!locationAtSightingLevel && !allowSightingDeviceSelection) {
-                    cols.push('70px'); // spacer
-                  }
-                  // Count column - fixed small width
-                  cols.push('60px');
-                  // Notes column — only when at least one sighting has notes
-                  if (showNotesColumn) {
-                    cols.push('2fr');
-                  }
-                  return cols.join(' ');
-                };
-                const gridColumns = getGridColumns();
+                const gridConfig = getSightingsGridConfig({
+                  locationAtSightingLevel,
+                  allowGeolocation,
+                  allowSightingDeviceSelection,
+                  showNotesColumn,
+                  includeDeleteColumn: false,
+                });
+                const { gridColumns } = gridConfig;
 
                 const getDeviceLabel = (deviceId: number | null | undefined): string => {
                   if (deviceId == null) return '-';
@@ -973,22 +956,22 @@ export function SurveyDetailPage() {
                     <Typography variant="body2" fontWeight={600} color="text.secondary">
                       SPECIES
                     </Typography>
-                    {allowSightingDeviceSelection && (
+                    {gridConfig.showDevice && (
                       <Typography variant="body2" fontWeight={600} color="text.secondary">
                         DEVICE
                       </Typography>
                     )}
-                    {!allowSightingDeviceSelection && locationAtSightingLevel && (
+                    {gridConfig.showLocation && (
                       <Typography variant="body2" fontWeight={600} color="text.secondary">
                         LOCATION
                       </Typography>
                     )}
-                    {allowGeolocation && !allowSightingDeviceSelection && (
+                    {gridConfig.showGps && (
                       <Typography variant="body2" fontWeight={600} color="text.secondary" textAlign="center">
                         GPS
                       </Typography>
                     )}
-                    {!allowGeolocation && !locationAtSightingLevel && !allowSightingDeviceSelection && (
+                    {gridConfig.showSpacer && (
                       <Box /> // Empty spacer
                     )}
                     <Typography variant="body2" fontWeight={600} color="text.secondary">
@@ -1097,21 +1080,21 @@ export function SurveyDetailPage() {
                               </Typography>
 
                               {/* Device Column - when sighting attaches to a device */}
-                              {allowSightingDeviceSelection && (
+                              {gridConfig.showDevice && (
                                 <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
                                   {getDeviceLabel(sighting.device_id)}
                                 </Typography>
                               )}
 
                               {/* Location Column - when location is at sighting level */}
-                              {!allowSightingDeviceSelection && locationAtSightingLevel && (
+                              {gridConfig.showLocation && (
                                 <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
                                   {sighting.location_name || '-'}
                                 </Typography>
                               )}
 
                               {/* GPS Column - for individual geolocation */}
-                              {allowGeolocation && !allowSightingDeviceSelection && (
+                              {gridConfig.showGps && (
                                 <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                                   {hasIndividualLocations ? (
                                     <Tooltip title={locationTooltip} arrow>
@@ -1122,7 +1105,7 @@ export function SurveyDetailPage() {
                                   )}
                                 </Box>
                               )}
-                              {!allowGeolocation && !locationAtSightingLevel && !allowSightingDeviceSelection && (
+                              {gridConfig.showSpacer && (
                                 <Box /> // Empty spacer
                               )}
 

@@ -7,6 +7,7 @@ import { AddSightingModal } from './AddSightingModal';
 import type { SightingData } from './AddSightingModal';
 import { LocationModal } from './LocationModal';
 import { MapModeSightings } from './MapModeSightings';
+import { getSightingsGridConfig } from './sightingsGridConfig';
 import { getSpeciesIcon } from '../../config';
 import { useResponsive } from '../../hooks/useResponsive';
 import type { DraftIndividualLocation } from './MultiLocationMapPicker';
@@ -643,46 +644,15 @@ export function SightingsEditor({
 
       {/* Calculate grid columns based on which fields are shown */}
       {(() => {
-        // Build grid columns dynamically: Species, [Device | Location], [GPS/Spacer], Count, [Notes], Delete
-        const getGridColumns = () => {
-          const cols: string[] = [];
-
-          // Species column - flexible
-          cols.push(locationAtSightingLevel || allowSightingDeviceSelection ? '2fr' : '2.5fr');
-
-          // Device column (if device selection is on) — replaces location
-          if (allowSightingDeviceSelection) {
-            cols.push('1.5fr');
-          } else if (locationAtSightingLevel) {
-            cols.push('1.2fr');
-          }
-
-          // GPS column (if allowed) or spacer (only when neither location nor device column is present)
-          if (allowGeolocation && !allowSightingDeviceSelection) {
-            cols.push('70px');
-          } else if (!locationAtSightingLevel && !allowSightingDeviceSelection) {
-            cols.push('70px'); // spacer
-          }
-
-          // Count column - fixed small width
-          cols.push('60px');
-
-          // Notes column (if allowed) - flexible
-          if (allowSightingNotes) {
-            cols.push('2fr');
-          }
-
-          // Photos column (if sighting photo upload is allowed)
-          if (allowSightingPhotoUpload) {
-            cols.push('80px');
-          }
-
-          // Delete button - fixed small width
-          cols.push('40px');
-
-          return cols.join(' ');
-        };
-        const gridColumns = getGridColumns();
+        const gridConfig = getSightingsGridConfig({
+          locationAtSightingLevel,
+          allowGeolocation,
+          allowSightingDeviceSelection,
+          showNotesColumn: allowSightingNotes,
+          showPhotosColumn: allowSightingPhotoUpload,
+          includeDeleteColumn: true,
+        });
+        const { gridColumns } = gridConfig;
 
         return sightings.length > 0 ? (
         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
@@ -700,22 +670,22 @@ export function SightingsEditor({
             <Typography variant="body2" fontWeight={600} color="text.secondary">
               SPECIES *
             </Typography>
-            {allowSightingDeviceSelection && (
+            {gridConfig.showDevice && (
               <Typography variant="body2" fontWeight={600} color="text.secondary">
                 DEVICE *
               </Typography>
             )}
-            {!allowSightingDeviceSelection && locationAtSightingLevel && (
+            {gridConfig.showLocation && (
               <Typography variant="body2" fontWeight={600} color="text.secondary">
                 LOCATION *
               </Typography>
             )}
-            {allowGeolocation && !allowSightingDeviceSelection && (
+            {gridConfig.showGps && (
               <Typography variant="body2" fontWeight={600} color="text.secondary" textAlign="center">
                 GPS
               </Typography>
             )}
-            {!allowGeolocation && !locationAtSightingLevel && !allowSightingDeviceSelection && (
+            {gridConfig.showSpacer && (
               <Box /> // Empty spacer to maintain grid alignment
             )}
             <Typography variant="body2" fontWeight={600} color="text.secondary">
@@ -864,7 +834,7 @@ export function SightingsEditor({
                 />
 
                 {/* Device Dropdown Column - when device selection is on */}
-                {allowSightingDeviceSelection && (
+                {gridConfig.showDevice && (
                   <Autocomplete
                     options={devices}
                     getOptionLabel={getDeviceLabel}
@@ -891,7 +861,7 @@ export function SightingsEditor({
                 )}
 
                 {/* Location Dropdown Column - when location is at sighting level */}
-                {!allowSightingDeviceSelection && locationAtSightingLevel && (
+                {gridConfig.showLocation && (
                   <Autocomplete
                     options={locations}
                     getOptionLabel={(option) => option.name}
@@ -918,7 +888,7 @@ export function SightingsEditor({
                 )}
 
                 {/* GPS Location Column - for individual geolocation */}
-                {allowGeolocation && !allowSightingDeviceSelection && (
+                {gridConfig.showGps && (
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                     <Tooltip title={locationTooltip} arrow>
                       <IconButton
@@ -941,7 +911,7 @@ export function SightingsEditor({
                     </Tooltip>
                   </Box>
                 )}
-                {!allowGeolocation && !locationAtSightingLevel && !allowSightingDeviceSelection && (
+                {gridConfig.showSpacer && (
                   <Box /> // Empty spacer to maintain grid alignment
                 )}
 
