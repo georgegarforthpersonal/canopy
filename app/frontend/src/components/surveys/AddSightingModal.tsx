@@ -235,7 +235,6 @@ export function AddSightingModal({
   const selectedSpecies = species.find(s => s.id === selectedSpeciesId);
   const selectedLocation = locations.find(l => l.id === selectedLocationId);
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
-  const getDeviceLabel = (d: Device): string => d.name;
   // Require location / device when their respective mode is on
   const canSave = selectedSpeciesId !== null && count > 0 &&
     (!locationAtSightingLevel || selectedLocationId !== null) &&
@@ -371,7 +370,7 @@ export function AddSightingModal({
           {allowSightingDeviceSelection && (
             <Autocomplete
               options={devices}
-              getOptionLabel={getDeviceLabel}
+              getOptionLabel={(d) => d.name}
               value={selectedDevice || null}
               onChange={(_, newValue) => setSelectedDeviceId(newValue?.id || null)}
               renderInput={(params) => (

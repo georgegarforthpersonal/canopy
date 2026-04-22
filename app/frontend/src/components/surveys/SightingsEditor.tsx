@@ -257,12 +257,9 @@ export function SightingsEditor({
     return loc?.name || '';
   };
 
-  const getDeviceLabel = (device: Device): string => device.name;
-
   const getDeviceDisplayName = (deviceId: number | null | undefined): string => {
     if (!deviceId) return '';
-    const d = devices.find((x) => x.id === deviceId);
-    return d ? getDeviceLabel(d) : '';
+    return devices.find((x) => x.id === deviceId)?.name || '';
   };
 
   // Location modal handlers
@@ -837,7 +834,7 @@ export function SightingsEditor({
                 {gridConfig.showDevice && (
                   <Autocomplete
                     options={devices}
-                    getOptionLabel={getDeviceLabel}
+                    getOptionLabel={(d) => d.name}
                     value={devices.find((d) => d.id === sighting.device_id) || null}
                     onChange={(_, newValue) =>
                       updateSighting(sighting.tempId, 'device_id', newValue?.id || null)
