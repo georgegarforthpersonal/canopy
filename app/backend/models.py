@@ -73,7 +73,7 @@ class OrganisationRead(OrganisationBase):
 class DeviceBase(SQLModel):
     """Base device fields"""
     device_id: str = Field(max_length=50, description="Device serial number from audio filenames")
-    name: Optional[str] = Field(None, max_length=255, description="Friendly name for the device")
+    name: str = Field(max_length=255, description="Friendly name for the device (shown to end users)")
     device_type: DeviceType = Field(default=DeviceType.audio_recorder, description="Type of device")
 
 

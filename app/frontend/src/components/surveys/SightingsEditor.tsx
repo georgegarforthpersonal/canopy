@@ -256,9 +256,7 @@ export function SightingsEditor({
     return loc?.name || '';
   };
 
-  const getDeviceLabel = (device: Device): string => {
-    return device.name ? `${device.name} (${device.device_id})` : device.device_id;
-  };
+  const getDeviceLabel = (device: Device): string => device.name;
 
   const getDeviceDisplayName = (deviceId: number | null | undefined): string => {
     if (!deviceId) return '';

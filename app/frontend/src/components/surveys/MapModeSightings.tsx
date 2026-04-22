@@ -300,14 +300,9 @@ export function MapModeSightings({
                     className="map-mode-popup"
                   >
                     <Box sx={{ minWidth: 180, p: 0.5 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.25 }}>
-                        {group.device.name || group.device.device_id}
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.75 }}>
+                        {group.device.name}
                       </Typography>
-                      {group.device.name && (
-                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', display: 'block', mb: 0.75 }}>
-                          {group.device.device_id}
-                        </Typography>
-                      )}
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
                         {group.entries.length} species · {totalIndividuals} individual{totalIndividuals === 1 ? '' : 's'}
                       </Typography>

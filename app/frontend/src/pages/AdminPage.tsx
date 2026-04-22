@@ -474,6 +474,10 @@ export function AdminPage() {
       setDeviceFormError('Device ID is required');
       return;
     }
+    if (!formDeviceName.trim()) {
+      setDeviceFormError('Device name is required');
+      return;
+    }
     if (deviceDialogMode === 'add' && (formDeviceLatitude === undefined || formDeviceLongitude === undefined)) {
       setDeviceFormError('Latitude and longitude are required');
       return;
@@ -484,7 +488,7 @@ export function AdminPage() {
       if (deviceDialogMode === 'add') {
         const data: DeviceCreate = {
           device_id: formDeviceId.trim(),
-          name: formDeviceName.trim() || undefined,
+          name: formDeviceName.trim(),
           device_type: formDeviceType,
           latitude: formDeviceLatitude!,
           longitude: formDeviceLongitude!,
@@ -494,7 +498,7 @@ export function AdminPage() {
       } else if (editingDevice) {
         const data: DeviceUpdate = {
           device_id: formDeviceId.trim(),
-          name: formDeviceName.trim() || undefined,
+          name: formDeviceName.trim(),
           device_type: formDeviceType,
           latitude: formDeviceLatitude,
           longitude: formDeviceLongitude,

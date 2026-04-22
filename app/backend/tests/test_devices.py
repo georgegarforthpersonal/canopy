@@ -137,6 +137,7 @@ class TestCreateDevice:
             "/api/devices",
             json={
                 "device_id": "DUPE001",
+                "name": "Duplicate",
                 "device_type": "audio_recorder",
                 "latitude": 51.5,
                 "longitude": -0.12,
@@ -151,7 +152,23 @@ class TestCreateDevice:
         """Should return 422 when latitude/longitude are missing."""
         response = client.post(
             "/api/devices",
-            json={"device_id": "NOCOORDS", "device_type": "audio_recorder"},
+            json={"device_id": "NOCOORDS", "name": "No Coords", "device_type": "audio_recorder"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
+
+    def test_create_device_requires_name(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """Should return 422 when name is missing."""
+        response = client.post(
+            "/api/devices",
+            json={
+                "device_id": "NONAME",
+                "device_type": "audio_recorder",
+                "latitude": 51.5,
+                "longitude": -0.12,
+            },
             headers=auth_headers,
         )
         assert response.status_code == 422
@@ -162,6 +179,7 @@ class TestCreateDevice:
             "/api/devices",
             json={
                 "device_id": "TEST",
+                "name": "Test",
                 "device_type": "audio_recorder",
                 "latitude": 51.5,
                 "longitude": -0.12,

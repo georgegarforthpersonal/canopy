@@ -767,7 +767,7 @@ export type DeviceType = 'audio_recorder' | 'camera_trap' | 'refugia';
 export interface Device {
   id: number;
   device_id: string;
-  name: string | null;
+  name: string;
   device_type: DeviceType;
   latitude: number | null;
   longitude: number | null;
@@ -778,7 +778,7 @@ export interface Device {
 
 export interface DeviceCreate {
   device_id: string;
-  name?: string;
+  name: string;
   device_type?: DeviceType;
   latitude: number;
   longitude: number;
