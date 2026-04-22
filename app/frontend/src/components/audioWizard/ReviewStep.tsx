@@ -7,7 +7,7 @@ import {
   Checkbox,
 } from '@mui/material';
 import { ArrowBack, Save } from '@mui/icons-material';
-import type { AudioWizardState } from '../../hooks/useAudioWizard';
+import { paddedSnippetRange, type AudioWizardState } from '../../hooks/useAudioWizard';
 import { AudioClipPlayer } from '../audio/AudioClipPlayer';
 
 interface ReviewStepProps {
@@ -110,16 +110,19 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
                 spacing={1}
                 onClick={(e) => e.stopPropagation()}
               >
-                {species.topDetections.map((det, idx) => (
-                  <AudioClipPlayer
-                    key={idx}
-                    audioUrl={audioFiles[det.fileIndex]?.objectUrl}
-                    startTime={det.start_time}
-                    endTime={det.end_time}
-                    confidence={det.confidence}
-                    timestamp={det.detection_timestamp}
-                  />
-                ))}
+                {species.topDetections.map((det, idx) => {
+                  const { paddedStart, paddedEnd } = paddedSnippetRange(det.start_time, det.end_time);
+                  return (
+                    <AudioClipPlayer
+                      key={idx}
+                      audioUrl={audioFiles[det.fileIndex]?.objectUrl}
+                      startTime={paddedStart}
+                      endTime={paddedEnd}
+                      confidence={det.confidence}
+                      timestamp={det.detection_timestamp}
+                    />
+                  );
+                })}
               </Stack>
             </Box>
           );
