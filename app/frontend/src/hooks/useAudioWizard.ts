@@ -54,29 +54,21 @@ const UPLOAD_BATCH_SIZE = 10;
 
 // Seconds of audio to include either side of the BirdNET detection window
 // when extracting a snippet, so reviewers get context around the call.
-const SNIPPET_PADDING_SECONDS = 10;
+const SNIPPET_PADDING_SECONDS = 3.5;
 
-function secondsToTimeString(totalSeconds: number): string {
-  const safe = Math.max(0, Math.floor(totalSeconds));
-  const h = Math.floor(safe / 3600);
-  const m = Math.floor((safe % 3600) / 60);
-  const s = safe % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-function paddedSnippetRange(startTime: string, endTime: string): {
+export function paddedSnippetRange(startTime: string, endTime: string): {
   paddedStart: string;
   paddedEnd: string;
-  detectionOffsetSeconds: number;
+  paddedDurationSeconds: number;
 } {
   const startSec = parseTimeToSeconds(startTime);
   const endSec = parseTimeToSeconds(endTime);
   const paddedStartSec = Math.max(0, startSec - SNIPPET_PADDING_SECONDS);
   const paddedEndSec = endSec + SNIPPET_PADDING_SECONDS;
   return {
-    paddedStart: secondsToTimeString(paddedStartSec),
-    paddedEnd: secondsToTimeString(paddedEndSec),
-    detectionOffsetSeconds: startSec - paddedStartSec,
+    paddedStart: formatDuration(paddedStartSec),
+    paddedEnd: formatDuration(paddedEndSec),
+    paddedDurationSeconds: paddedEndSec - paddedStartSec,
   };
 }
 
@@ -434,18 +426,13 @@ export function useAudioWizard() {
             const snippetFilename = `snippet_${speciesData.speciesId}_${det.start_time.replace(/:/g, '')}_${det.fileIndex}.wav`;
             const recordingId = filenameToRecordingId.get(snippetFilename);
             if (!recordingId) return null;
-            // Snippet-relative times: the detection sits inside a padded clip,
-            // offset from the start by however much leading padding we kept.
-            const { detectionOffsetSeconds } = paddedSnippetRange(det.start_time, det.end_time);
-            const detectionDuration = det.end_time > det.start_time
-              ? parseTimeToSeconds(det.end_time) - parseTimeToSeconds(det.start_time)
-              : 3;
+            const { paddedDurationSeconds } = paddedSnippetRange(det.start_time, det.end_time);
             return {
               audio_recording_id: recordingId,
               species_name: det.species_name,
               confidence: det.confidence,
-              start_time: formatDuration(detectionOffsetSeconds),
-              end_time: formatDuration(detectionOffsetSeconds + detectionDuration),
+              start_time: '00:00:00',
+              end_time: formatDuration(paddedDurationSeconds),
               // Absolute wall-clock time from BirdNET. Sent explicitly because
               // the snippet's filename no longer carries the original timestamp.
               detection_timestamp: det.detection_timestamp,
