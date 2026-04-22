@@ -210,28 +210,18 @@ async def create_device(
         if not location:
             raise HTTPException(status_code=400, detail=f"Location {device.location_id} not found")
 
-    # Create the device
+    # Create the device with coordinates set atomically (point_geometry is NOT NULL).
     db_device = Device(
         device_id=device.device_id,
         name=device.name,
         device_type=device.device_type,
         location_id=device.location_id,
-        organisation_id=org.id
+        organisation_id=org.id,
+        point_geometry=f"SRID=4326;POINT({device.longitude} {device.latitude})",
     )
     db.add(db_device)
     db.commit()
     db.refresh(db_device)
-
-    # Persist point geometry from the required coordinates.
-    db.execute(
-        text("""
-            UPDATE device
-            SET point_geometry = ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)
-            WHERE id = :id
-        """),
-        {"lng": device.longitude, "lat": device.latitude, "id": db_device.id}
-    )
-    db.commit()
 
     # Fetch and return the created device with all fields
     return await get_device(db_device.id, org, db)  # type: ignore[no-any-return]
