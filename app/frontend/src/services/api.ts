@@ -769,8 +769,8 @@ export interface Device {
   device_id: string;
   name: string;
   device_type: DeviceType;
-  latitude: number | null;
-  longitude: number | null;
+  latitude: number;
+  longitude: number;
   location_id: number | null;
   location_name: string | null;
   is_active: boolean;

@@ -136,8 +136,8 @@ class DeviceUpdate(SQLModel):
 class DeviceRead(DeviceBase):
     """Model for reading a device"""
     id: int
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    latitude: float
+    longitude: float
     location_id: Optional[int] = None
     location_name: Optional[str] = None
     is_active: bool
