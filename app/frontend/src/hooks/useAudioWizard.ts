@@ -524,6 +524,8 @@ export function useAudioWizard() {
     runProcessing,
     detections,
     unmatchedSpecies,
+    // True once the current audioFiles set has finished processing without error.
+    isProcessingComplete: !processing && !processError && processedFileSet === audioFiles && audioFiles.length > 0,
 
     // Review
     reviewData,

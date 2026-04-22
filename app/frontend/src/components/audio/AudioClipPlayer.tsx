@@ -177,7 +177,7 @@ export function AudioClipPlayer({
   const tooltipTitle = error
     ? error
     : timestamp
-      ? `${formatTimestamp(timestamp)} — ${baseTitle}`
+      ? formatTimestamp(timestamp)
       : baseTitle;
 
   return (
