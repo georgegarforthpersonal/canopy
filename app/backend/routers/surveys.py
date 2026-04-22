@@ -498,6 +498,7 @@ async def get_survey_sightings(
         Sighting.survey_id,
         Sighting.species_id,
         Sighting.location_id,
+        Sighting.device_id,
         Sighting.count,
         Sighting.notes,
         Species.name.label('species_name'),  # type: ignore[union-attr]
@@ -549,6 +550,7 @@ async def get_survey_sightings(
             "species_id": row.species_id,
             "location_id": row.location_id,
             "location_name": row.location_name,
+            "device_id": row.device_id,
             "count": row.count,
             "notes": row.notes,
             "species_name": row.species_name,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
@@ -128,6 +128,19 @@ export function SurveyDetailPage() {
     sightings?: string;
     endTime?: string;
   }>({});
+
+  // Devices surfaced to the picker and map: active devices plus any inactive device
+  // already referenced by a sighting (so historical rows stay editable/mappable).
+  // Declared up here to keep hook order stable with the loading/error early returns below.
+  const visibleDevices = useMemo(() => {
+    if (!surveyType?.allow_sighting_device_selection) return [];
+    const referencedIds = new Set(
+      sightings
+        .map((s: any) => s.device_id)
+        .filter((id: number | null | undefined): id is number => id != null)
+    );
+    return devices.filter((d) => d.is_active || referencedIds.has(d.id));
+  }, [surveyType?.allow_sighting_device_selection, devices, sightings]);
 
   // ============================================================================
   // Data Fetching
@@ -288,7 +301,12 @@ export function SurveyDetailPage() {
     const validSightings = editDraftSightings.filter(
       (s) => s.species_id !== null && s.count > 0
     );
-    if (locationAtSightingLevel) {
+    if (allowSightingDeviceSelection) {
+      const sightingsWithoutDevice = validSightings.filter((s) => !s.device_id);
+      if (sightingsWithoutDevice.length > 0) {
+        errors.sightings = 'Each sighting must have a device selected';
+      }
+    } else if (locationAtSightingLevel) {
       const sightingsWithoutLocation = validSightings.filter((s) => !s.location_id);
       if (sightingsWithoutLocation.length > 0) {
         errors.sightings = 'Each sighting must have a location selected';
@@ -331,6 +349,8 @@ export function SurveyDetailPage() {
       id: sighting.id, // Keep the real ID for updates/deletes
       // Include location_id for sighting-level location
       location_id: sighting.location_id,
+      // Include device_id for device-attached sightings
+      device_id: sighting.device_id,
       // Include notes for this sighting
       notes: sighting.notes,
       // Include individuals if present (from SightingWithIndividuals)
@@ -435,6 +455,7 @@ export function SurveyDetailPage() {
             species_id: sighting.species_id!,
             count: sighting.count,
             location_id: locationAtSightingLevel ? sighting.location_id : undefined,
+            device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
             notes: sighting.notes,
             image_ids: finalImageIds,
           });
@@ -493,6 +514,7 @@ export function SurveyDetailPage() {
             species_id: sighting.species_id!,
             count: sighting.count,
             location_id: locationAtSightingLevel ? sighting.location_id : undefined,
+            device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
             notes: sighting.notes,
             individuals: sighting.individuals?.map((ind) => ({
               latitude: ind.latitude,
@@ -838,7 +860,7 @@ export function SurveyDetailPage() {
               allowSightingNotes={allowSightingNotes}
               allowSightingPhotoUpload={allowSightingPhotoUpload}
               allowSightingDeviceSelection={allowSightingDeviceSelection}
-              devices={devices}
+              devices={visibleDevices}
               surveyLocationId={editLocationId}
             />
           ) : (
@@ -888,36 +910,51 @@ export function SurveyDetailPage() {
                   locationsWithBoundaries={locationsWithBoundaries}
                   readOnly
                   surveyLocationId={survey.location_id}
-                  devices={devices}
+                  devices={visibleDevices}
                   allowSightingDeviceSelection={allowSightingDeviceSelection}
                 />
               ) : (
               /* Sightings Table */
               (() => {
+                // In view mode, only show the notes column if at least one sighting
+                // actually has notes — an empty column for a survey type that allows
+                // notes but has none recorded is just dead space.
+                const showNotesColumn = allowSightingNotes && sightings.some(
+                  (s: any) => s.notes && String(s.notes).trim() !== ''
+                );
+
                 // Build grid columns dynamically to match edit mode
                 const getGridColumns = () => {
                   const cols: string[] = [];
                   // Species column - flexible
-                  cols.push(locationAtSightingLevel ? '2fr' : '2.5fr');
-                  // Location column (if at sighting level)
-                  if (locationAtSightingLevel) {
+                  cols.push(locationAtSightingLevel || allowSightingDeviceSelection ? '2fr' : '2.5fr');
+                  // Device column (if device selection is on) — mutually exclusive with location/GPS
+                  if (allowSightingDeviceSelection) {
+                    cols.push('1.5fr');
+                  } else if (locationAtSightingLevel) {
                     cols.push('1.2fr');
                   }
-                  // GPS column (if allowed) or spacer (if no location and no GPS)
-                  if (allowGeolocation) {
+                  // GPS column (if allowed) or spacer (if no location, no GPS, no device)
+                  if (allowGeolocation && !allowSightingDeviceSelection) {
                     cols.push('70px');
-                  } else if (!locationAtSightingLevel) {
+                  } else if (!locationAtSightingLevel && !allowSightingDeviceSelection) {
                     cols.push('70px'); // spacer
                   }
                   // Count column - fixed small width
                   cols.push('60px');
-                  // Notes column (if allowed) - flexible
-                  if (allowSightingNotes) {
+                  // Notes column — only when at least one sighting has notes
+                  if (showNotesColumn) {
                     cols.push('2fr');
                   }
                   return cols.join(' ');
                 };
                 const gridColumns = getGridColumns();
+
+                const getDeviceLabel = (deviceId: number | null | undefined): string => {
+                  if (deviceId == null) return '-';
+                  const d = devices.find((x) => x.id === deviceId);
+                  return d ? d.name : '-';
+                };
 
                 return sightings.length > 0 ? (
                 <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
@@ -936,23 +973,28 @@ export function SurveyDetailPage() {
                     <Typography variant="body2" fontWeight={600} color="text.secondary">
                       SPECIES
                     </Typography>
-                    {locationAtSightingLevel && (
+                    {allowSightingDeviceSelection && (
+                      <Typography variant="body2" fontWeight={600} color="text.secondary">
+                        DEVICE
+                      </Typography>
+                    )}
+                    {!allowSightingDeviceSelection && locationAtSightingLevel && (
                       <Typography variant="body2" fontWeight={600} color="text.secondary">
                         LOCATION
                       </Typography>
                     )}
-                    {allowGeolocation && (
+                    {allowGeolocation && !allowSightingDeviceSelection && (
                       <Typography variant="body2" fontWeight={600} color="text.secondary" textAlign="center">
                         GPS
                       </Typography>
                     )}
-                    {!allowGeolocation && !locationAtSightingLevel && (
+                    {!allowGeolocation && !locationAtSightingLevel && !allowSightingDeviceSelection && (
                       <Box /> // Empty spacer
                     )}
                     <Typography variant="body2" fontWeight={600} color="text.secondary">
                       COUNT
                     </Typography>
-                    {allowSightingNotes && (
+                    {showNotesColumn && (
                       <Typography variant="body2" fontWeight={600} color="text.secondary">
                         NOTES
                       </Typography>
@@ -1054,15 +1096,22 @@ export function SurveyDetailPage() {
                                 )}
                               </Typography>
 
+                              {/* Device Column - when sighting attaches to a device */}
+                              {allowSightingDeviceSelection && (
+                                <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                                  {getDeviceLabel(sighting.device_id)}
+                                </Typography>
+                              )}
+
                               {/* Location Column - when location is at sighting level */}
-                              {locationAtSightingLevel && (
+                              {!allowSightingDeviceSelection && locationAtSightingLevel && (
                                 <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
                                   {sighting.location_name || '-'}
                                 </Typography>
                               )}
 
                               {/* GPS Column - for individual geolocation */}
-                              {allowGeolocation && (
+                              {allowGeolocation && !allowSightingDeviceSelection && (
                                 <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                                   {hasIndividualLocations ? (
                                     <Tooltip title={locationTooltip} arrow>
@@ -1073,7 +1122,7 @@ export function SurveyDetailPage() {
                                   )}
                                 </Box>
                               )}
-                              {!allowGeolocation && !locationAtSightingLevel && (
+                              {!allowGeolocation && !locationAtSightingLevel && !allowSightingDeviceSelection && (
                                 <Box /> // Empty spacer
                               )}
 
@@ -1082,8 +1131,8 @@ export function SurveyDetailPage() {
                                 {sighting.count}
                               </Typography>
 
-                              {/* Notes Column */}
-                              {allowSightingNotes && (
+                              {/* Notes Column — only rendered when at least one sighting has notes */}
+                              {showNotesColumn && (
                                 <Typography
                                   variant="body2"
                                   sx={{
