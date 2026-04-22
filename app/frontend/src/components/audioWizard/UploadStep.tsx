@@ -19,12 +19,13 @@ export function UploadStep({ wizard }: UploadStepProps) {
   const {
     audioFiles, loadingFiles, fileInputRef, handleFileSelect,
     processing, processProgress, processError, setProcessError, runProcessing,
-    detections, unmatchedSpecies, reviewData,
+    detections, unmatchedSpecies, reviewData, isProcessingComplete,
     canProceed, setActiveStep,
   } = wizard;
 
   const hasFiles = audioFiles.length > 0;
-  const isProcessed = !processing && detections.length > 0;
+  const hasDetections = isProcessingComplete && detections.length > 0;
+  const noDetections = isProcessingComplete && detections.length === 0;
 
   return (
     <Paper sx={{ p: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
@@ -128,7 +129,7 @@ export function UploadStep({ wizard }: UploadStepProps) {
       )}
 
       {/* Processing results summary */}
-      {isProcessed && (
+      {hasDetections && (
         <Alert severity="success" sx={{ mb: 2 }}>
           Processing complete — <strong>{detections.length}</strong> detections across <strong>{reviewData.length}</strong> species found.
           {unmatchedSpecies.length > 0 && (
@@ -141,6 +142,20 @@ export function UploadStep({ wizard }: UploadStepProps) {
               </Stack>
             </Box>
           )}
+        </Alert>
+      )}
+
+      {noDetections && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => runProcessing()}>
+              Retry
+            </Button>
+          }
+        >
+          Processing complete — <strong>0 detections</strong> found. The file may not contain audible bird calls, or none met the confidence threshold. Try a different file or re-run processing.
         </Alert>
       )}
 
