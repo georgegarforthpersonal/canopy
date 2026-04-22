@@ -5,7 +5,7 @@ import { notionColors } from '../theme';
 export const DEVICE_COLORS: Record<Device['device_type'], string> = {
   camera_trap: notionColors.blue.text,
   audio_recorder: notionColors.orange.text,
-  refugia: '#2E7D32',
+  refugia: notionColors.green.text,
 };
 
 export const DEVICE_SVG: Record<Device['device_type'], string> = {
