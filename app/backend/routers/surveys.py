@@ -662,12 +662,16 @@ async def create_sighting(
         ).fetchone()
         if not device_row:
             raise HTTPException(status_code=400, detail=f"Device {sighting.device_id} not found")
-        if survey_type.sighting_device_type and device_row.device_type != survey_type.sighting_device_type.value:
+        expected_type = survey_type.sighting_device_type
+        # sighting_device_type is stored as a raw String column, so normalise to the
+        # enum's string value whether SQLAlchemy hands us the enum or the raw string.
+        expected_str = expected_type.value if hasattr(expected_type, "value") else expected_type
+        if expected_str and device_row.device_type != expected_str:
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Device type '{device_row.device_type}' does not match survey type's "
-                    f"configured device type '{survey_type.sighting_device_type.value}'"
+                    f"configured device type '{expected_str}'"
                 )
             )
         device_point: Optional[tuple[float, float]] = (device_row.latitude, device_row.longitude)
@@ -781,7 +785,10 @@ async def create_sighting(
         "id": db_sighting.id,
         "survey_id": db_sighting.survey_id,
         "species_id": db_sighting.species_id,
+        "location_id": db_sighting.location_id,
+        "device_id": db_sighting.device_id,
         "count": db_sighting.count,
+        "notes": db_sighting.notes,
         "species_name": species.name if species else None,
         "species_scientific_name": species.scientific_name if species else None,
         "individuals": [
