@@ -35,6 +35,7 @@ from models import (
     AudioRecording, AudioDetection,
     CameraTrapImage,
     Device,
+    SurveyType,
     Organisation
 )
 from services.r2_storage import delete_media_file
@@ -611,12 +612,18 @@ async def create_sighting(
                 detail=f"Sum of individual counts ({total_individual_count}) exceeds sighting count ({sighting.count})"
             )
 
-    # Validate device_id belongs to this organisation, and fetch its point
-    device_point: Optional[tuple[float, float]] = None
+    # Device-attach mode consistency check: reject device_id unless the survey type
+    # opts in, and require the device's type to match the configured sighting_device_type.
+    survey_type = db.query(SurveyType).filter(SurveyType.id == survey.survey_type_id).first()
     if sighting.device_id is not None:
+        if not (survey_type and survey_type.allow_sighting_device_selection):
+            raise HTTPException(
+                status_code=400,
+                detail="This survey type does not allow attaching a device to sightings"
+            )
         device_row = db.execute(
             text("""
-                SELECT id, ST_Y(point_geometry) AS latitude, ST_X(point_geometry) AS longitude
+                SELECT id, device_type, ST_Y(point_geometry) AS latitude, ST_X(point_geometry) AS longitude
                 FROM device
                 WHERE id = :id AND organisation_id = :org_id
             """),
@@ -624,8 +631,17 @@ async def create_sighting(
         ).fetchone()
         if not device_row:
             raise HTTPException(status_code=400, detail=f"Device {sighting.device_id} not found")
-        if device_row.latitude is not None and device_row.longitude is not None:
-            device_point = (device_row.latitude, device_row.longitude)
+        if survey_type.sighting_device_type and device_row.device_type != survey_type.sighting_device_type.value:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Device type '{device_row.device_type}' does not match survey type's "
+                    f"configured device type '{survey_type.sighting_device_type.value}'"
+                )
+            )
+        device_point: Optional[tuple[float, float]] = (device_row.latitude, device_row.longitude)
+    else:
+        device_point = None
 
     # Create sighting
     db_sighting = Sighting(
