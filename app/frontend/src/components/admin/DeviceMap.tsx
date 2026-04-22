@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Paper,
@@ -19,7 +19,6 @@ import {
   TileLayer,
   Marker,
   Popup,
-  useMapEvents,
   useMap,
 } from 'react-leaflet';
 import { LatLngBounds, LatLng, DivIcon } from 'leaflet';
@@ -27,7 +26,6 @@ import MapIcon from '@mui/icons-material/Map';
 import SatelliteIcon from '@mui/icons-material/Satellite';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
-import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreFromTrashIcon from '@mui/icons-material/RestoreFromTrash';
@@ -45,14 +43,13 @@ interface DeviceMapProps {
   onEditDevice: (device: Device) => void;
   onDeactivateDevice: (device: Device) => void;
   onReactivateDevice: (device: Device) => void;
-  onAddDeviceAtLocation: (lat: number, lng: number) => void;
 }
 
-// Colours for device types (notion palette)
+// Colours for device types (notion palette, refugia overridden for clarity)
 const DEVICE_COLORS: Record<Device['device_type'], string> = {
   camera_trap: notionColors.blue.text,
   audio_recorder: notionColors.orange.text,
-  refugia: notionColors.green.text,
+  refugia: '#2E7D32',
 };
 
 // Inline SVG paths for marker icons (stroke-based, no fill)
@@ -119,13 +116,24 @@ function FitBoundsToDevices({ devices }: { devices: Device[] }) {
   return null;
 }
 
-function MapClickHandler({ onClick }: { onClick: (latlng: LatLng) => void }) {
-  useMapEvents({
-    click(e) {
-      onClick(e.latlng);
-    },
-  });
-  return null;
+function DeviceLegendIcon({ type }: { type: Device['device_type'] }) {
+  return (
+    <Box
+      sx={{
+        width: 20,
+        height: 20,
+        borderRadius: '50%',
+        bgcolor: DEVICE_COLORS[type],
+        border: '1.5px solid #fff',
+        boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        '& svg': { width: 12, height: 12 },
+      }}
+      dangerouslySetInnerHTML={{ __html: DEVICE_SVG[type] }}
+    />
+  );
 }
 
 export default function DeviceMap({
@@ -135,12 +143,10 @@ export default function DeviceMap({
   onEditDevice,
   onDeactivateDevice,
   onReactivateDevice,
-  onAddDeviceAtLocation,
 }: DeviceMapProps) {
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
   const [mapType, setMapType] = useState<'street' | 'satellite'>('satellite');
   const [showInactive, setShowInactive] = useState(false);
-  const [placementMode, setPlacementMode] = useState(false);
 
   const defaultCenter = DEFAULT_MAP_CENTER;
   const defaultZoom = DEFAULT_MAP_ZOOM;
@@ -151,21 +157,6 @@ export default function DeviceMap({
       (d) => d.latitude && d.longitude && (d.is_active || showInactive)
     );
   }, [devices, showInactive]);
-
-  // Exit placement mode on Escape (only when not fullscreen — fullscreen has its own Escape handler)
-  useEffect(() => {
-    if (!placementMode || isFullscreen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setPlacementMode(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [placementMode, isFullscreen]);
-
-  const handleMapClick = (latlng: LatLng) => {
-    setPlacementMode(false);
-    onAddDeviceAtLocation(latlng.lat, latlng.lng);
-  };
 
   if (loading) {
     return (
@@ -202,43 +193,16 @@ export default function DeviceMap({
 
             {/* Legend */}
             <Stack direction="row" spacing={2}>
-              <Stack direction="row" spacing={0.5} alignItems="center">
-                <Box
-                  sx={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    bgcolor: DEVICE_COLORS.camera_trap,
-                    border: '1.5px solid #fff',
-                    boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
-                  }}
-                />
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <DeviceLegendIcon type="camera_trap" />
                 <Typography variant="caption" color="text.secondary">Camera Trap</Typography>
               </Stack>
-              <Stack direction="row" spacing={0.5} alignItems="center">
-                <Box
-                  sx={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    bgcolor: DEVICE_COLORS.audio_recorder,
-                    border: '1.5px solid #fff',
-                    boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
-                  }}
-                />
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <DeviceLegendIcon type="audio_recorder" />
                 <Typography variant="caption" color="text.secondary">Audio Recorder</Typography>
               </Stack>
-              <Stack direction="row" spacing={0.5} alignItems="center">
-                <Box
-                  sx={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    bgcolor: DEVICE_COLORS.refugia,
-                    border: '1.5px solid #fff',
-                    boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
-                  }}
-                />
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <DeviceLegendIcon type="refugia" />
                 <Typography variant="caption" color="text.secondary">Refugia</Typography>
               </Stack>
             </Stack>
@@ -291,64 +255,17 @@ export default function DeviceMap({
           ...fullscreenContainerSx,
         }}
       >
-        {/* Placement mode banner */}
-        {placementMode && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 1000,
-              bgcolor: 'rgba(25, 118, 210, 0.9)',
-              color: 'white',
-              px: 2,
-              py: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              Click on the map to place a new device
-            </Typography>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => setPlacementMode(false)}
-              sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.5)', '&:hover': { borderColor: 'white' } }}
-            >
-              Cancel
-            </Button>
-          </Box>
-        )}
-
         {/* Map controls */}
         <Stack
           direction="row"
           spacing={0.5}
           sx={{
             position: 'absolute',
-            top: placementMode ? 50 : 10,
+            top: 10,
             right: 10,
             zIndex: 1000,
-            transition: 'top 0.2s',
           }}
         >
-          <Tooltip title="Place new device">
-            <IconButton
-              size="small"
-              onClick={() => setPlacementMode(!placementMode)}
-              sx={{
-                bgcolor: placementMode ? 'primary.main' : 'white',
-                color: placementMode ? 'white' : 'inherit',
-                boxShadow: 2,
-                '&:hover': { bgcolor: placementMode ? 'primary.dark' : 'grey.100' },
-              }}
-            >
-              <AddLocationAltIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
           <Tooltip title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
             <IconButton
               size="small"
@@ -369,10 +286,6 @@ export default function DeviceMap({
             height: 500,
             width: '100%',
             ...fullscreenMapSx,
-            // Crosshair cursor in placement mode
-            ...(placementMode && {
-              '& .leaflet-container': { cursor: 'crosshair' },
-            }),
           }}
         >
           <MapContainer
@@ -482,9 +395,6 @@ export default function DeviceMap({
                 </Popup>
               </Marker>
             ))}
-
-            {/* Click handler for placement mode */}
-            {placementMode && <MapClickHandler onClick={handleMapClick} />}
 
             <FitBoundsToDevices devices={devices} />
             <MapResizeHandler isFullscreen={isFullscreen} />

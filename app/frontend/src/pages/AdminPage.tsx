@@ -443,14 +443,14 @@ export function AdminPage() {
   };
 
   // Device handlers
-  const handleOpenAddDevice = (lat?: number, lng?: number) => {
+  const handleOpenAddDevice = () => {
     setDeviceDialogMode('add');
     setEditingDevice(null);
     setFormDeviceId('');
     setFormDeviceName('');
     setFormDeviceType('audio_recorder');
-    setFormDeviceLatitude(lat);
-    setFormDeviceLongitude(lng);
+    setFormDeviceLatitude(undefined);
+    setFormDeviceLongitude(undefined);
     setFormDeviceLocationId(null);
     setDeviceFormError(null);
     setDeviceDialogOpen(true);
@@ -827,7 +827,6 @@ export function AdminPage() {
             setDeactivateDeviceDialogOpen(true);
           }}
           onReactivateDevice={handleReactivateDevice}
-          onAddDeviceAtLocation={handleOpenAddDevice}
         />
 
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
@@ -1469,6 +1468,7 @@ export function AdminPage() {
                 setFormDeviceLatitude(lat ?? undefined);
                 setFormDeviceLongitude(lng ?? undefined);
               }}
+              locationBoundaries={allLocationsWithBoundaries}
               locationBoundary={
                 formDeviceLocationId
                   ? allLocationsWithBoundaries.find((l) => l.id === formDeviceLocationId) ?? null
