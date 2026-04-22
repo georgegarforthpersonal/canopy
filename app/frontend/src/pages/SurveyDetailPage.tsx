@@ -4,8 +4,8 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useAuth } from '../context/AuthContext';
-import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI } from '../services/api';
-import type { SurveyDetail, Sighting, SightingAudioClip, Surveyor, Location, Species, Survey, BreedingStatusCode, LocationWithBoundary, SurveyType } from '../services/api';
+import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI, devicesAPI } from '../services/api';
+import type { SurveyDetail, Sighting, SightingAudioClip, Surveyor, Location, Species, Survey, BreedingStatusCode, LocationWithBoundary, SurveyType, Device } from '../services/api';
 import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/SurveyFormFields';
 import { SightingsEditor } from '../components/surveys/SightingsEditor';
 import type { DraftSighting } from '../components/surveys/SightingsEditor';
@@ -76,6 +76,7 @@ export function SurveyDetailPage() {
   const [species, setSpecies] = useState<Species[]>([]);
   const [breedingCodes, setBreedingCodes] = useState<BreedingStatusCode[]>([]);
   const [locationsWithBoundaries, setLocationsWithBoundaries] = useState<LocationWithBoundary[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -175,6 +176,20 @@ export function SurveyDetailPage() {
         setSpecies(speciesData);
         setBreedingCodes(breedingCodesData);
         setLocationsWithBoundaries(boundariesData);
+
+        // If this survey type attaches sightings to devices, fetch those devices so the
+        // map can plot sightings at their device's coordinates. Include inactive so
+        // historical sightings whose device has since been deactivated still plot.
+        if (surveyTypeData?.allow_sighting_device_selection && surveyTypeData.sighting_device_type) {
+          try {
+            const devicesData = await devicesAPI.getAll(true, surveyTypeData.sighting_device_type);
+            setDevices(devicesData);
+          } catch (e) {
+            console.error('Error fetching devices:', e);
+          }
+        } else {
+          setDevices([]);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load survey details');
         console.error('Error fetching survey:', err);
@@ -242,8 +257,10 @@ export function SurveyDetailPage() {
   // Computed Values - Survey Type Configuration
   // ============================================================================
 
-  const locationAtSightingLevel = surveyType?.location_at_sighting_level ?? false;
-  const allowGeolocation = surveyType?.allow_geolocation ?? true;
+  const allowSightingDeviceSelection = surveyType?.allow_sighting_device_selection ?? false;
+  const locationAtSightingLevel = !allowSightingDeviceSelection && (surveyType?.location_at_sighting_level ?? false);
+  const allowGeolocation = !allowSightingDeviceSelection && (surveyType?.allow_geolocation ?? true);
+  const canShowSightingsMap = allowGeolocation || allowSightingDeviceSelection;
   const allowSightingNotes = surveyType?.allow_sighting_notes ?? true;
   const allowSightingPhotoUpload = surveyType?.allow_sighting_photo_upload ?? false;
   const showStartEndTime = surveyType?.allow_start_end_time ?? false;
@@ -820,6 +837,8 @@ export function SurveyDetailPage() {
               allowGeolocation={allowGeolocation}
               allowSightingNotes={allowSightingNotes}
               allowSightingPhotoUpload={allowSightingPhotoUpload}
+              allowSightingDeviceSelection={allowSightingDeviceSelection}
+              devices={devices}
               surveyLocationId={editLocationId}
             />
           ) : (
@@ -828,7 +847,7 @@ export function SurveyDetailPage() {
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
                   Sightings ({sightings.length})
                 </Typography>
-                {allowGeolocation && (
+                {canShowSightingsMap && (
                   <ToggleButtonGroup
                     value={viewMode}
                     exclusive
@@ -851,13 +870,14 @@ export function SurveyDetailPage() {
               </Stack>
 
               {/* Map Mode View */}
-              {viewMode === 'map' && allowGeolocation ? (
+              {viewMode === 'map' && canShowSightingsMap ? (
                 <MapModeSightings
                   sightings={sightings.map((s: any) => ({
                     tempId: `view-${s.id}`,
                     species_id: s.species_id,
                     count: s.count,
                     id: s.id,
+                    device_id: s.device_id,
                     individuals: s.individuals?.map((ind: any) => ({
                       ...ind,
                       tempId: `view-ind-${ind.id}`,
@@ -868,6 +888,8 @@ export function SurveyDetailPage() {
                   locationsWithBoundaries={locationsWithBoundaries}
                   readOnly
                   surveyLocationId={survey.location_id}
+                  devices={devices}
+                  allowSightingDeviceSelection={allowSightingDeviceSelection}
                 />
               ) : (
               /* Sightings Table */

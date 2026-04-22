@@ -474,21 +474,33 @@ export function AdminPage() {
       setDeviceFormError('Device ID is required');
       return;
     }
+    if (deviceDialogMode === 'add' && (formDeviceLatitude === undefined || formDeviceLongitude === undefined)) {
+      setDeviceFormError('Latitude and longitude are required');
+      return;
+    }
     try {
       setSavingDevice(true);
       setDeviceFormError(null);
-      const data: DeviceCreate | DeviceUpdate = {
-        device_id: formDeviceId.trim(),
-        name: formDeviceName.trim() || undefined,
-        device_type: formDeviceType,
-        latitude: formDeviceLatitude,
-        longitude: formDeviceLongitude,
-        location_id: formDeviceLocationId ?? undefined,
-      };
       if (deviceDialogMode === 'add') {
-        await devicesAPI.create(data as DeviceCreate);
+        const data: DeviceCreate = {
+          device_id: formDeviceId.trim(),
+          name: formDeviceName.trim() || undefined,
+          device_type: formDeviceType,
+          latitude: formDeviceLatitude!,
+          longitude: formDeviceLongitude!,
+          location_id: formDeviceLocationId ?? undefined,
+        };
+        await devicesAPI.create(data);
       } else if (editingDevice) {
-        await devicesAPI.update(editingDevice.id, data as DeviceUpdate);
+        const data: DeviceUpdate = {
+          device_id: formDeviceId.trim(),
+          name: formDeviceName.trim() || undefined,
+          device_type: formDeviceType,
+          latitude: formDeviceLatitude,
+          longitude: formDeviceLongitude,
+          location_id: formDeviceLocationId ?? undefined,
+        };
+        await devicesAPI.update(editingDevice.id, data);
       }
       setDeviceDialogOpen(false);
       await loadDevices();

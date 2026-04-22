@@ -117,8 +117,8 @@ class Device(DeviceBase, table=True):  # type: ignore[call-arg]
 
 class DeviceCreate(DeviceBase):
     """Model for creating a new device"""
-    latitude: Optional[float] = Field(None, ge=-90, le=90, description="Latitude coordinate")
-    longitude: Optional[float] = Field(None, ge=-180, le=180, description="Longitude coordinate")
+    latitude: float = Field(ge=-90, le=90, description="Latitude coordinate")
+    longitude: float = Field(ge=-180, le=180, description="Longitude coordinate")
     location_id: Optional[int] = Field(None, description="Associated location ID")
 
 

@@ -780,8 +780,8 @@ export interface DeviceCreate {
   device_id: string;
   name?: string;
   device_type?: DeviceType;
-  latitude?: number;
-  longitude?: number;
+  latitude: number;
+  longitude: number;
   location_id?: number;
 }
 

@@ -222,17 +222,16 @@ async def create_device(
     db.commit()
     db.refresh(db_device)
 
-    # Update point geometry if coordinates provided
-    if device.latitude is not None and device.longitude is not None:
-        db.execute(
-            text("""
-                UPDATE device
-                SET point_geometry = ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)
-                WHERE id = :id
-            """),
-            {"lng": device.longitude, "lat": device.latitude, "id": db_device.id}
-        )
-        db.commit()
+    # Persist point geometry from the required coordinates.
+    db.execute(
+        text("""
+            UPDATE device
+            SET point_geometry = ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)
+            WHERE id = :id
+        """),
+        {"lng": device.longitude, "lat": device.latitude, "id": db_device.id}
+    )
+    db.commit()
 
     # Fetch and return the created device with all fields
     return await get_device(db_device.id, org, db)  # type: ignore[no-any-return]

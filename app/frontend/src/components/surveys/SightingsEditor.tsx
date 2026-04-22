@@ -338,7 +338,9 @@ export function SightingsEditor({
   const editingSighting = editingTempId ? sightings.find((s) => s.tempId === editingTempId) : null;
   const locationEditingSighting = locationEditingTempId ? sightings.find((s) => s.tempId === locationEditingTempId) : null;
 
-  const viewModeToggle = allowGeolocation ? (
+  const canShowMap = allowGeolocation || allowSightingDeviceSelection;
+
+  const viewModeToggle = canShowMap ? (
     <ToggleButtonGroup
       value={viewMode}
       exclusive
@@ -360,7 +362,7 @@ export function SightingsEditor({
   ) : null;
 
   // Map mode UI (shared between mobile and desktop)
-  if (viewMode === 'map' && allowGeolocation) {
+  if (viewMode === 'map' && canShowMap) {
     return (
       <>
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
@@ -383,6 +385,8 @@ export function SightingsEditor({
           onSightingsChange={onSightingsChange}
           locationsWithBoundaries={locationsWithBoundaries}
           surveyLocationId={surveyLocationId}
+          devices={devices}
+          allowSightingDeviceSelection={allowSightingDeviceSelection}
         />
       </>
     );
