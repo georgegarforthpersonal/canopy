@@ -11,7 +11,7 @@ Endpoints:
 """
 
 from fastapi import APIRouter, HTTPException, status, Depends
-from typing import Any, List
+from typing import List, Union
 from sqlalchemy.orm import Session
 from database.connection import get_db
 from auth import require_admin
@@ -27,27 +27,26 @@ from models import (
 router = APIRouter()
 
 
-def _validate_sighting_device_selection(payload: Any) -> None:
+def _validate_sighting_device_selection(payload: Union[SurveyType, SurveyTypeCreate]) -> None:
     """Validate that sighting device selection config is internally consistent.
 
     - When enabled, sighting_device_type must be set.
     - When enabled, location_at_sighting_level and allow_geolocation must be False
       (the device supplies location for each sighting).
     """
-    enabled = getattr(payload, 'allow_sighting_device_selection', None)
-    if not enabled:
+    if not payload.allow_sighting_device_selection:
         return
-    if not getattr(payload, 'sighting_device_type', None):
+    if not payload.sighting_device_type:
         raise HTTPException(
             status_code=400,
             detail="sighting_device_type is required when allow_sighting_device_selection is enabled"
         )
-    if getattr(payload, 'location_at_sighting_level', False):
+    if payload.location_at_sighting_level:
         raise HTTPException(
             status_code=400,
             detail="location_at_sighting_level must be disabled when using sighting device selection"
         )
-    if getattr(payload, 'allow_geolocation', False):
+    if payload.allow_geolocation:
         raise HTTPException(
             status_code=400,
             detail="allow_geolocation must be disabled when using sighting device selection"
