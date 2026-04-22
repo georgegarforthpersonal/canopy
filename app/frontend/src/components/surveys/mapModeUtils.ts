@@ -81,8 +81,8 @@ export interface DeviceGroup {
 
 /**
  * Group draft sightings by the device they're attached to, placing each group at the
- * device's coordinates. Sightings whose device isn't in the provided list, or whose
- * device has no coordinates, are skipped and returned separately.
+ * device's coordinates. Sightings whose device isn't in the visible list (e.g. it was
+ * deactivated and isn't referenced by any other sighting) are returned as unmappable.
  */
 export function getDeviceGroupsFromSightings(
   draftSightings: DraftSighting[],
@@ -96,7 +96,7 @@ export function getDeviceGroupsFromSightings(
     if (sighting.species_id == null || sighting.device_id == null) continue;
 
     const device = devicesById.get(sighting.device_id);
-    if (!device || device.latitude == null || device.longitude == null) {
+    if (!device) {
       unmappable += 1;
       continue;
     }
