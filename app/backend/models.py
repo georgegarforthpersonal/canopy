@@ -89,13 +89,13 @@ class Device(DeviceBase, table=True):  # type: ignore[call-arg]
     location_id: Optional[int] = Field(None, foreign_key="location.id", description="Associated location area")
     is_active: bool = Field(default=True, description="Whether device is active")
 
-    # PostGIS Point geometry (stored as text, cast in queries)
-    point_geometry: Optional[str] = Field(
-        default=None,
+    # PostGIS Point geometry (stored as text, cast in queries).
+    # NOT NULL: every device must be mappable so sightings can inherit coordinates.
+    point_geometry: str = Field(
         sa_column=sa.Column(
             "point_geometry",
             sa.Text,  # PostGIS geometry stored as text, cast in queries
-            nullable=True
+            nullable=False
         )
     )
 
