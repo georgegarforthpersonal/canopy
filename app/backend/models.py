@@ -760,6 +760,7 @@ class SightingAudioClip(SQLModel):
     audio_recording_id: int
     start_time: time_type
     end_time: time_type
+    detection_timestamp: Optional[datetime] = None
 
 
 class SightingWithIndividuals(SightingWithDetails):

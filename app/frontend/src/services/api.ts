@@ -326,6 +326,7 @@ export interface SightingAudioClip {
   audio_recording_id: number;
   start_time: string; // HH:MM:SS
   end_time: string;   // HH:MM:SS
+  detection_timestamp?: string | null;
 }
 
 export interface Sighting {

@@ -1156,6 +1156,7 @@ export function SurveyDetailPage() {
                                     startTime={clip.start_time}
                                     endTime={clip.end_time}
                                     confidence={clip.confidence}
+                                    timestamp={clip.detection_timestamp}
                                   />
                                 ))}
                               </Stack>

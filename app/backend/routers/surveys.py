@@ -556,6 +556,7 @@ async def get_survey_sightings(
                 "audio_recording_id": d.audio_recording_id,
                 "start_time": d.start_time,
                 "end_time": d.end_time,
+                "detection_timestamp": d.detection_timestamp,
             })
 
     result = []
@@ -770,6 +771,7 @@ async def create_sighting(
             audio_recording_id=det.audio_recording_id,
             start_time=start_t,
             end_time=end_t,
+            detection_timestamp=detection_ts,
         ))
 
     db.commit()
