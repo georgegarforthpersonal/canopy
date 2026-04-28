@@ -1,0 +1,16 @@
+scripts/data/
+spiders_migration_*.json
+spiders_migration_preview_*.csv
+~$*
+
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+venv/
+.venv/
+
+.git/
+.gitignore
