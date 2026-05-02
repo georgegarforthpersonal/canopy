@@ -28,6 +28,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlmodel import col
@@ -87,7 +88,6 @@ async def process_audio_files(
     lat: float = Query(DEFAULT_LAT, description="Latitude for location-based species filtering"),
     lon: float = Query(DEFAULT_LON, description="Longitude for location-based species filtering"),
     org: Organisation = Depends(get_current_organisation),
-    db: Session = Depends(get_db),
 ) -> AudioProcessingResponse:
     """
     Process audio files with BirdNET and return detections.
@@ -98,6 +98,7 @@ async def process_audio_files(
     # Get location-filtered species list
     species_list = get_location_species(lat, lon)
 
+    SessionLocal = get_session_factory()
     results = []
     for file in files:
         if not file.filename or not file.filename.lower().endswith(".wav"):
@@ -112,7 +113,10 @@ async def process_audio_files(
             local_path.write_bytes(content)
 
             try:
-                detections = analyze_file(local_path, species_list)
+                # BirdNET is CPU-bound and ~30s per file; run off the event loop
+                # and without holding a DB connection (Neon's pooler reaps idle
+                # sockets, which causes SSL EOF errors on the next query).
+                detections = await run_in_threadpool(analyze_file, local_path, species_list)
             except Exception as e:
                 logger.exception(f"Error processing {file.filename}")
                 raise HTTPException(
@@ -120,19 +124,25 @@ async def process_audio_files(
                     detail=f"Failed to process {file.filename}: {str(e)}",
                 )
 
-            file_detections = []
-            unmatched = []
-            for det in detections:
-                scientific_name = get_db_scientific_name(det.species)
-                species = (
+            scientific_names = {get_db_scientific_name(det.species) for det in detections}
+
+            with SessionLocal() as db:
+                species_rows = (
                     db.query(Species)
                     .join(Species.species_type)
                     .filter(
-                        Species.scientific_name == scientific_name,
+                        col(Species.scientific_name).in_(scientific_names),
                         SpeciesType.name == "bird",
                     )
-                    .first()
+                    .all()
                 )
+            species_by_scientific_name = {s.scientific_name: s for s in species_rows}
+
+            file_detections = []
+            unmatched: list[str] = []
+            for det in detections:
+                scientific_name = get_db_scientific_name(det.species)
+                species = species_by_scientific_name.get(scientific_name)
 
                 if species:
                     file_detections.append(
@@ -147,9 +157,8 @@ async def process_audio_files(
                             detection_timestamp=det.timestamp,
                         )
                     )
-                else:
-                    if det.species not in unmatched:
-                        unmatched.append(det.species)
+                elif det.species not in unmatched:
+                    unmatched.append(det.species)
 
             results.append(
                 FileProcessingResult(
