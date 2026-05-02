@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Box, Paper, Typography, Slider, Stack, CircularProgress, Alert, ToggleButtonGroup, ToggleButton, Tooltip, IconButton } from '@mui/material';
+import { Box, Paper, Typography, Slider, Stack, CircularProgress, Alert, ToggleButtonGroup, ToggleButton, Tooltip, IconButton, Chip } from '@mui/material';
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, useMap } from 'react-leaflet';
 import { LatLngBounds, LatLng, DivIcon } from 'leaflet';
 import MapIcon from '@mui/icons-material/Map';
@@ -15,6 +15,7 @@ import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { getSurveyTypeColorStyles } from '../SurveyTypeColors';
 import { brandColors } from '../../theme';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
+import BreedingStatusFilter from './BreedingStatusFilter';
 
 interface SightingsMapProps {
   sightings: SpeciesSightingLocation[];
@@ -113,6 +114,53 @@ function buildHistogramData(
   return buckets;
 }
 
+/**
+ * Clickable survey-type legend that doubles as a filter. Empty `selected` set
+ * means no filter is applied — every chip renders in its filled state.
+ */
+function SurveyTypeFilterLegend({
+  surveyTypes,
+  selected,
+  onToggle,
+}: {
+  surveyTypes: { name: string; color: string }[];
+  selected: Set<string>;
+  onToggle: (name: string) => void;
+}) {
+  const hasFilter = selected.size > 0;
+  return (
+    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+      {surveyTypes.map((st) => {
+        const isActive = !hasFilter || selected.has(st.name);
+        return (
+          <Chip
+            key={st.name}
+            label={st.name}
+            size="small"
+            onClick={() => onToggle(st.name)}
+            icon={
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: st.color,
+                  ml: '8px !important',
+                }}
+              />
+            }
+            variant={isActive ? 'filled' : 'outlined'}
+            sx={{
+              opacity: isActive ? 1 : 0.5,
+              cursor: 'pointer',
+            }}
+          />
+        );
+      })}
+    </Stack>
+  );
+}
+
 export default function SightingsMap({ sightings, loading, error, locationsWithBoundaries }: SightingsMapProps) {
   // Fullscreen state
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
@@ -149,15 +197,55 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
     }
   }, [dateRange]);
 
-  // Filter sightings based on date range
-  const filteredSightings = useMemo(() => {
-    if (!dateRange) return sightings;
+  // Breeding status filter state — empty Set means "no filter applied"
+  const [selectedBreedingCodes, setSelectedBreedingCodes] = useState<Set<string>>(new Set());
+  // Survey type filter state — empty Set means "no filter applied"
+  const [selectedSurveyTypes, setSelectedSurveyTypes] = useState<Set<string>>(new Set());
 
-    return sightings.filter(s => {
-      const time = new Date(s.survey_date).getTime();
-      return time >= dateFilterRange[0] && time <= dateFilterRange[1];
+  // Reset filters when the underlying sightings change (e.g. species switch)
+  useEffect(() => {
+    setSelectedBreedingCodes(new Set());
+    setSelectedSurveyTypes(new Set());
+  }, [sightings]);
+
+  const handleToggleSurveyType = (name: string) => {
+    setSelectedSurveyTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
     });
-  }, [sightings, dateFilterRange, dateRange]);
+  };
+
+  // Counts per available breeding code (only includes codes that appear at least once)
+  const breedingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of sightings) {
+      if (!s.breeding_status_code) continue;
+      counts.set(s.breeding_status_code, (counts.get(s.breeding_status_code) ?? 0) + 1);
+    }
+    return counts;
+  }, [sightings]);
+
+  // Filter sightings based on date range, breeding codes, and survey types
+  const filteredSightings = useMemo(() => {
+    const breedingActive = selectedBreedingCodes.size > 0;
+    const surveyActive = selectedSurveyTypes.size > 0;
+    return sightings.filter(s => {
+      if (dateRange) {
+        const time = new Date(s.survey_date).getTime();
+        if (time < dateFilterRange[0] || time > dateFilterRange[1]) return false;
+      }
+      if (breedingActive) {
+        if (!s.breeding_status_code || !selectedBreedingCodes.has(s.breeding_status_code)) return false;
+      }
+      if (surveyActive) {
+        const name = s.survey_type_name || 'Unknown';
+        if (!selectedSurveyTypes.has(name)) return false;
+      }
+      return true;
+    });
+  }, [sightings, dateFilterRange, dateRange, selectedBreedingCodes, selectedSurveyTypes]);
 
   // Cluster filtered sightings by location
   const clusters = useMemo((): SightingCluster[] => {
@@ -274,24 +362,31 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
                 </Typography>
               </Box>
 
-              <ToggleButtonGroup
-                value={mapType}
-                exclusive
-                onChange={(_, newValue) => newValue && setMapType(newValue)}
-                size="small"
-                sx={{ height: '32px' }}
-              >
-                <ToggleButton value="street" aria-label="street map">
-                  <Tooltip title="Street Map">
-                    <MapIcon fontSize="small" />
-                  </Tooltip>
-                </ToggleButton>
-                <ToggleButton value="satellite" aria-label="satellite view">
-                  <Tooltip title="Satellite View">
-                    <SatelliteIcon fontSize="small" />
-                  </Tooltip>
-                </ToggleButton>
-              </ToggleButtonGroup>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <BreedingStatusFilter
+                  availableCounts={breedingCounts}
+                  selectedCodes={selectedBreedingCodes}
+                  onChange={setSelectedBreedingCodes}
+                />
+                <ToggleButtonGroup
+                  value={mapType}
+                  exclusive
+                  onChange={(_, newValue) => newValue && setMapType(newValue)}
+                  size="small"
+                  sx={{ height: '32px' }}
+                >
+                  <ToggleButton value="street" aria-label="street map">
+                    <Tooltip title="Street Map">
+                      <MapIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="satellite" aria-label="satellite view">
+                    <Tooltip title="Satellite View">
+                      <SatelliteIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Stack>
             </Box>
 
             {/* Histogram + Slider overlay */}
@@ -352,27 +447,15 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
               </Box>
             </Box>
 
-            {/* Survey type legend */}
+            {/* Survey type legend / filter */}
             {surveyTypes.length > 1 && (
-              <Stack direction="row" spacing={2} sx={{ pt: 0.5 }}>
-                {surveyTypes.map((st) => (
-                  <Stack key={st.name} direction="row" spacing={0.5} alignItems="center">
-                    <Box
-                      sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        bgcolor: st.color,
-                        border: '1.5px solid #fff',
-                        boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
-                      }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      {st.name}
-                    </Typography>
-                  </Stack>
-                ))}
-              </Stack>
+              <Box sx={{ pt: 0.5 }}>
+                <SurveyTypeFilterLegend
+                  surveyTypes={surveyTypes}
+                  selected={selectedSurveyTypes}
+                  onToggle={handleToggleSurveyType}
+                />
+              </Box>
             )}
           </Stack>
         </Paper>
@@ -395,47 +478,40 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Map View
               </Typography>
-              {/* Legend for single-date view */}
+              {/* Legend / filter for single-date view */}
               {surveyTypes.length > 1 && (
-                <Stack direction="row" spacing={2}>
-                  {surveyTypes.map((st) => (
-                    <Stack key={st.name} direction="row" spacing={0.5} alignItems="center">
-                      <Box
-                        sx={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          bgcolor: st.color,
-                          border: '1.5px solid #fff',
-                          boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
-                        }}
-                      />
-                      <Typography variant="caption" color="text.secondary">
-                        {st.name}
-                      </Typography>
-                    </Stack>
-                  ))}
-                </Stack>
+                <SurveyTypeFilterLegend
+                  surveyTypes={surveyTypes}
+                  selected={selectedSurveyTypes}
+                  onToggle={handleToggleSurveyType}
+                />
               )}
             </Box>
-            <ToggleButtonGroup
-              value={mapType}
-              exclusive
-              onChange={(_, newValue) => newValue && setMapType(newValue)}
-              size="small"
-              sx={{ height: '32px' }}
-            >
-              <ToggleButton value="street" aria-label="street map">
-                <Tooltip title="Street Map">
-                  <MapIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
-              <ToggleButton value="satellite" aria-label="satellite view">
-                <Tooltip title="Satellite View">
-                  <SatelliteIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
-            </ToggleButtonGroup>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <BreedingStatusFilter
+                availableCounts={breedingCounts}
+                selectedCodes={selectedBreedingCodes}
+                onChange={setSelectedBreedingCodes}
+              />
+              <ToggleButtonGroup
+                value={mapType}
+                exclusive
+                onChange={(_, newValue) => newValue && setMapType(newValue)}
+                size="small"
+                sx={{ height: '32px' }}
+              >
+                <ToggleButton value="street" aria-label="street map">
+                  <Tooltip title="Street Map">
+                    <MapIcon fontSize="small" />
+                  </Tooltip>
+                </ToggleButton>
+                <ToggleButton value="satellite" aria-label="satellite view">
+                  <Tooltip title="Satellite View">
+                    <SatelliteIcon fontSize="small" />
+                  </Tooltip>
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
           </Box>
         </Paper>
       )}
