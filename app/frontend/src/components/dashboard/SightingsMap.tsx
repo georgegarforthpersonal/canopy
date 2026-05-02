@@ -15,6 +15,7 @@ import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { getSurveyTypeColorStyles } from '../SurveyTypeColors';
 import { brandColors } from '../../theme';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
+import BreedingStatusFilter from './BreedingStatusFilter';
 
 interface SightingsMapProps {
   sightings: SpeciesSightingLocation[];
@@ -149,15 +150,38 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
     }
   }, [dateRange]);
 
-  // Filter sightings based on date range
-  const filteredSightings = useMemo(() => {
-    if (!dateRange) return sightings;
+  // Breeding status filter state — empty Set means "no filter applied"
+  const [selectedBreedingCodes, setSelectedBreedingCodes] = useState<Set<string>>(new Set());
 
+  // Reset breeding filter when the underlying sightings change (e.g. species switch)
+  useEffect(() => {
+    setSelectedBreedingCodes(new Set());
+  }, [sightings]);
+
+  // Counts per available breeding code (only includes codes that appear at least once)
+  const breedingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of sightings) {
+      if (!s.breeding_status_code) continue;
+      counts.set(s.breeding_status_code, (counts.get(s.breeding_status_code) ?? 0) + 1);
+    }
+    return counts;
+  }, [sightings]);
+
+  // Filter sightings based on date range and selected breeding codes
+  const filteredSightings = useMemo(() => {
+    const breedingActive = selectedBreedingCodes.size > 0;
     return sightings.filter(s => {
-      const time = new Date(s.survey_date).getTime();
-      return time >= dateFilterRange[0] && time <= dateFilterRange[1];
+      if (dateRange) {
+        const time = new Date(s.survey_date).getTime();
+        if (time < dateFilterRange[0] || time > dateFilterRange[1]) return false;
+      }
+      if (breedingActive) {
+        if (!s.breeding_status_code || !selectedBreedingCodes.has(s.breeding_status_code)) return false;
+      }
+      return true;
     });
-  }, [sightings, dateFilterRange, dateRange]);
+  }, [sightings, dateFilterRange, dateRange, selectedBreedingCodes]);
 
   // Cluster filtered sightings by location
   const clusters = useMemo((): SightingCluster[] => {
@@ -274,24 +298,31 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
                 </Typography>
               </Box>
 
-              <ToggleButtonGroup
-                value={mapType}
-                exclusive
-                onChange={(_, newValue) => newValue && setMapType(newValue)}
-                size="small"
-                sx={{ height: '32px' }}
-              >
-                <ToggleButton value="street" aria-label="street map">
-                  <Tooltip title="Street Map">
-                    <MapIcon fontSize="small" />
-                  </Tooltip>
-                </ToggleButton>
-                <ToggleButton value="satellite" aria-label="satellite view">
-                  <Tooltip title="Satellite View">
-                    <SatelliteIcon fontSize="small" />
-                  </Tooltip>
-                </ToggleButton>
-              </ToggleButtonGroup>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <BreedingStatusFilter
+                  availableCounts={breedingCounts}
+                  selectedCodes={selectedBreedingCodes}
+                  onChange={setSelectedBreedingCodes}
+                />
+                <ToggleButtonGroup
+                  value={mapType}
+                  exclusive
+                  onChange={(_, newValue) => newValue && setMapType(newValue)}
+                  size="small"
+                  sx={{ height: '32px' }}
+                >
+                  <ToggleButton value="street" aria-label="street map">
+                    <Tooltip title="Street Map">
+                      <MapIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="satellite" aria-label="satellite view">
+                    <Tooltip title="Satellite View">
+                      <SatelliteIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Stack>
             </Box>
 
             {/* Histogram + Slider overlay */}
@@ -418,24 +449,31 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
                 </Stack>
               )}
             </Box>
-            <ToggleButtonGroup
-              value={mapType}
-              exclusive
-              onChange={(_, newValue) => newValue && setMapType(newValue)}
-              size="small"
-              sx={{ height: '32px' }}
-            >
-              <ToggleButton value="street" aria-label="street map">
-                <Tooltip title="Street Map">
-                  <MapIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
-              <ToggleButton value="satellite" aria-label="satellite view">
-                <Tooltip title="Satellite View">
-                  <SatelliteIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
-            </ToggleButtonGroup>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <BreedingStatusFilter
+                availableCounts={breedingCounts}
+                selectedCodes={selectedBreedingCodes}
+                onChange={setSelectedBreedingCodes}
+              />
+              <ToggleButtonGroup
+                value={mapType}
+                exclusive
+                onChange={(_, newValue) => newValue && setMapType(newValue)}
+                size="small"
+                sx={{ height: '32px' }}
+              >
+                <ToggleButton value="street" aria-label="street map">
+                  <Tooltip title="Street Map">
+                    <MapIcon fontSize="small" />
+                  </Tooltip>
+                </ToggleButton>
+                <ToggleButton value="satellite" aria-label="satellite view">
+                  <Tooltip title="Satellite View">
+                    <SatelliteIcon fontSize="small" />
+                  </Tooltip>
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
           </Box>
         </Paper>
       )}
