@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Box, Paper, Typography, Slider, Stack, CircularProgress, Alert, ToggleButtonGroup, ToggleButton, Tooltip, IconButton } from '@mui/material';
+import { Box, Paper, Typography, Slider, Stack, CircularProgress, Alert, ToggleButtonGroup, ToggleButton, Tooltip, IconButton, Chip } from '@mui/material';
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, useMap } from 'react-leaflet';
 import { LatLngBounds, LatLng, DivIcon } from 'leaflet';
 import MapIcon from '@mui/icons-material/Map';
@@ -114,6 +114,53 @@ function buildHistogramData(
   return buckets;
 }
 
+/**
+ * Clickable survey-type legend that doubles as a filter. Empty `selected` set
+ * means no filter is applied — every chip renders in its filled state.
+ */
+function SurveyTypeFilterLegend({
+  surveyTypes,
+  selected,
+  onToggle,
+}: {
+  surveyTypes: { name: string; color: string }[];
+  selected: Set<string>;
+  onToggle: (name: string) => void;
+}) {
+  const hasFilter = selected.size > 0;
+  return (
+    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+      {surveyTypes.map((st) => {
+        const isActive = !hasFilter || selected.has(st.name);
+        return (
+          <Chip
+            key={st.name}
+            label={st.name}
+            size="small"
+            onClick={() => onToggle(st.name)}
+            icon={
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: st.color,
+                  ml: '8px !important',
+                }}
+              />
+            }
+            variant={isActive ? 'filled' : 'outlined'}
+            sx={{
+              opacity: isActive ? 1 : 0.5,
+              cursor: 'pointer',
+            }}
+          />
+        );
+      })}
+    </Stack>
+  );
+}
+
 export default function SightingsMap({ sightings, loading, error, locationsWithBoundaries }: SightingsMapProps) {
   // Fullscreen state
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
@@ -152,11 +199,23 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
 
   // Breeding status filter state — empty Set means "no filter applied"
   const [selectedBreedingCodes, setSelectedBreedingCodes] = useState<Set<string>>(new Set());
+  // Survey type filter state — empty Set means "no filter applied"
+  const [selectedSurveyTypes, setSelectedSurveyTypes] = useState<Set<string>>(new Set());
 
-  // Reset breeding filter when the underlying sightings change (e.g. species switch)
+  // Reset filters when the underlying sightings change (e.g. species switch)
   useEffect(() => {
     setSelectedBreedingCodes(new Set());
+    setSelectedSurveyTypes(new Set());
   }, [sightings]);
+
+  const handleToggleSurveyType = (name: string) => {
+    setSelectedSurveyTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
   // Counts per available breeding code (only includes codes that appear at least once)
   const breedingCounts = useMemo(() => {
@@ -168,9 +227,10 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
     return counts;
   }, [sightings]);
 
-  // Filter sightings based on date range and selected breeding codes
+  // Filter sightings based on date range, breeding codes, and survey types
   const filteredSightings = useMemo(() => {
     const breedingActive = selectedBreedingCodes.size > 0;
+    const surveyActive = selectedSurveyTypes.size > 0;
     return sightings.filter(s => {
       if (dateRange) {
         const time = new Date(s.survey_date).getTime();
@@ -179,9 +239,13 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
       if (breedingActive) {
         if (!s.breeding_status_code || !selectedBreedingCodes.has(s.breeding_status_code)) return false;
       }
+      if (surveyActive) {
+        const name = s.survey_type_name || 'Unknown';
+        if (!selectedSurveyTypes.has(name)) return false;
+      }
       return true;
     });
-  }, [sightings, dateFilterRange, dateRange, selectedBreedingCodes]);
+  }, [sightings, dateFilterRange, dateRange, selectedBreedingCodes, selectedSurveyTypes]);
 
   // Cluster filtered sightings by location
   const clusters = useMemo((): SightingCluster[] => {
@@ -383,27 +447,15 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
               </Box>
             </Box>
 
-            {/* Survey type legend */}
+            {/* Survey type legend / filter */}
             {surveyTypes.length > 1 && (
-              <Stack direction="row" spacing={2} sx={{ pt: 0.5 }}>
-                {surveyTypes.map((st) => (
-                  <Stack key={st.name} direction="row" spacing={0.5} alignItems="center">
-                    <Box
-                      sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        bgcolor: st.color,
-                        border: '1.5px solid #fff',
-                        boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
-                      }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      {st.name}
-                    </Typography>
-                  </Stack>
-                ))}
-              </Stack>
+              <Box sx={{ pt: 0.5 }}>
+                <SurveyTypeFilterLegend
+                  surveyTypes={surveyTypes}
+                  selected={selectedSurveyTypes}
+                  onToggle={handleToggleSurveyType}
+                />
+              </Box>
             )}
           </Stack>
         </Paper>
@@ -426,27 +478,13 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Map View
               </Typography>
-              {/* Legend for single-date view */}
+              {/* Legend / filter for single-date view */}
               {surveyTypes.length > 1 && (
-                <Stack direction="row" spacing={2}>
-                  {surveyTypes.map((st) => (
-                    <Stack key={st.name} direction="row" spacing={0.5} alignItems="center">
-                      <Box
-                        sx={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          bgcolor: st.color,
-                          border: '1.5px solid #fff',
-                          boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
-                        }}
-                      />
-                      <Typography variant="caption" color="text.secondary">
-                        {st.name}
-                      </Typography>
-                    </Stack>
-                  ))}
-                </Stack>
+                <SurveyTypeFilterLegend
+                  surveyTypes={surveyTypes}
+                  selected={selectedSurveyTypes}
+                  onToggle={handleToggleSurveyType}
+                />
               )}
             </Box>
             <Stack direction="row" spacing={1} alignItems="center">
