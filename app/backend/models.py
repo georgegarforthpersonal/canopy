@@ -924,7 +924,12 @@ class AudioDetection(AudioDetectionBase, table=True):  # type: ignore[call-arg]
     __tablename__ = "audio_detection"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    audio_recording_id: int = Field(foreign_key="audio_recording.id", ondelete="CASCADE", index=True)
+    audio_recording_id: Optional[int] = Field(
+        default=None, foreign_key="audio_recording.id", ondelete="CASCADE", index=True
+    )
+    survey_id: Optional[int] = Field(
+        default=None, foreign_key="survey.id", ondelete="CASCADE", index=True
+    )
     species_id: int = Field(foreign_key="species.id", ondelete="CASCADE")
     sighting_id: Optional[int] = Field(default=None, foreign_key="sighting.id", ondelete="SET NULL", index=True)
 

@@ -396,6 +396,7 @@ def process_recording_background(recording_id: int) -> None:
                 if species:
                     audio_det = AudioDetection(
                         audio_recording_id=recording_id,
+                        survey_id=recording.survey_id,
                         species_name=det.species,
                         species_id=species.id,
                         confidence=det.confidence,
