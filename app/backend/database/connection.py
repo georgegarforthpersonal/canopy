@@ -267,6 +267,7 @@ def get_engine() -> Engine:
         _engine = create_engine(
             database_url,
             pool_pre_ping=True,  # Verify connections before using
+            pool_recycle=300,  # Recycle connections older than 5 min (Neon pooler reaps idle sockets)
             pool_size=5,
             max_overflow=10,
             echo=False  # Set to True for SQL query logging
