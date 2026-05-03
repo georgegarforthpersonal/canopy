@@ -14,7 +14,7 @@ Endpoints:
 
 import logging
 import tempfile
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any, List
 
@@ -52,6 +52,8 @@ from models import (
     SpeciesDetectionSummary,
     SpeciesType,
     Survey,
+    SurveyDetectionsSaveRequest,
+    SurveyDetectionsSaveResponse,
     SurveyDetectionsSummaryResponse,
 )
 from services.r2_storage import (
@@ -160,6 +162,48 @@ async def process_audio_files(
             )
 
     return AudioProcessingResponse(results=results)
+
+
+def _parse_hms(value: str) -> time:
+    h, m, s = value.split(":")
+    return time(int(h), int(m), int(s))
+
+
+@router.post(
+    "/{survey_id}/audio/detections",
+    response_model=SurveyDetectionsSaveResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
+async def save_survey_detections(
+    survey_id: int,
+    payload: SurveyDetectionsSaveRequest,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> SurveyDetectionsSaveResponse:
+    """Persist BirdNET detections for a survey without storing the source audio."""
+    survey = (
+        db.query(Survey)
+        .filter(Survey.id == survey_id, Survey.organisation_id == org.id)
+        .first()
+    )
+    if not survey:
+        raise HTTPException(status_code=404, detail="Survey not found")
+
+    for det in payload.detections:
+        db.add(AudioDetection(
+            audio_recording_id=None,
+            survey_id=survey_id,
+            species_id=det.species_id,
+            species_name=det.species_name,
+            confidence=det.confidence,
+            start_time=_parse_hms(det.start_time),
+            end_time=_parse_hms(det.end_time),
+            detection_timestamp=det.detection_timestamp,
+        ))
+    db.commit()
+
+    return SurveyDetectionsSaveResponse(created=len(payload.detections))
 
 
 def _build_recording_response(recording: AudioRecording, detection_count: int) -> dict:

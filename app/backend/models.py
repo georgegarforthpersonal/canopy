@@ -1021,6 +1021,24 @@ class AudioProcessingResponse(SQLModel):
     results: List[FileProcessingResult] = Field(default_factory=list)
 
 
+class SurveyDetectionSave(SQLModel):
+    """One BirdNET detection to persist against a survey (no audio file)."""
+    species_id: int = Field(description="DB species ID")
+    species_name: str = Field(description="BirdNET species string (Scientific_Common)")
+    confidence: float = Field(ge=0, le=1)
+    start_time: str = Field(description="Start time within source file (HH:MM:SS)")
+    end_time: str = Field(description="End time within source file (HH:MM:SS)")
+    detection_timestamp: datetime = Field(description="Absolute wall-clock time of the detection")
+
+
+class SurveyDetectionsSaveRequest(SQLModel):
+    detections: List[SurveyDetectionSave] = Field(default_factory=list)
+
+
+class SurveyDetectionsSaveResponse(SQLModel):
+    created: int
+
+
 # ============================================================================
 # Camera Trap Image Models
 # ============================================================================
