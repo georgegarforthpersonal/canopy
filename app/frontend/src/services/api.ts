@@ -1314,6 +1314,15 @@ export interface AudioProcessingResponse {
   results: FileProcessingResult[];
 }
 
+export interface SurveyDetectionSave {
+  species_id: number;
+  species_name: string;
+  confidence: number;
+  start_time: string;
+  end_time: string;
+  detection_timestamp: string;
+}
+
 // ============================================================================
 // API Methods - Audio
 // ============================================================================
@@ -1397,6 +1406,19 @@ export const audioAPI = {
    */
   getDetectionsSummary: (surveyId: number): Promise<SurveyDetectionsSummaryResponse> => {
     return fetchAPI(`/surveys/${surveyId}/detections/summary`);
+  },
+
+  /**
+   * Persist BirdNET detections for a survey without storing the source audio.
+   */
+  saveDetections: (
+    surveyId: number,
+    detections: SurveyDetectionSave[]
+  ): Promise<{ created: number }> => {
+    return fetchAPI(`/surveys/${surveyId}/audio/detections`, {
+      method: 'POST',
+      body: JSON.stringify({ detections }),
+    });
   },
 };
 
