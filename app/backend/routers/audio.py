@@ -283,8 +283,10 @@ async def upload_audio_files(
         file_size = file.file.tell()
         file.file.seek(0)  # Reset
 
-        # Upload to R2
-        r2_key = upload_audio_file(file.file, file.filename, org.slug)
+        # Upload to R2 using a survey-scoped path so that identical filenames
+        # from different surveys (common with wildlife recorders) don't collide
+        # on the unique r2_key DB constraint.
+        r2_key = upload_audio_file(file.file, f"{survey_id}/{file.filename}", org.slug)
 
         # Create database record
         recording = AudioRecording(
