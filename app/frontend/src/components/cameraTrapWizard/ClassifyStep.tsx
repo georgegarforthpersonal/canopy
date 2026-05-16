@@ -128,13 +128,6 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
             }}
           />
           {showDetectionBoxes && detections?.length ? <DetectionBoxOverlay detections={detections} /> : null}
-          {detections?.length ? (
-            <DetectionBoxToggleButton
-              showing={showDetectionBoxes}
-              onToggle={toggleDetectionBoxes}
-              overlay
-            />
-          ) : null}
         </Box>
       </Box>
 
@@ -164,13 +157,18 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
         }}
       />
 
-      {/* Image info */}
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-        {currentImage.filename}
-        {currentImage.exifDate && (
-          <> &mdash; {dayjs(currentImage.exifDate).format('DD/MM/YYYY HH:mm:ss')}</>
-        )}
-      </Typography>
+      {/* Image info + box toggle */}
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
+        <Typography variant="caption" color="text.secondary">
+          {currentImage.filename}
+          {currentImage.exifDate && (
+            <> &mdash; {dayjs(currentImage.exifDate).format('DD/MM/YYYY HH:mm:ss')}</>
+          )}
+        </Typography>
+        {detections?.length ? (
+          <DetectionBoxToggleButton showing={showDetectionBoxes} onToggle={toggleDetectionBoxes} />
+        ) : null}
+      </Stack>
 
       {/* Species selection */}
       <Autocomplete
