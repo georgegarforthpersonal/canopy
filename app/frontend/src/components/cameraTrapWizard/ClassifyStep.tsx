@@ -21,6 +21,7 @@ import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
 import { ImageViewerModal } from '../ImageViewerModal';
 import { DetectionBoxOverlay } from '../DetectionBoxOverlay';
+import { DetectionBoxToggleButton } from '../DetectionBoxToggleButton';
 import { useArrowKeyNavigation } from '../../hooks/useArrowKeyNavigation';
 
 interface ClassifyStepProps {
@@ -35,6 +36,7 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
     speciesSearchValue, setSpeciesSearchValue,
     speciesInputRef, thumbnailStripRef,
     classifyViewerOpen, setClassifyViewerOpen,
+    showDetectionBoxes, toggleDetectionBoxes,
     classifyImage, removeClassification,
     goToPrev, goToNext, goToNextUnviewed,
     viewedImages, viewedCount, uniqueSpeciesCount, remainingCount,
@@ -125,7 +127,7 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
               maxHeight: '50vh',
             }}
           />
-          {detections?.length ? <DetectionBoxOverlay detections={detections} /> : null}
+          {showDetectionBoxes && detections?.length ? <DetectionBoxOverlay detections={detections} /> : null}
         </Box>
       </Box>
 
@@ -145,17 +147,28 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
         renderOverlay={(viewerIdx) => {
           const viewOrigIdx = filteredToOriginalIndex[viewerIdx];
           const dets = viewOrigIdx !== undefined ? filterResults.get(viewOrigIdx)?.detections : undefined;
-          return dets?.length ? <DetectionBoxOverlay detections={dets} /> : null;
+          return showDetectionBoxes && dets?.length ? <DetectionBoxOverlay detections={dets} /> : null;
+        }}
+        renderActions={(viewerIdx) => {
+          const viewOrigIdx = filteredToOriginalIndex[viewerIdx];
+          const dets = viewOrigIdx !== undefined ? filterResults.get(viewOrigIdx)?.detections : undefined;
+          if (!dets?.length) return null;
+          return <DetectionBoxToggleButton showing={showDetectionBoxes} onToggle={toggleDetectionBoxes} />;
         }}
       />
 
-      {/* Image info */}
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-        {currentImage.filename}
-        {currentImage.exifDate && (
-          <> &mdash; {dayjs(currentImage.exifDate).format('DD/MM/YYYY HH:mm:ss')}</>
-        )}
-      </Typography>
+      {/* Image info + box toggle */}
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
+        <Typography variant="caption" color="text.secondary">
+          {currentImage.filename}
+          {currentImage.exifDate && (
+            <> &mdash; {dayjs(currentImage.exifDate).format('DD/MM/YYYY HH:mm:ss')}</>
+          )}
+        </Typography>
+        {detections?.length ? (
+          <DetectionBoxToggleButton showing={showDetectionBoxes} onToggle={toggleDetectionBoxes} />
+        ) : null}
+      </Stack>
 
       {/* Species selection */}
       <Autocomplete

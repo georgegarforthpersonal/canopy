@@ -19,6 +19,7 @@ import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
 import { ImageViewerModal } from '../ImageViewerModal';
 import { DetectionBoxOverlay } from '../DetectionBoxOverlay';
+import { DetectionBoxToggleButton } from '../DetectionBoxToggleButton';
 import { ThumbnailGrid, type ThumbnailGridItem } from '../ThumbnailGrid';
 import { useArrowKeyNavigation } from '../../hooks/useArrowKeyNavigation';
 
@@ -33,6 +34,7 @@ export function FilterStep({ wizard }: FilterStepProps) {
     filterReviewGroup, setFilterReviewGroup,
     filterReviewIdx, setFilterReviewIdx,
     toggleFilterOverride, filterDerived,
+    showDetectionBoxes, toggleDetectionBoxes,
     canProceed, goBackToUpload, goToClassifyStep, skipFiltering,
     filteredImageFiles,
   } = wizard;
@@ -161,33 +163,41 @@ export function FilterStep({ wizard }: FilterStepProps) {
             renderOverlay={(viewerIdx) => {
               const origIdx = reviewIndices[viewerIdx];
               const detections = origIdx !== undefined ? filterResults.get(origIdx)?.detections : undefined;
-              return detections?.length ? <DetectionBoxOverlay detections={detections} /> : null;
+              return showDetectionBoxes && detections?.length ? <DetectionBoxOverlay detections={detections} /> : null;
             }}
             renderActions={(viewerIdx) => {
               const origIdx = reviewIndices[viewerIdx];
               if (origIdx === undefined) return null;
-              return filterReviewGroup === 'animal' ? (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="error"
-                  startIcon={<RemoveCircleOutline />}
-                  onClick={() => toggleFilterOverride(origIdx, 'exclude')}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Exclude
-                </Button>
-              ) : (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="success"
-                  startIcon={<Restore />}
-                  onClick={() => toggleFilterOverride(origIdx, 'include')}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Restore
-                </Button>
+              const detections = filterResults.get(origIdx)?.detections;
+              return (
+                <>
+                  {detections?.length ? (
+                    <DetectionBoxToggleButton showing={showDetectionBoxes} onToggle={toggleDetectionBoxes} />
+                  ) : null}
+                  {filterReviewGroup === 'animal' ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      startIcon={<RemoveCircleOutline />}
+                      onClick={() => toggleFilterOverride(origIdx, 'exclude')}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Exclude
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="success"
+                      startIcon={<Restore />}
+                      onClick={() => toggleFilterOverride(origIdx, 'include')}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Restore
+                    </Button>
+                  )}
+                </>
               );
             }}
           />
