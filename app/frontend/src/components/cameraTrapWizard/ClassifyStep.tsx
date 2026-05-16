@@ -11,11 +11,14 @@ import {
   LinearProgress,
   IconButton,
   Chip,
+  Tooltip,
 } from '@mui/material';
 import {
   ArrowBack,
   ArrowForward,
   CheckCircle,
+  Visibility,
+  VisibilityOff,
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
@@ -35,6 +38,7 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
     speciesSearchValue, setSpeciesSearchValue,
     speciesInputRef, thumbnailStripRef,
     classifyViewerOpen, setClassifyViewerOpen,
+    showDetectionBoxes, toggleDetectionBoxes,
     classifyImage, removeClassification,
     goToPrev, goToNext, goToNextUnviewed,
     viewedImages, viewedCount, uniqueSpeciesCount, remainingCount,
@@ -125,7 +129,25 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
               maxHeight: '50vh',
             }}
           />
-          {detections?.length ? <DetectionBoxOverlay detections={detections} /> : null}
+          {showDetectionBoxes && detections?.length ? <DetectionBoxOverlay detections={detections} /> : null}
+          {detections?.length ? (
+            <Tooltip title={`${showDetectionBoxes ? 'Hide' : 'Show'} detection boxes (B)`}>
+              <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); toggleDetectionBoxes(); }}
+                sx={{
+                  position: 'absolute',
+                  top: 6,
+                  right: 6,
+                  bgcolor: 'rgba(0, 0, 0, 0.5)',
+                  color: 'white',
+                  '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)' },
+                }}
+              >
+                {showDetectionBoxes ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          ) : null}
         </Box>
       </Box>
 
@@ -145,7 +167,19 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
         renderOverlay={(viewerIdx) => {
           const viewOrigIdx = filteredToOriginalIndex[viewerIdx];
           const dets = viewOrigIdx !== undefined ? filterResults.get(viewOrigIdx)?.detections : undefined;
-          return dets?.length ? <DetectionBoxOverlay detections={dets} /> : null;
+          return showDetectionBoxes && dets?.length ? <DetectionBoxOverlay detections={dets} /> : null;
+        }}
+        renderActions={(viewerIdx) => {
+          const viewOrigIdx = filteredToOriginalIndex[viewerIdx];
+          const dets = viewOrigIdx !== undefined ? filterResults.get(viewOrigIdx)?.detections : undefined;
+          if (!dets?.length) return null;
+          return (
+            <Tooltip title={`${showDetectionBoxes ? 'Hide' : 'Show'} detection boxes (B)`}>
+              <IconButton size="small" onClick={toggleDetectionBoxes}>
+                {showDetectionBoxes ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          );
         }}
       />
 

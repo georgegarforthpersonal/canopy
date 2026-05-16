@@ -162,6 +162,10 @@ export function useCameraTrapWizard() {
   const thumbnailStripRef = useRef<HTMLDivElement>(null);
   const [classifyViewerOpen, setClassifyViewerOpen] = useState(false);
 
+  // ---- Detection box visibility (shared across Filter + Classify steps) ----
+  const [showDetectionBoxes, setShowDetectionBoxes] = useState(true);
+  const toggleDetectionBoxes = useCallback(() => setShowDetectionBoxes((v) => !v), []);
+
   // ---- Step 5: Review ----
   const [deselectedImages, setDeselectedImages] = useState<Set<string>>(new Set());
 
@@ -369,6 +373,20 @@ export function useCameraTrapWizard() {
   // ============================================================================
   // Step 4: Classification helpers
   // ============================================================================
+
+  // Keyboard shortcut: 'B' toggles detection boxes during Filter + Classify
+  useEffect(() => {
+    if (activeStep !== 2 && activeStep !== 3) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        toggleDetectionBoxes();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeStep, toggleDetectionBoxes]);
 
   // Scroll thumbnail strip to keep current image centred
   useEffect(() => {
@@ -736,6 +754,8 @@ export function useCameraTrapWizard() {
     thumbnailStripRef,
     classifyViewerOpen,
     setClassifyViewerOpen,
+    showDetectionBoxes,
+    toggleDetectionBoxes,
     classifyImage,
     removeClassification,
     goToPrev,
