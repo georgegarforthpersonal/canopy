@@ -1,5 +1,5 @@
 import { IconButton, Tooltip } from '@mui/material';
-import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { CropFree } from '@mui/icons-material';
 
 interface DetectionBoxToggleButtonProps {
   showing: boolean;
@@ -9,6 +9,20 @@ interface DetectionBoxToggleButtonProps {
 }
 
 export function DetectionBoxToggleButton({ showing, onToggle, overlay }: DetectionBoxToggleButtonProps) {
+  const overlaySx = {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    color: 'white',
+    bgcolor: showing ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.3)',
+    opacity: showing ? 1 : 0.7,
+    '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.75)' },
+  };
+  const inlineSx = {
+    bgcolor: showing ? 'action.selected' : 'transparent',
+    opacity: showing ? 1 : 0.6,
+  };
+
   return (
     <Tooltip title={`${showing ? 'Hide' : 'Show'} detection boxes (B)`}>
       <IconButton
@@ -19,20 +33,9 @@ export function DetectionBoxToggleButton({ showing, onToggle, overlay }: Detecti
           e.stopPropagation();
           onToggle();
         }}
-        sx={
-          overlay
-            ? {
-                position: 'absolute',
-                top: 6,
-                right: 6,
-                bgcolor: 'rgba(0, 0, 0, 0.5)',
-                color: 'white',
-                '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)' },
-              }
-            : undefined
-        }
+        sx={overlay ? overlaySx : inlineSx}
       >
-        {showing ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+        <CropFree fontSize="small" />
       </IconButton>
     </Tooltip>
   );
