@@ -924,7 +924,12 @@ class AudioDetection(AudioDetectionBase, table=True):  # type: ignore[call-arg]
     __tablename__ = "audio_detection"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    audio_recording_id: int = Field(foreign_key="audio_recording.id", ondelete="CASCADE", index=True)
+    audio_recording_id: Optional[int] = Field(
+        default=None, foreign_key="audio_recording.id", ondelete="CASCADE", index=True
+    )
+    survey_id: Optional[int] = Field(
+        default=None, foreign_key="survey.id", ondelete="CASCADE", index=True
+    )
     species_id: int = Field(foreign_key="species.id", ondelete="CASCADE")
     sighting_id: Optional[int] = Field(default=None, foreign_key="sighting.id", ondelete="SET NULL", index=True)
 
@@ -1014,6 +1019,24 @@ class FileProcessingResult(SQLModel):
 class AudioProcessingResponse(SQLModel):
     """Response from the process-audio endpoint"""
     results: List[FileProcessingResult] = Field(default_factory=list)
+
+
+class SurveyDetectionSave(SQLModel):
+    """One BirdNET detection to persist against a survey (no audio file)."""
+    species_id: int = Field(description="DB species ID")
+    species_name: str = Field(description="BirdNET species string (Scientific_Common)")
+    confidence: float = Field(ge=0, le=1)
+    start_time: str = Field(description="Start time within source file (HH:MM:SS)")
+    end_time: str = Field(description="End time within source file (HH:MM:SS)")
+    detection_timestamp: datetime = Field(description="Absolute wall-clock time of the detection")
+
+
+class SurveyDetectionsSaveRequest(SQLModel):
+    detections: List[SurveyDetectionSave] = Field(default_factory=list)
+
+
+class SurveyDetectionsSaveResponse(SQLModel):
+    created: int
 
 
 # ============================================================================

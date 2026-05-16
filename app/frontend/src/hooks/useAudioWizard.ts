@@ -358,6 +358,40 @@ export function useAudioWizard() {
 
       // 2. Collect top 3 snippets per selected species
       const selectedReviewData = reviewData.filter((s) => !deselectedSpecies.has(s.speciesId));
+      const snippetDetections = new Set<WizardDetection>();
+      for (const speciesData of selectedReviewData) {
+        for (const det of speciesData.topDetections) {
+          snippetDetections.add(det);
+        }
+      }
+
+      // 3. Persist non-snippet detections for selected species only.
+      // Snippet detections are inserted later by the sighting-creation path with
+      // snippet-relative times — skip them here to avoid duplicates. Detections
+      // for species the user deselected in Review are dropped entirely.
+      setSaveProgress({ step: 'Saving detections...', percent: 7 });
+      const allDetectionsToSave = detections
+        .filter((d): d is WizardDetection & { species_id: number; detection_timestamp: string } =>
+          d.species_id != null
+          && d.detection_timestamp != null
+          && !deselectedSpecies.has(d.species_id)
+          && !snippetDetections.has(d)
+        )
+        .map((d) => ({
+          species_id: d.species_id,
+          species_name: d.species_name,
+          confidence: d.confidence,
+          start_time: d.start_time,
+          end_time: d.end_time,
+          detection_timestamp: d.detection_timestamp,
+        }));
+      if (allDetectionsToSave.length > 0) {
+        try {
+          await audioAPI.saveDetections(survey.id, allDetectionsToSave);
+        } catch (saveErr: unknown) {
+          throw new Error(`Failed to save detections: ${saveErr instanceof Error ? saveErr.message : String(saveErr)}`);
+        }
+      }
       interface SnippetInfo {
         speciesId: number;
         speciesData: SpeciesReviewData;
@@ -378,7 +412,7 @@ export function useAudioWizard() {
         }
       }
 
-      // 3. Extract WAV snippets from local files and upload
+      // 4. Extract WAV snippets from local files and upload
       const totalSnippets = snippetsToExtract.length;
       setSaveProgress({ step: `Extracting ${totalSnippets} audio snippets...`, percent: 10 });
 
@@ -417,7 +451,7 @@ export function useAudioWizard() {
         filenameToRecordingId.set(rec.filename, rec.id);
       }
 
-      // 4. Create sightings for selected species
+      // 5. Create sightings for selected species
       setSaveProgress({ step: 'Creating sightings...', percent: 75 });
 
       for (const speciesData of selectedReviewData) {
@@ -459,7 +493,7 @@ export function useAudioWizard() {
       setError(err instanceof Error ? err.message : 'Failed to save survey');
       setSaving(false);
     }
-  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, audioFiles, reviewData, deselectedSpecies, navigate]);
+  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, audioFiles, detections, reviewData, deselectedSpecies, navigate]);
 
   // ============================================================================
   // Step validation

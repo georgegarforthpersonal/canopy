@@ -757,6 +757,7 @@ async def create_sighting(
 
         audio_det = AudioDetection(
             audio_recording_id=det.audio_recording_id,
+            survey_id=db_sighting.survey_id,
             species_name=det.species_name,
             species_id=sighting.species_id,
             confidence=det.confidence,
