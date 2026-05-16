@@ -7,8 +7,6 @@ import {
   Button,
   Alert,
   LinearProgress,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
 import {
   ArrowBack,
@@ -16,13 +14,12 @@ import {
   FilterList,
   Restore,
   RemoveCircleOutline,
-  Visibility,
-  VisibilityOff,
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
 import { ImageViewerModal } from '../ImageViewerModal';
 import { DetectionBoxOverlay } from '../DetectionBoxOverlay';
+import { DetectionBoxToggleButton } from '../DetectionBoxToggleButton';
 import { ThumbnailGrid, type ThumbnailGridItem } from '../ThumbnailGrid';
 import { useArrowKeyNavigation } from '../../hooks/useArrowKeyNavigation';
 
@@ -175,11 +172,7 @@ export function FilterStep({ wizard }: FilterStepProps) {
               return (
                 <>
                   {detections?.length ? (
-                    <Tooltip title={`${showDetectionBoxes ? 'Hide' : 'Show'} detection boxes (B)`}>
-                      <IconButton size="small" onClick={toggleDetectionBoxes}>
-                        {showDetectionBoxes ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                      </IconButton>
-                    </Tooltip>
+                    <DetectionBoxToggleButton showing={showDetectionBoxes} onToggle={toggleDetectionBoxes} />
                   ) : null}
                   {filterReviewGroup === 'animal' ? (
                     <Button

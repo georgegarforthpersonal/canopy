@@ -11,19 +11,17 @@ import {
   LinearProgress,
   IconButton,
   Chip,
-  Tooltip,
 } from '@mui/material';
 import {
   ArrowBack,
   ArrowForward,
   CheckCircle,
-  Visibility,
-  VisibilityOff,
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
 import { ImageViewerModal } from '../ImageViewerModal';
 import { DetectionBoxOverlay } from '../DetectionBoxOverlay';
+import { DetectionBoxToggleButton } from '../DetectionBoxToggleButton';
 import { useArrowKeyNavigation } from '../../hooks/useArrowKeyNavigation';
 
 interface ClassifyStepProps {
@@ -131,22 +129,11 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
           />
           {showDetectionBoxes && detections?.length ? <DetectionBoxOverlay detections={detections} /> : null}
           {detections?.length ? (
-            <Tooltip title={`${showDetectionBoxes ? 'Hide' : 'Show'} detection boxes (B)`}>
-              <IconButton
-                size="small"
-                onClick={(e) => { e.stopPropagation(); toggleDetectionBoxes(); }}
-                sx={{
-                  position: 'absolute',
-                  top: 6,
-                  right: 6,
-                  bgcolor: 'rgba(0, 0, 0, 0.5)',
-                  color: 'white',
-                  '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.7)' },
-                }}
-              >
-                {showDetectionBoxes ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-              </IconButton>
-            </Tooltip>
+            <DetectionBoxToggleButton
+              showing={showDetectionBoxes}
+              onToggle={toggleDetectionBoxes}
+              overlay
+            />
           ) : null}
         </Box>
       </Box>
@@ -173,13 +160,7 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
           const viewOrigIdx = filteredToOriginalIndex[viewerIdx];
           const dets = viewOrigIdx !== undefined ? filterResults.get(viewOrigIdx)?.detections : undefined;
           if (!dets?.length) return null;
-          return (
-            <Tooltip title={`${showDetectionBoxes ? 'Hide' : 'Show'} detection boxes (B)`}>
-              <IconButton size="small" onClick={toggleDetectionBoxes}>
-                {showDetectionBoxes ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          );
+          return <DetectionBoxToggleButton showing={showDetectionBoxes} onToggle={toggleDetectionBoxes} />;
         }}
       />
 
