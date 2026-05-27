@@ -686,6 +686,7 @@ async def create_sighting(
         count=sighting.count,
         location_id=sighting.location_id,
         device_id=sighting.device_id,
+        notes=sighting.notes,
     )
 
     db.add(db_sighting)
@@ -918,7 +919,10 @@ async def update_sighting(
         "id": db_sighting.id,
         "survey_id": db_sighting.survey_id,
         "species_id": db_sighting.species_id,
+        "location_id": db_sighting.location_id,
+        "device_id": db_sighting.device_id,
         "count": db_sighting.count,
+        "notes": db_sighting.notes,
         "species_name": species.name if species else None,
         "species_scientific_name": species.scientific_name if species else None,
         "image_ids": result_image_ids,
