@@ -225,6 +225,66 @@ class TestSurveySightings:
         assert data["species_id"] == species.id
         assert data["count"] == 5
 
+    def test_create_sighting_persists_notes(
+        self, client: TestClient, auth_headers: dict,
+        create_survey, create_surveyor, create_species
+    ):
+        """Notes sent on create must be saved and read back.
+
+        Regression: create_sighting built the Sighting row without `notes`,
+        so notes entered at creation time were silently dropped.
+        """
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id])
+        species = create_species(name="Red Admiral")
+
+        response = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={
+                "species_id": species.id,
+                "count": 5,
+                "notes": "seen near the hedge",
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["notes"] == "seen near the hedge"
+
+        # Re-fetch from the DB to confirm the note was persisted, not just echoed.
+        listing = client.get(
+            f"/api/surveys/{survey.id}/sightings", headers=auth_headers
+        )
+        assert listing.status_code == 200
+        assert listing.json()[0]["notes"] == "seen near the hedge"
+
+    def test_update_sighting_returns_notes(
+        self, client: TestClient, auth_headers: dict,
+        create_survey, create_surveyor, create_species
+    ):
+        """The update response must echo persisted fields.
+
+        Regression: update_sighting's response dict omitted notes/location_id/
+        device_id even though they were saved, so clients read them back as null.
+        """
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id])
+        species = create_species(name="Peacock")
+
+        created = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={"species_id": species.id, "count": 1},
+            headers=auth_headers,
+        )
+        sighting_id = created.json()["id"]
+
+        response = client.put(
+            f"/api/surveys/{survey.id}/sightings/{sighting_id}",
+            json={"notes": "updated note"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["notes"] == "updated note"
+
     def test_get_sightings_for_nonexistent_survey(
         self, client: TestClient, auth_headers: dict
     ):

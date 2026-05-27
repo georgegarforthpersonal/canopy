@@ -71,6 +71,37 @@ class TestCreateSpecies:
         # Clean up - delete the created species
         client.delete(f"/api/species/{data['id']}", headers=auth_headers)
 
+    def test_create_species_persists_nbn_atlas_guid(
+        self, client: TestClient, auth_headers: dict, create_species_type
+    ):
+        """nbn_atlas_guid sent on create must be saved and read back.
+
+        Regression: create_species built the Species row without nbn_atlas_guid,
+        so the identifier was silently dropped.
+        """
+        st = create_species_type(name="butterfly", display_name="Butterfly")
+
+        response = client.post(
+            "/api/species",
+            json={
+                "name": "Guid Butterfly",
+                "species_type_id": st.id,
+                "nbn_atlas_guid": "NBNSYS0000008319",
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["nbn_atlas_guid"] == "NBNSYS0000008319"
+
+        try:
+            # Re-fetch to confirm persistence, not just echo.
+            fetched = client.get(f"/api/species/{data['id']}", headers=auth_headers)
+            assert fetched.status_code == 200
+            assert fetched.json()["nbn_atlas_guid"] == "NBNSYS0000008319"
+        finally:
+            client.delete(f"/api/species/{data['id']}", headers=auth_headers)
+
     def test_create_species_invalid_type_id(self, client: TestClient, auth_headers: dict):
         """Should return 400 for invalid species_type_id."""
         response = client.post(

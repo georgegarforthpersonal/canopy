@@ -128,6 +128,7 @@ async def create_species(
         conservation_status=species.conservation_status,
         species_type_id=species.species_type_id,
         scientific_name=species.scientific_name,
+        nbn_atlas_guid=species.nbn_atlas_guid,
         species_code=species.species_code,
     )
     db.add(db_species)
