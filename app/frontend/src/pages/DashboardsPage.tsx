@@ -1,10 +1,11 @@
-import { Box, Typography, Paper, Stack, IconButton, Tooltip, CircularProgress, Alert, Autocomplete, TextField } from '@mui/material';
+import { Box, Typography, Paper, Stack, IconButton, Tooltip, CircularProgress, Alert, Autocomplete, TextField, Tabs, Tab } from '@mui/material';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar } from 'recharts';
 import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { dashboardAPI, locationsAPI } from '../services/api';
+import { dashboardAPI, locationsAPI, getOrgSlug } from '../services/api';
 import type { CumulativeSpeciesResponse, SpeciesWithCount, SpeciesOccurrenceResponse, SpeciesSightingLocation, LocationWithBoundary } from '../services/api';
 import SightingsMap from '../components/dashboard/SightingsMap';
+import { DeviceTrackerMap } from '../components/dashboard/DeviceTrackerMap';
 import { speciesTypes, getSpeciesIcon, getSpeciesDisplayName } from '../config';
 import { notionColors, brandColors } from '../theme';
 
@@ -21,6 +22,10 @@ export function DashboardsPage() {
   // ============================================================================
   // State Management
   // ============================================================================
+
+  // Cannwood-only "Devices" tab alongside the species dashboards
+  const isCannwood = getOrgSlug() === 'cannwood';
+  const [activeTab, setActiveTab] = useState(0);
 
   const [selectedSpeciesTypes, setSelectedSpeciesTypes] = useState<string[]>(['bird']); // Default: bird selected
   const [chartData, setChartData] = useState<CumulativeSpeciesResponse | null>(null);
@@ -344,6 +349,19 @@ export function DashboardsPage() {
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+      {isCannwood && (
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={activeTab} onChange={(_e, v) => setActiveTab(v)}>
+            <Tab label="Species" />
+            <Tab label="Devices" />
+          </Tabs>
+        </Box>
+      )}
+
+      {isCannwood && activeTab === 1 && <DeviceTrackerMap />}
+
+      {(!isCannwood || activeTab === 0) && (
+        <>
       {/* Species Group Selector */}
       <Paper
         elevation={0}
@@ -668,6 +686,8 @@ export function DashboardsPage() {
           </Box>
         )}
       </Paper>
+        </>
+      )}
     </Box>
   );
 }

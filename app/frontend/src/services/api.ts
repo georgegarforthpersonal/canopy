@@ -876,6 +876,50 @@ export const devicesAPI = {
 };
 
 // ============================================================================
+// API Methods - Ecotopia (Druid solar tag trackers)
+// ============================================================================
+
+/** A Druid tracker device from the Ecotopia API (Cannwood only). */
+export interface EcotopiaDevice {
+  id: string;
+  uuid: string | null;
+  description: string | null;
+  device_type: number | null;
+  survive: number | null;
+  battery_voltage: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  gps_timestamp: string | null;
+  // Bird the tag is fitted to (hardcoded mapping, server-side).
+  sex: string | null;
+  ring_number: string | null;
+  ring_colour: string | null;
+}
+
+/** A single successful GNSS fix for a tracker device. */
+export interface EcotopiaGpsFix {
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+}
+
+export const ecotopiaAPI = {
+  /**
+   * List the account's tracker devices.
+   */
+  getDevices: (): Promise<EcotopiaDevice[]> => {
+    return fetchAPI('/ecotopia/devices');
+  },
+
+  /**
+   * Get a device's successful GNSS fixes over the last `days` (oldest first).
+   */
+  getGpsHistory: (deviceId: string, days: number = 7): Promise<EcotopiaGpsFix[]> => {
+    return fetchAPI(`/ecotopia/devices/${encodeURIComponent(deviceId)}/gps?days=${days}`);
+  },
+};
+
+// ============================================================================
 // API Methods - Species
 // ============================================================================
 
