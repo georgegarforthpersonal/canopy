@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
+from auth import require_admin
 from clients.ecotopia import EcotopiaClient
 from config import settings
 from dependencies import get_current_organisation
@@ -21,7 +22,8 @@ def _require_cannwood(org: Organisation = Depends(get_current_organisation)) -> 
         raise HTTPException(status_code=404, detail="Not found")
 
 
-router = APIRouter(dependencies=[Depends(_require_cannwood)])
+# Gated to the Cannwood org, and requires admin auth (the page holds live tracking data).
+router = APIRouter(dependencies=[Depends(_require_cannwood), Depends(require_admin)])
 
 
 class EcotopiaDevice(BaseModel):

@@ -29,15 +29,19 @@ SAMPLE_DEVICE = {
 }
 
 
+def _override_org(slug: str) -> None:
+    async def _org() -> Organisation:
+        return Organisation(name=slug, slug=slug, admin_password="", is_active=True)
+
+    app.dependency_overrides[get_current_organisation] = _org
+
+
 @pytest.fixture
-def cannwood_client(client: TestClient) -> TestClient:
-    """The shared client with the current org overridden to Cannwood, so the
-    router's org gate lets requests through."""
-
-    async def _cannwood_org() -> Organisation:
-        return Organisation(name="Cannwood", slug="cannwood", admin_password="", is_active=True)
-
-    app.dependency_overrides[get_current_organisation] = _cannwood_org
+def cannwood_client(client: TestClient, auth_headers: dict) -> TestClient:
+    """The shared client overridden to the Cannwood org and authenticated, so
+    requests pass the router's org gate and admin-auth requirement."""
+    _override_org("cannwood")
+    client.headers.update(auth_headers)
     return client
 
 
@@ -94,14 +98,16 @@ class TestGetEcotopiaDevices:
 
         assert response.status_code == 502
 
-    def test_404_for_non_cannwood_org(self, client: TestClient, monkeypatch) -> None:
+    def test_404_for_non_cannwood_org(self, client: TestClient, auth_headers: dict) -> None:
         """Hidden (404) from non-Cannwood orgs (client fixture org is 'test-org')."""
-        monkeypatch.setattr(settings, "ecotopia_username", "user")
-        monkeypatch.setattr(settings, "ecotopia_password", "pass")
-
-        response = client.get("/api/ecotopia/devices")
-
+        response = client.get("/api/ecotopia/devices", headers=auth_headers)
         assert response.status_code == 404
+
+    def test_401_when_not_authenticated(self, client: TestClient) -> None:
+        """Requires admin auth even for the Cannwood org."""
+        _override_org("cannwood")
+        response = client.get("/api/ecotopia/devices")  # no auth headers
+        assert response.status_code == 401
 
 
 class TestGetDeviceGps:
