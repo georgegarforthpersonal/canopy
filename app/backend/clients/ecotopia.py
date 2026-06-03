@@ -2,7 +2,8 @@
 
 Login hashes the password as sha256("{username} + druid + {password} + heifeng").
 Data calls carry the token in the JSON body; the v2 GPS API takes it in an
-X-Druid-Authentication header instead.
+X-Druid-Authentication header instead. The token is reused across calls and
+re-fetched once on an auth failure, so a long-lived instance can be cached.
 """
 
 import hashlib
@@ -61,29 +62,39 @@ class EcotopiaClient:
         return recent
 
     def _get_v2(self, path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
-        if not self.token:
-            self.login()
-        response = self.session.get(
-            f"{self.BASE_URL}/v2/{path}",
-            headers={"X-Druid-Authentication": self.token},
-            params=params,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        body = response.json()
-        return body if isinstance(body, list) else []
+        for attempt in range(2):
+            if not self.token:
+                self.login()
+            response = self.session.get(
+                f"{self.BASE_URL}/v2/{path}",
+                headers={"X-Druid-Authentication": self.token},
+                params=params,
+                timeout=self.timeout,
+            )
+            if response.status_code == 401 and attempt == 0:
+                self.token = ""  # expired — re-login and retry once
+                continue
+            response.raise_for_status()
+            data: List[Dict[str, Any]] = response.json()
+            return data
+        raise RuntimeError(f"Ecotopia v2/{path} failed: authentication")
 
     def _post(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        if not self.token:
-            self.login()
-        response = self.session.post(
-            f"{self.BASE_URL}/{path}",
-            json={"token": self.token, "data": data},
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        body = response.json()
-        if body.get("code") != 200:
-            raise RuntimeError(f"Ecotopia {path} failed: {body}")
-        payload: Dict[str, Any] = body["data"]
-        return payload
+        for attempt in range(2):
+            if not self.token:
+                self.login()
+            response = self.session.post(
+                f"{self.BASE_URL}/{path}",
+                json={"token": self.token, "data": data},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            body = response.json()
+            if body.get("code") == 401 and attempt == 0:
+                self.token = ""  # expired — re-login and retry once
+                continue
+            if body.get("code") != 200:
+                raise RuntimeError(f"Ecotopia {path} failed: {body}")
+            payload: Dict[str, Any] = body["data"]
+            return payload
+        raise RuntimeError(f"Ecotopia {path} failed: authentication")

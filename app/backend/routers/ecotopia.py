@@ -1,15 +1,27 @@
-"""Ecotopia / Druid tracker endpoints (Cannwood-only in practice)."""
+"""Ecotopia / Druid tracker endpoints (gated to the Cannwood org)."""
 
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from clients.ecotopia import EcotopiaClient
 from config import settings
+from dependencies import get_current_organisation
+from models import Organisation
 from tracker_birds import BIRD_BY_OBJECT_ID
 
-router = APIRouter()
+CANNWOOD_SLUG = "cannwood"
+
+
+def _require_cannwood(org: Organisation = Depends(get_current_organisation)) -> None:
+    if org.slug != CANNWOOD_SLUG:
+        raise HTTPException(status_code=404, detail="Not found")
+
+
+router = APIRouter(dependencies=[Depends(_require_cannwood)])
 
 
 class EcotopiaDevice(BaseModel):
@@ -54,10 +66,15 @@ def _to_device(d: Dict[str, Any]) -> EcotopiaDevice:
     )
 
 
+@lru_cache(maxsize=1)
+def _cached_client(username: str, password: str) -> EcotopiaClient:
+    return EcotopiaClient(username, password)
+
+
 def _client() -> EcotopiaClient:
     if not settings.ecotopia_username or not settings.ecotopia_password:
         raise HTTPException(status_code=503, detail="Ecotopia credentials not configured")
-    return EcotopiaClient(settings.ecotopia_username, settings.ecotopia_password)
+    return _cached_client(settings.ecotopia_username, settings.ecotopia_password)
 
 
 def _valid_fix(lon: Any, lat: Any) -> bool:
@@ -75,7 +92,7 @@ async def get_devices() -> List[EcotopiaDevice]:
     """List the account's tracker devices from the Ecotopia API."""
     client = _client()
     try:
-        devices = client.list_devices()
+        devices = await run_in_threadpool(client.list_devices)
     except Exception as exc:  # noqa: BLE001 - surface upstream failures as 502
         raise HTTPException(status_code=502, detail=f"Ecotopia API error: {exc}") from exc
 
@@ -87,7 +104,7 @@ async def get_device_gps(device_id: str, days: int = 7) -> List[EcotopiaGpsFix]:
     """Return a device's successful GNSS fixes over the last `days`, oldest first."""
     client = _client()
     try:
-        records = client.get_gps_history(device_id, days=days)
+        records = await run_in_threadpool(client.get_gps_history, device_id, days)
     except Exception as exc:  # noqa: BLE001 - surface upstream failures as 502
         raise HTTPException(status_code=502, detail=f"Ecotopia API error: {exc}") from exc
 

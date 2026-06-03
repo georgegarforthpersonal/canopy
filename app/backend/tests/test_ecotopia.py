@@ -1,14 +1,18 @@
 """
-Tests for the Ecotopia tracker router (GET /api/ecotopia/devices).
+Tests for the Ecotopia tracker router.
 
-The external Ecotopia API is mocked — these tests cover the endpoint's
-mapping/flattening and the missing-credentials guard, not the live API.
+The external Ecotopia API is mocked — these cover the endpoints' mapping, the
+missing-credentials guard, and the Cannwood-only org gate, not the live API.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
 from clients.ecotopia import EcotopiaClient
 from config import settings
+from dependencies import get_current_organisation
+from main import app
+from models import Organisation
 
 SAMPLE_DEVICE = {
     "id": "69c7b38f46109fd46939985a",  # tracker 240D (see tracker_birds.py)
@@ -25,16 +29,28 @@ SAMPLE_DEVICE = {
 }
 
 
+@pytest.fixture
+def cannwood_client(client: TestClient) -> TestClient:
+    """The shared client with the current org overridden to Cannwood, so the
+    router's org gate lets requests through."""
+
+    async def _cannwood_org() -> Organisation:
+        return Organisation(name="Cannwood", slug="cannwood", admin_password="", is_active=True)
+
+    app.dependency_overrides[get_current_organisation] = _cannwood_org
+    return client
+
+
 class TestGetEcotopiaDevices:
     """Tests for GET /api/ecotopia/devices"""
 
-    def test_returns_flattened_devices(self, client: TestClient, monkeypatch) -> None:
+    def test_returns_flattened_devices(self, cannwood_client: TestClient, monkeypatch) -> None:
         """Maps the nested Ecotopia device into the flat response shape."""
         monkeypatch.setattr(settings, "ecotopia_username", "user")
         monkeypatch.setattr(settings, "ecotopia_password", "pass")
         monkeypatch.setattr(EcotopiaClient, "list_devices", lambda self: [SAMPLE_DEVICE])
 
-        response = client.get("/api/ecotopia/devices")
+        response = cannwood_client.get("/api/ecotopia/devices")
 
         assert response.status_code == 200
         data = response.json()
@@ -55,16 +71,16 @@ class TestGetEcotopiaDevices:
             "ring_colour": "black",
         }
 
-    def test_503_when_credentials_missing(self, client: TestClient, monkeypatch) -> None:
+    def test_503_when_credentials_missing(self, cannwood_client: TestClient, monkeypatch) -> None:
         """Returns 503 rather than calling the API when creds are unset."""
         monkeypatch.setattr(settings, "ecotopia_username", "")
         monkeypatch.setattr(settings, "ecotopia_password", "")
 
-        response = client.get("/api/ecotopia/devices")
+        response = cannwood_client.get("/api/ecotopia/devices")
 
         assert response.status_code == 503
 
-    def test_502_on_upstream_error(self, client: TestClient, monkeypatch) -> None:
+    def test_502_on_upstream_error(self, cannwood_client: TestClient, monkeypatch) -> None:
         """Surfaces upstream Ecotopia failures as a 502."""
         monkeypatch.setattr(settings, "ecotopia_username", "user")
         monkeypatch.setattr(settings, "ecotopia_password", "pass")
@@ -74,15 +90,24 @@ class TestGetEcotopiaDevices:
 
         monkeypatch.setattr(EcotopiaClient, "list_devices", _boom)
 
-        response = client.get("/api/ecotopia/devices")
+        response = cannwood_client.get("/api/ecotopia/devices")
 
         assert response.status_code == 502
+
+    def test_404_for_non_cannwood_org(self, client: TestClient, monkeypatch) -> None:
+        """Hidden (404) from non-Cannwood orgs (client fixture org is 'test-org')."""
+        monkeypatch.setattr(settings, "ecotopia_username", "user")
+        monkeypatch.setattr(settings, "ecotopia_password", "pass")
+
+        response = client.get("/api/ecotopia/devices")
+
+        assert response.status_code == 404
 
 
 class TestGetDeviceGps:
     """Tests for GET /api/ecotopia/devices/{id}/gps"""
 
-    def test_returns_only_valid_fixes(self, client: TestClient, monkeypatch) -> None:
+    def test_returns_only_valid_fixes(self, cannwood_client: TestClient, monkeypatch) -> None:
         """Drops failed-fix records (null / sentinel coords), keeps real ones."""
         monkeypatch.setattr(settings, "ecotopia_username", "user")
         monkeypatch.setattr(settings, "ecotopia_password", "pass")
@@ -94,7 +119,7 @@ class TestGetDeviceGps:
         ]
         monkeypatch.setattr(EcotopiaClient, "get_gps_history", lambda self, device_id, days=7: records)
 
-        response = client.get("/api/ecotopia/devices/abc123/gps?days=7")
+        response = cannwood_client.get("/api/ecotopia/devices/abc123/gps?days=7")
 
         assert response.status_code == 200
         data = response.json()
@@ -102,10 +127,10 @@ class TestGetDeviceGps:
         assert data[0] == {"timestamp": "2026-05-27T00:00:31Z", "latitude": 52.5834, "longitude": 1.0607}
         assert data[1]["latitude"] == 51.2278
 
-    def test_503_when_credentials_missing(self, client: TestClient, monkeypatch) -> None:
+    def test_503_when_credentials_missing(self, cannwood_client: TestClient, monkeypatch) -> None:
         monkeypatch.setattr(settings, "ecotopia_username", "")
         monkeypatch.setattr(settings, "ecotopia_password", "")
 
-        response = client.get("/api/ecotopia/devices/abc123/gps")
+        response = cannwood_client.get("/api/ecotopia/devices/abc123/gps")
 
         assert response.status_code == 503
