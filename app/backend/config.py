@@ -107,6 +107,18 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Ecotopia / Druid Tracker Integration
+    # =========================================================================
+    ecotopia_username: str = Field(
+        default="",
+        description="Ecotopia portal username (used to obtain a session token via /api/login).",
+    )
+    ecotopia_password: str = Field(
+        default="",
+        description="Ecotopia portal password (plaintext; the client hashes it before sending).",
+    )
+
+    # =========================================================================
     # Environment
     # =========================================================================
     env: str = Field(default="development", description="Environment name")

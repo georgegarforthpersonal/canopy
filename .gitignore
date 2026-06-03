@@ -33,6 +33,8 @@ venv.bak/
 .env
 .env.local
 .env.production
+.env.staging
+.env.prod
 
 # IDE
 .vscode/

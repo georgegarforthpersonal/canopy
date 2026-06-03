@@ -1,0 +1,142 @@
+"""
+Tests for the Ecotopia tracker router.
+
+The external Ecotopia API is mocked — these cover the endpoints' mapping, the
+missing-credentials guard, and the Cannwood-only org gate, not the live API.
+"""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from clients.ecotopia import EcotopiaClient
+from config import settings
+from dependencies import get_current_organisation
+from main import app
+from models import Organisation
+
+SAMPLE_DEVICE = {
+    "id": "69c7b38f46109fd46939985a",  # tracker 240D (see tracker_birds.py)
+    "uuid": "1300000d99",
+    "description": "stored(Peter)",
+    "device_type": 4864,
+    "survive": 1,
+    "status_device": {"battery_voltage": 3.941},
+    "status_gps": {
+        "latitude": 51.8051936,
+        "longitude": 19.3248464,
+        "timestamp": "2024-08-24T13:00:36Z",
+    },
+}
+
+
+def _override_org(slug: str) -> None:
+    async def _org() -> Organisation:
+        return Organisation(name=slug, slug=slug, admin_password="", is_active=True)
+
+    app.dependency_overrides[get_current_organisation] = _org
+
+
+@pytest.fixture
+def cannwood_client(client: TestClient, auth_headers: dict) -> TestClient:
+    """The shared client overridden to the Cannwood org and authenticated, so
+    requests pass the router's org gate and admin-auth requirement."""
+    _override_org("cannwood")
+    client.headers.update(auth_headers)
+    return client
+
+
+class TestGetEcotopiaDevices:
+    """Tests for GET /api/ecotopia/devices"""
+
+    def test_returns_flattened_devices(self, cannwood_client: TestClient, monkeypatch) -> None:
+        """Maps the nested Ecotopia device into the flat response shape."""
+        monkeypatch.setattr(settings, "ecotopia_username", "user")
+        monkeypatch.setattr(settings, "ecotopia_password", "pass")
+        monkeypatch.setattr(EcotopiaClient, "list_devices", lambda self: [SAMPLE_DEVICE])
+
+        response = cannwood_client.get("/api/ecotopia/devices")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0] == {
+            "id": "69c7b38f46109fd46939985a",
+            "uuid": "1300000d99",
+            "description": "stored(Peter)",
+            "device_type": 4864,
+            "survive": 1,
+            "battery_voltage": 3.941,
+            "latitude": 51.8051936,
+            "longitude": 19.3248464,
+            "gps_timestamp": "2024-08-24T13:00:36Z",
+            # enriched from tracker_birds.py
+            "sex": "male",
+            "ring_number": "1847/1848",
+            "ring_colour": "black",
+        }
+
+    def test_503_when_credentials_missing(self, cannwood_client: TestClient, monkeypatch) -> None:
+        """Returns 503 rather than calling the API when creds are unset."""
+        monkeypatch.setattr(settings, "ecotopia_username", "")
+        monkeypatch.setattr(settings, "ecotopia_password", "")
+
+        response = cannwood_client.get("/api/ecotopia/devices")
+
+        assert response.status_code == 503
+
+    def test_502_on_upstream_error(self, cannwood_client: TestClient, monkeypatch) -> None:
+        """Surfaces upstream Ecotopia failures as a 502."""
+        monkeypatch.setattr(settings, "ecotopia_username", "user")
+        monkeypatch.setattr(settings, "ecotopia_password", "pass")
+
+        def _boom(self) -> None:
+            raise RuntimeError("login failed")
+
+        monkeypatch.setattr(EcotopiaClient, "list_devices", _boom)
+
+        response = cannwood_client.get("/api/ecotopia/devices")
+
+        assert response.status_code == 502
+
+    def test_404_for_non_cannwood_org(self, client: TestClient, auth_headers: dict) -> None:
+        """Hidden (404) from non-Cannwood orgs (client fixture org is 'test-org')."""
+        response = client.get("/api/ecotopia/devices", headers=auth_headers)
+        assert response.status_code == 404
+
+    def test_401_when_not_authenticated(self, client: TestClient) -> None:
+        """Requires admin auth even for the Cannwood org."""
+        _override_org("cannwood")
+        response = client.get("/api/ecotopia/devices")  # no auth headers
+        assert response.status_code == 401
+
+
+class TestGetDeviceGps:
+    """Tests for GET /api/ecotopia/devices/{id}/gps"""
+
+    def test_returns_only_valid_fixes(self, cannwood_client: TestClient, monkeypatch) -> None:
+        """Drops failed-fix records (null / sentinel coords), keeps real ones."""
+        monkeypatch.setattr(settings, "ecotopia_username", "user")
+        monkeypatch.setattr(settings, "ecotopia_password", "pass")
+        records = [
+            {"timestamp": "2026-05-27T00:00:31Z", "latitude": 52.5834, "longitude": 1.0607},
+            {"timestamp": "2026-05-27T10:00:25Z", "latitude": None, "longitude": None},
+            {"timestamp": "2026-05-27T12:00:24Z", "latitude": -99999.9, "longitude": -99999.9},
+            {"timestamp": "2026-06-02T12:00:22Z", "latitude": 51.2278, "longitude": -2.3233},
+        ]
+        monkeypatch.setattr(EcotopiaClient, "get_gps_history", lambda self, device_id, days=7: records)
+
+        response = cannwood_client.get("/api/ecotopia/devices/abc123/gps?days=7")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert data[0] == {"timestamp": "2026-05-27T00:00:31Z", "latitude": 52.5834, "longitude": 1.0607}
+        assert data[1]["latitude"] == 51.2278
+
+    def test_503_when_credentials_missing(self, cannwood_client: TestClient, monkeypatch) -> None:
+        monkeypatch.setattr(settings, "ecotopia_username", "")
+        monkeypatch.setattr(settings, "ecotopia_password", "")
+
+        response = cannwood_client.get("/api/ecotopia/devices/abc123/gps")
+
+        assert response.status_code == 503
