@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from config import settings
 from exceptions import AppException
-from routers import surveys, species, locations, surveyors, dashboard, survey_types, auth, audio, devices, images, export
+from routers import surveys, species, locations, surveyors, dashboard, survey_types, auth, audio, devices, images, export, ecotopia
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,7 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"]
 app.include_router(survey_types.router, prefix="/api/survey-types", tags=["Survey Types"])
 app.include_router(devices.router, prefix="/api/devices", tags=["Devices"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
+app.include_router(ecotopia.router, prefix="/api/ecotopia", tags=["Ecotopia"])
 
 # ============================================================================
 # Health Check Endpoint
