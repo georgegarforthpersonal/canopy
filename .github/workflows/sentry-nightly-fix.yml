@@ -11,10 +11,12 @@ permissions:
   id-token: write
 
 jobs:
-  sentry-fix:
+  discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 10
+    outputs:
+      issue_count: ${{ steps.sentry.outputs.issue_count }}
+      issues: ${{ steps.sentry.outputs.issues }}
     steps:
       - name: Fetch Sentry issues and stack traces
         id: sentry
@@ -34,30 +36,23 @@ jobs:
           if [ "$HTTP_CODE" != "200" ]; then
             echo "Sentry API error: ${BODY}"
             echo "issue_count=0" >> "$GITHUB_OUTPUT"
+            echo "issues=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          COUNT=$(echo "$BODY" | jq 'length')
+          # Take the top 5 issues with metadata
+          ISSUES=$(echo "$BODY" | jq -c '[.[:5] | .[] | {id, title, culprit, count, level, link: .permalink}]')
+          COUNT=$(echo "$ISSUES" | jq 'length')
           echo "issue_count=${COUNT}" >> "$GITHUB_OUTPUT"
           echo "Found ${COUNT} unresolved Sentry issues"
 
           if [ "$COUNT" = "0" ]; then
+            echo "issues=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Get top 5 issues with metadata
-          ISSUES=$(echo "$BODY" | jq -c '[.[:5] | .[] | {id, title, culprit, count, level, permalink}]')
-
-          # For each issue, fetch the latest event's stack trace
-          REPORT=""
+          # Enrich each issue with its latest event's stack trace
           for ISSUE_ID in $(echo "$ISSUES" | jq -r '.[].id'); do
-            ISSUE_META=$(echo "$ISSUES" | jq -r ".[] | select(.id==\"${ISSUE_ID}\")")
-            TITLE=$(echo "$ISSUE_META" | jq -r '.title')
-            CULPRIT=$(echo "$ISSUE_META" | jq -r '.culprit')
-            OCCURRENCES=$(echo "$ISSUE_META" | jq -r '.count')
-            LEVEL=$(echo "$ISSUE_META" | jq -r '.level')
-            LINK=$(echo "$ISSUE_META" | jq -r '.permalink')
-
             # Fetch latest event (org-scoped path; the bare /issues/{id}/ path 404s)
             EVENT_RESP=$(curl -s -w "\n%{http_code}" \
               -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" \
@@ -66,59 +61,52 @@ jobs:
             EVENT=$(echo "$EVENT_RESP" | sed '$d')
             echo "Event fetch for issue ${ISSUE_ID}: HTTP ${EVENT_CODE}"
 
-            # Extract stack trace frames
             STACKTRACE=$(echo "$EVENT" | jq -c '[.entries[]? | select(.type=="exception") | .data.values[]? | {type: .type, value: .value, frames: [.stacktrace.frames[]? | {filename, function, lineNo, inApp: .inApp}]}]' 2>/dev/null || echo "[]")
             [ -z "$STACKTRACE" ] && STACKTRACE="[]"
 
-            REPORT="${REPORT}
-          --- ISSUE: ${TITLE} ---
-          ID: ${ISSUE_ID}
-          Link: ${LINK}
-          Culprit: ${CULPRIT}
-          Occurrences: ${OCCURRENCES}
-          Level: ${LEVEL}
-          Stack trace:
-          ${STACKTRACE}
-          "
+            ISSUES=$(echo "$ISSUES" | jq -c --arg id "$ISSUE_ID" --argjson st "$STACKTRACE" \
+              'map(if (.id|tostring) == $id then . + {stacktrace: $st} else . end)')
           done
 
-          # Save report for next step
-          {
-            echo "report<<SENTRY_EOF"
-            echo "$REPORT"
-            echo "SENTRY_EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "issues=${ISSUES}" >> "$GITHUB_OUTPUT"
 
+  fix:
+    needs: discover
+    if: needs.discover.outputs.issue_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        issue: ${{ fromJson(needs.discover.outputs.issues) }}
+    steps:
       - name: Checkout repository
-        if: steps.sentry.outputs.issue_count != '0'
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Run Claude Code
-        if: steps.sentry.outputs.issue_count != '0'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: "--max-turns 40 --allowedTools 'Bash,Read,Write,Edit,Glob,Grep'"
           show_full_output: true
           prompt: |
-            You are fixing bugs in the Canopy Data wildlife monitoring platform (FastAPI + PostgreSQL).
-
-            Below are unresolved Sentry issues from the last 24 hours with full stack traces.
+            You are fixing a single bug in the Canopy Data wildlife monitoring platform (FastAPI + PostgreSQL).
             Source files are under app/backend/ in this repository.
 
-            ${{ steps.sentry.outputs.report }}
+            Below is one unresolved Sentry issue from the last 24 hours as JSON
+            (title, culprit, occurrence count, level, link, and stack-trace frames):
+
+            ${{ toJson(matrix.issue) }}
 
             Instructions:
-            1. Read ONLY the source files referenced in the stack traces above
-            2. Prioritise by: frequency, severity, and confidence the fix is correct
-            3. Fix the top 1-2 issues where you are confident the fix is safe. Do not attempt speculative fixes.
-            4. Create a branch called fix/sentry-$(date +%Y-%m-%d)
-            5. Commit with clear messages explaining what was fixed and why
-            6. Open a PR titled "Nightly Sentry fixes - $(date +%Y-%m-%d)" with:
-               - A summary table of ALL issues (columns: Issue, Occurrences, Severity, Action taken)
-               - For fixed issues: Sentry link, root cause, what changed, caveats
-               - For unfixed issues: why (too complex, needs human decision, etc.)
-            7. Only modify files directly implicated by the stack traces
-            8. Never push directly to main
+            1. Read ONLY the source files referenced in the stack trace above.
+            2. If you are confident a safe, correct fix exists, apply it. Do not attempt speculative fixes.
+            3. If the issue is not safely fixable (e.g. an external/network error, needs a human decision, or is too complex), STOP without opening a PR and explain why in your final message.
+            4. When you do fix it:
+               - Create a branch named fix/sentry-${{ matrix.issue.id }}-${{ github.run_number }}
+               - Commit with a clear message explaining what was fixed and why
+               - Open a PR describing the Sentry link, root cause, what changed, and any caveats
+            5. Only modify files directly implicated by the stack trace. Never push directly to main.
