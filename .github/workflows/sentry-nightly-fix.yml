@@ -58,13 +58,17 @@ jobs:
             LEVEL=$(echo "$ISSUE_META" | jq -r '.level')
             LINK=$(echo "$ISSUE_META" | jq -r '.permalink')
 
-            # Fetch latest event for this issue
-            EVENT=$(curl -s \
+            # Fetch latest event (org-scoped path; the bare /issues/{id}/ path 404s)
+            EVENT_RESP=$(curl -s -w "\n%{http_code}" \
               -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" \
-              "https://sentry.io/api/0/issues/${ISSUE_ID}/events/latest/")
+              "https://sentry.io/api/0/organizations/${SENTRY_ORG}/issues/${ISSUE_ID}/events/latest/")
+            EVENT_CODE=$(echo "$EVENT_RESP" | tail -1)
+            EVENT=$(echo "$EVENT_RESP" | sed '$d')
+            echo "Event fetch for issue ${ISSUE_ID}: HTTP ${EVENT_CODE}"
 
             # Extract stack trace frames
-            STACKTRACE=$(echo "$EVENT" | jq '[.entries[]? | select(.type=="exception") | .data.values[]? | {type: .type, value: .value, frames: [.stacktrace.frames[]? | {filename, function, lineNo, context: .context}]}]' 2>/dev/null || echo "[]")
+            STACKTRACE=$(echo "$EVENT" | jq -c '[.entries[]? | select(.type=="exception") | .data.values[]? | {type: .type, value: .value, frames: [.stacktrace.frames[]? | {filename, function, lineNo, inApp: .inApp}]}]' 2>/dev/null || echo "[]")
+            [ -z "$STACKTRACE" ] && STACKTRACE="[]"
 
             REPORT="${REPORT}
           --- ISSUE: ${TITLE} ---
@@ -96,7 +100,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--max-turns 10 --allowedTools 'Bash,Read,Write,Edit,Glob,Grep'"
+          claude_args: "--max-turns 40 --allowedTools 'Bash,Read,Write,Edit,Glob,Grep'"
           show_full_output: true
           prompt: |
             You are fixing bugs in the Canopy Data wildlife monitoring platform (FastAPI + PostgreSQL).
