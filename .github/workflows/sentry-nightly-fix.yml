@@ -41,7 +41,9 @@ jobs:
           fi
 
           # Take the top 5 issues with metadata
-          ISSUES=$(echo "$BODY" | jq -c '[.[:5] | .[] | {id, title, culprit, count, level, link: .permalink}]')
+          # Omit the Sentry permalink here: it embeds the SENTRY_ORG secret, which
+          # would cause GitHub to drop this job output. The link is rebuilt in the fix job.
+          ISSUES=$(echo "$BODY" | jq -c '[.[:5] | .[] | {id, title, culprit, count, level}]')
           COUNT=$(echo "$ISSUES" | jq 'length')
           echo "issue_count=${COUNT}" >> "$GITHUB_OUTPUT"
           echo "Found ${COUNT} unresolved Sentry issues"
@@ -97,9 +99,11 @@ jobs:
             Source files are under app/backend/ in this repository.
 
             Below is one unresolved Sentry issue from the last 24 hours as JSON
-            (title, culprit, occurrence count, level, link, and stack-trace frames):
+            (title, culprit, occurrence count, level, and stack-trace frames):
 
             ${{ toJson(matrix.issue) }}
+
+            Sentry link: https://${{ secrets.SENTRY_ORG }}.sentry.io/issues/${{ matrix.issue.id }}/
 
             Always open a PR for this issue — it serves as the diagnosis, whether or not a fix was made.
 
