@@ -8,6 +8,8 @@ database logic from the Streamlit POC.
 
 import logging
 import os
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 import sentry_sdk
 from fastapi import FastAPI, Request
@@ -17,6 +19,7 @@ from fastapi.responses import JSONResponse
 from config import settings
 from exceptions import AppException
 from routers import surveys, species, locations, surveyors, dashboard, survey_types, auth, audio, devices, images, export, ecotopia
+from services.job_queue import start_dispatcher, stop_dispatcher
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,17 @@ sentry_sdk.init(
     traces_sample_rate=0.1,
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Run the media job dispatcher for the lifetime of the app."""
+    if settings.job_dispatcher_enabled:
+        await start_dispatcher()
+    yield
+    if settings.job_dispatcher_enabled:
+        await stop_dispatcher()
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Wildlife Survey API",
@@ -33,6 +47,7 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/api/docs",  # Swagger UI
     redoc_url="/api/redoc",  # ReDoc
+    lifespan=lifespan,
 )
 
 # ============================================================================

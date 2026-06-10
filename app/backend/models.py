@@ -878,6 +878,10 @@ class AudioRecording(AudioRecordingBase, table=True):  # type: ignore[call-arg]
     processing_started_at: Optional[datetime] = Field(None)
     processing_completed_at: Optional[datetime] = Field(None)
     processing_error: Optional[str] = Field(None)
+    processing_attempts: int = Field(
+        default=0,
+        sa_column=sa.Column(sa.Integer, nullable=False, server_default="0"),
+    )
 
     uploaded_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -894,6 +898,15 @@ class AudioRecording(AudioRecordingBase, table=True):  # type: ignore[call-arg]
         back_populates="audio_recording",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+
+
+class ProcessingSummary(SQLModel):
+    """Counts of media rows by processing status for a survey."""
+    pending: int = 0
+    processing: int = 0
+    completed: int = 0
+    failed: int = 0
+    total: int = 0
 
 
 class AudioRecordingRead(AudioRecordingBase):
@@ -1079,6 +1092,10 @@ class CameraTrapImage(CameraTrapImageBase, table=True):  # type: ignore[call-arg
     processing_started_at: Optional[datetime] = Field(None)
     processing_completed_at: Optional[datetime] = Field(None)
     processing_error: Optional[str] = Field(None)
+    processing_attempts: int = Field(
+        default=0,
+        sa_column=sa.Column(sa.Integer, nullable=False, server_default="0"),
+    )
 
     created_at: datetime = Field(
         default_factory=datetime.utcnow,

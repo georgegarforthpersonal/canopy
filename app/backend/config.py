@@ -119,6 +119,30 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Background Job Processing
+    # =========================================================================
+    job_dispatcher_enabled: bool = Field(
+        default=True,
+        description="Run the in-process dispatcher that processes pending media jobs"
+    )
+    job_concurrency: int = Field(
+        default=2,
+        description="Maximum media processing jobs running at once"
+    )
+    job_poll_interval_seconds: float = Field(
+        default=3.0,
+        description="How often the dispatcher polls for pending jobs"
+    )
+    job_max_attempts: int = Field(
+        default=3,
+        description="Processing attempts before a job is marked failed"
+    )
+    job_timeout_seconds: int = Field(
+        default=1800,
+        description="Per-job timeout; jobs stuck in 'processing' are requeued after 1.5x this"
+    )
+
+    # =========================================================================
     # Environment
     # =========================================================================
     env: str = Field(default="development", description="Environment name")

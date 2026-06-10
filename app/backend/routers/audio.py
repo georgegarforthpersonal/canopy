@@ -14,13 +14,12 @@ Endpoints:
 
 import logging
 import tempfile
-from datetime import datetime, time
+from datetime import time
 from pathlib import Path
 from typing import Any, List
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -49,6 +48,7 @@ from models import (
     Location,
     Organisation,
     ProcessingStatus,
+    ProcessingSummary,
     Species,
     SpeciesDetectionSummary,
     SpeciesType,
@@ -57,9 +57,9 @@ from models import (
     SurveyDetectionsSaveResponse,
     SurveyDetectionsSummaryResponse,
 )
+from services.processing import DEFAULT_LAT, DEFAULT_LON
 from services.r2_storage import (
     delete_audio_file,
-    download_audio_file,
     generate_presigned_url,
     upload_audio_file,
 )
@@ -68,10 +68,6 @@ from utils.filename_parser import extract_media_info
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Default coordinates for location-based species filtering (used by background processing)
-DEFAULT_LAT = 51.3452
-DEFAULT_LON = -2.2525
 
 
 def extract_recording_info(filename: str) -> dict:
@@ -270,6 +266,39 @@ async def list_audio_recordings(
     return result
 
 
+# NOTE: must be declared before /{survey_id}/audio/{recording_id} so the
+# literal segment wins over the path parameter.
+@router.get("/{survey_id}/audio/processing-summary", response_model=ProcessingSummary)
+async def get_audio_processing_summary(
+    survey_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> ProcessingSummary:
+    """Counts of audio recordings by processing status, for progress display."""
+    survey = (
+        db.query(Survey)
+        .filter(Survey.id == survey_id, Survey.organisation_id == org.id)
+        .first()
+    )
+    if not survey:
+        raise HTTPException(status_code=404, detail="Survey not found")
+
+    rows = (
+        db.query(AudioRecording.processing_status, func.count(AudioRecording.id))
+        .filter(AudioRecording.survey_id == survey_id)
+        .group_by(AudioRecording.processing_status)
+        .all()
+    )
+    counts = {str(status_value): count for status_value, count in rows}
+    return ProcessingSummary(
+        pending=counts.get("pending", 0),
+        processing=counts.get("processing", 0),
+        completed=counts.get("completed", 0),
+        failed=counts.get("failed", 0),
+        total=sum(counts.values()),
+    )
+
+
 @router.post(
     "/{survey_id}/audio",
     response_model=List[AudioRecordingRead],
@@ -278,7 +307,6 @@ async def list_audio_recordings(
 )
 async def upload_audio_files(
     survey_id: int,
-    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     skip_processing: bool = Query(False, description="Skip BirdNET processing (for wizard uploads)"),
     org: Organisation = Depends(get_current_organisation),
@@ -286,7 +314,8 @@ async def upload_audio_files(
 ) -> list[dict[str, Any]]:
     """
     Upload one or more audio files to a survey.
-    Files are stored in R2. Processing is auto-triggered unless skip_processing=true.
+    Files are stored in R2. Pending recordings are picked up by the job
+    dispatcher unless skip_processing=true.
     """
     # Verify survey belongs to org
     survey = (
@@ -345,10 +374,6 @@ async def upload_audio_files(
 
         uploaded.append(recording)
 
-        # Auto-trigger background processing (unless skipped for wizard uploads)
-        if not skip_processing:
-            background_tasks.add_task(process_recording_background, recording_id=recording.id)
-
     db.commit()
 
     # Build response
@@ -362,13 +387,12 @@ async def upload_audio_files(
 async def process_audio_recording(
     survey_id: int,
     recording_id: int,
-    background_tasks: BackgroundTasks,
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """
-    Manually trigger BirdNET processing for an audio recording.
-    Processing runs in background; poll status via GET endpoint.
+    Manually (re)queue BirdNET processing for an audio recording.
+    The job dispatcher picks it up; poll status via GET endpoint.
     """
     recording = (
         db.query(AudioRecording)
@@ -388,111 +412,13 @@ async def process_audio_recording(
             status_code=400, detail="Recording is already being processed"
         )
 
-    # Mark as processing
-    recording.processing_status = ProcessingStatus.processing
-    recording.processing_started_at = datetime.utcnow()
+    # Requeue with a fresh attempt budget
+    recording.processing_status = ProcessingStatus.pending
+    recording.processing_attempts = 0
     recording.processing_error = None
     db.commit()
 
-    # Queue background processing
-    background_tasks.add_task(process_recording_background, recording_id=recording_id)
-
-    return {"status": "processing", "message": "Processing started"}
-
-
-def process_recording_background(recording_id: int) -> None:
-    """Background task to process audio with BirdNET."""
-    from services.bird_audio import analyze_file, get_db_scientific_name, get_location_species
-
-    SessionLocal = get_session_factory()
-    db = SessionLocal()
-
-    try:
-        recording = (
-            db.query(AudioRecording)
-            .filter(AudioRecording.id == recording_id)
-            .first()
-        )
-        if not recording:
-            logger.error(f"Recording {recording_id} not found for processing")
-            return
-
-        # Update status to processing
-        recording.processing_status = ProcessingStatus.processing
-        recording.processing_started_at = datetime.utcnow()
-        db.commit()
-
-        # Download file to temp location
-        with tempfile.TemporaryDirectory() as tmpdir:
-            local_path = Path(tmpdir) / recording.filename
-            download_audio_file(recording.r2_key, local_path)
-
-            # Get location-filtered species list
-            species_list = get_location_species(DEFAULT_LAT, DEFAULT_LON)
-
-            # Run BirdNET analysis
-            detections = analyze_file(local_path, species_list)
-
-            # Store detections, tracking unmatched species
-            unmatched = []
-            matched_count = 0
-            for det in detections:
-                # Look up species in database
-                scientific_name = get_db_scientific_name(det.species)
-                species = db.query(Species).join(
-                    Species.species_type
-                ).filter(
-                    Species.scientific_name == scientific_name,
-                    SpeciesType.name == "bird"
-                ).first()
-
-                if species:
-                    audio_det = AudioDetection(
-                        audio_recording_id=recording_id,
-                        survey_id=recording.survey_id,
-                        species_name=det.species,
-                        species_id=species.id,
-                        confidence=det.confidence,
-                        start_time=det.start,
-                        end_time=det.end,
-                        detection_timestamp=det.timestamp,
-                    )
-                    db.add(audio_det)
-                    matched_count += 1
-                else:
-                    # Track unmatched species (avoid duplicates)
-                    if det.species not in unmatched:
-                        unmatched.append(det.species)
-
-            # Store unmatched species on the recording
-            recording.unmatched_species = unmatched if unmatched else None
-
-            # Update recording status
-            recording.processing_status = ProcessingStatus.completed
-            recording.processing_completed_at = datetime.utcnow()
-            db.commit()
-
-            logger.info(
-                f"Processed recording {recording_id}: {matched_count} matched detections, "
-                f"{len(unmatched)} unmatched species"
-            )
-
-    except Exception as e:
-        logger.exception(f"Error processing recording {recording_id}")
-        try:
-            recording = (
-                db.query(AudioRecording)
-                .filter(AudioRecording.id == recording_id)
-                .first()
-            )
-            if recording:
-                recording.processing_status = ProcessingStatus.failed
-                recording.processing_error = str(e)
-                db.commit()
-        except Exception:
-            pass
-    finally:
-        db.close()
+    return {"status": "queued", "message": "Processing queued"}
 
 
 @router.get("/{survey_id}/audio/{recording_id}", response_model=AudioRecordingRead)

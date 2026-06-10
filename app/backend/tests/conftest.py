@@ -18,6 +18,8 @@ from sqlmodel import SQLModel
 
 # Set test environment variables before importing app modules
 os.environ.setdefault("SESSION_SECRET_KEY", "test-secret-key")
+# Tests drive processing explicitly; never run the polling dispatcher
+os.environ.setdefault("JOB_DISPATCHER_ENABLED", "false")
 
 from main import app
 from database.connection import get_db
