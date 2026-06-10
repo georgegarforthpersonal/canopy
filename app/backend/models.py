@@ -900,6 +900,15 @@ class AudioRecording(AudioRecordingBase, table=True):  # type: ignore[call-arg]
     )
 
 
+class ProcessingSummary(SQLModel):
+    """Counts of media rows by processing status for a survey."""
+    pending: int = 0
+    processing: int = 0
+    completed: int = 0
+    failed: int = 0
+    total: int = 0
+
+
 class AudioRecordingRead(AudioRecordingBase):
     """Model for reading audio recording"""
     id: int

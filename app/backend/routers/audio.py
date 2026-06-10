@@ -48,6 +48,7 @@ from models import (
     Location,
     Organisation,
     ProcessingStatus,
+    ProcessingSummary,
     Species,
     SpeciesDetectionSummary,
     SpeciesType,
@@ -263,6 +264,39 @@ async def list_audio_recordings(
         )
         result.append(_build_recording_response(rec, detection_count))
     return result
+
+
+# NOTE: must be declared before /{survey_id}/audio/{recording_id} so the
+# literal segment wins over the path parameter.
+@router.get("/{survey_id}/audio/processing-summary", response_model=ProcessingSummary)
+async def get_audio_processing_summary(
+    survey_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> ProcessingSummary:
+    """Counts of audio recordings by processing status, for progress display."""
+    survey = (
+        db.query(Survey)
+        .filter(Survey.id == survey_id, Survey.organisation_id == org.id)
+        .first()
+    )
+    if not survey:
+        raise HTTPException(status_code=404, detail="Survey not found")
+
+    rows = (
+        db.query(AudioRecording.processing_status, func.count(AudioRecording.id))
+        .filter(AudioRecording.survey_id == survey_id)
+        .group_by(AudioRecording.processing_status)
+        .all()
+    )
+    counts = {str(status_value): count for status_value, count in rows}
+    return ProcessingSummary(
+        pending=counts.get("pending", 0),
+        processing=counts.get("processing", 0),
+        completed=counts.get("completed", 0),
+        failed=counts.get("failed", 0),
+        total=sum(counts.values()),
+    )
 
 
 @router.post(

@@ -49,6 +49,7 @@ from models import (
     Location,
     Organisation,
     ProcessingStatus,
+    ProcessingSummary,
     Survey,
     SurveyImageDetectionsResponse,
 )
@@ -217,6 +218,39 @@ async def list_images(
         )
         result.append(_build_image_response(img, detection_count))
     return result
+
+
+# NOTE: must be declared before /{survey_id}/images/{image_id} so the
+# literal segment wins over the path parameter.
+@router.get("/{survey_id}/images/processing-summary", response_model=ProcessingSummary)
+async def get_image_processing_summary(
+    survey_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> ProcessingSummary:
+    """Counts of camera trap images by processing status, for progress display."""
+    survey = (
+        db.query(Survey)
+        .filter(Survey.id == survey_id, Survey.organisation_id == org.id)
+        .first()
+    )
+    if not survey:
+        raise HTTPException(status_code=404, detail="Survey not found")
+
+    rows = (
+        db.query(CameraTrapImage.processing_status, func.count(CameraTrapImage.id))
+        .filter(CameraTrapImage.survey_id == survey_id)
+        .group_by(CameraTrapImage.processing_status)
+        .all()
+    )
+    counts = {str(status_value): count for status_value, count in rows}
+    return ProcessingSummary(
+        pending=counts.get("pending", 0),
+        processing=counts.get("processing", 0),
+        completed=counts.get("completed", 0),
+        failed=counts.get("failed", 0),
+        total=sum(counts.values()),
+    )
 
 
 @router.post(
