@@ -93,7 +93,7 @@ export function UploadStep({ wizard }: UploadStepProps) {
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
             <CircularProgress size={20} />
             <Typography variant="body2" fontWeight={600}>
-              Analysing file {processProgress.processed + 1} of {processProgress.total}
+              Analysing {processProgress.total} file{processProgress.total === 1 ? '' : 's'}
             </Typography>
           </Stack>
           {processProgress.currentFilename && (
