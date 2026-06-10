@@ -878,6 +878,10 @@ class AudioRecording(AudioRecordingBase, table=True):  # type: ignore[call-arg]
     processing_started_at: Optional[datetime] = Field(None)
     processing_completed_at: Optional[datetime] = Field(None)
     processing_error: Optional[str] = Field(None)
+    processing_attempts: int = Field(
+        default=0,
+        sa_column=sa.Column(sa.Integer, nullable=False, server_default="0"),
+    )
 
     uploaded_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -1079,6 +1083,10 @@ class CameraTrapImage(CameraTrapImageBase, table=True):  # type: ignore[call-arg
     processing_started_at: Optional[datetime] = Field(None)
     processing_completed_at: Optional[datetime] = Field(None)
     processing_error: Optional[str] = Field(None)
+    processing_attempts: int = Field(
+        default=0,
+        sa_column=sa.Column(sa.Integer, nullable=False, server_default="0"),
+    )
 
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
