@@ -1,12 +1,19 @@
 import re
+import threading
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
+from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import birdnet
 
 LOCATION_FILTER_THRESHOLD = 0.03
 MIN_CONFIDENCE = 0.8
+
+# TF inference is already parallel across cores internally; running two
+# predictions at once just doubles peak memory, so serialise them.
+_predict_lock = threading.Lock()
 
 # BirdNET uses outdated scientific names for some species.
 # Maps BirdNET scientific name -> DB scientific name.
@@ -55,27 +62,42 @@ def _extract_recording_timestamp(file: Path) -> datetime:
     return datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
 
 
+@lru_cache(maxsize=1)
+def _acoustic_model() -> Any:
+    return birdnet.load("acoustic", "2.4", "tf")
+
+
+@lru_cache(maxsize=1)
+def _geo_model() -> Any:
+    return birdnet.load("geo", "2.4", "tf")
+
+
+@lru_cache(maxsize=32)
+def _location_species(lat: float, lon: float) -> tuple[str, ...]:
+    predictions = _geo_model().predict(lat, lon, min_confidence=LOCATION_FILTER_THRESHOLD)
+    return tuple(predictions.to_set())
+
+
 def get_location_species(lat: float, lon: float) -> list[str]:
-    geo_model = birdnet.load("geo", "2.4", "tf")
-    predictions = geo_model.predict(lat, lon, min_confidence=LOCATION_FILTER_THRESHOLD)
-    return list(predictions.to_set())
+    return list(_location_species(lat, lon))
 
 
 def analyze_file(
     file: Path, species_list: list[str] | None = None, show_progress: bool = False
 ) -> list[Detection]:
     recording_time = _extract_recording_timestamp(file)
-    model = birdnet.load("acoustic", "2.4", "tf")
+    model = _acoustic_model()
 
-    predictions = model.predict(
-        file,
-        top_k=None,
-        sigmoid_sensitivity=1.0,
-        default_confidence_threshold=MIN_CONFIDENCE,
-        custom_species_list=species_list,
-        show_stats="progress" if show_progress else "minimal",
-        n_workers=1,  # Single worker to avoid multiprocessing spawn issues in background tasks
-    )
+    with _predict_lock:
+        predictions = model.predict(
+            file,
+            top_k=None,
+            sigmoid_sensitivity=1.0,
+            default_confidence_threshold=MIN_CONFIDENCE,
+            custom_species_list=species_list,
+            show_stats="progress" if show_progress else "minimal",
+            n_workers=1,  # Single worker to avoid multiprocessing spawn issues in background tasks
+        )
 
     return [
         Detection(
