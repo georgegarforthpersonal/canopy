@@ -69,7 +69,12 @@ vision_image = (
         "torchvision==0.19.*",
         "timm>=1.0.0",
         "pillow>=10.0.0",
-        "PytorchWildlife>=1.1.0",
+        # <1.3: PytorchWildlife 1.3.0 eagerly imports soundfile and
+        # pytorch_lightning without declaring them. lightning and omegaconf
+        # are 1.2.x's own undeclared imports (mirrors requirements.txt).
+        "PytorchWildlife>=1.1.0,<1.3",
+        "lightning>=2.0.0",
+        "omegaconf>=2.3.0",
         "numpy",
         "requests",
     )
