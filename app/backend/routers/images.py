@@ -16,7 +16,6 @@ Endpoints:
 
 import json
 import logging
-import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
@@ -31,6 +30,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 from sqlmodel import col
@@ -118,14 +118,7 @@ async def filter_images_for_false_positives(
     Run MegaDetector on uploaded images to identify false positives.
     Returns per-image detection results. Does not persist images.
     """
-    from services.megadetector import get_detector
-
-    detector = get_detector()
-    if not detector.load():
-        raise HTTPException(
-            status_code=503,
-            detail="MegaDetector model failed to load. Try again or skip filtering.",
-        )
+    from services.inference import InferenceError, detect_animals_bytes
 
     results = []
     animal_count = 0
@@ -145,37 +138,43 @@ async def filter_images_for_false_positives(
             animal_count += 1
             continue
 
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=True) as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp.flush()
+        content = await file.read()
+        try:
+            # Blocking inference (local model or Modal call); keep it off
+            # the event loop.
+            detection = await run_in_threadpool(
+                detect_animals_bytes, content, file.filename or f"unknown{ext}"
+            )
+        except InferenceError:
+            raise HTTPException(
+                status_code=503,
+                detail="MegaDetector model failed to load. Try again or skip filtering.",
+            )
 
-            detection = detector.detect(Path(tmp.name))
+        results.append({
+            "filename": file.filename,
+            "has_animal": detection.has_animal,
+            "max_confidence": detection.max_animal_confidence,
+            "categories": detection.categories_found,
+            "detections": [
+                {
+                    "x": box.x,
+                    "y": box.y,
+                    "w": box.w,
+                    "h": box.h,
+                    "confidence": box.confidence,
+                    "category": box.category,
+                }
+                for box in detection.boxes
+            ],
+        })
 
-            results.append({
-                "filename": file.filename,
-                "has_animal": detection.has_animal,
-                "max_confidence": detection.max_animal_confidence,
-                "categories": detection.categories_found,
-                "detections": [
-                    {
-                        "x": box.x,
-                        "y": box.y,
-                        "w": box.w,
-                        "h": box.h,
-                        "confidence": box.confidence,
-                        "category": box.category,
-                    }
-                    for box in detection.boxes
-                ],
-            })
-
-            if detection.has_animal:
-                animal_count += 1
-            else:
-                empty_count += 1
-            if "person" in detection.categories_found:
-                person_count += 1
+        if detection.has_animal:
+            animal_count += 1
+        else:
+            empty_count += 1
+        if "person" in detection.categories_found:
+            person_count += 1
 
     return {
         "results": results,

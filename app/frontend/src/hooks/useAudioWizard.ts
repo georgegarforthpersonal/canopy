@@ -51,6 +51,10 @@ export interface SpeciesReviewData {
 export const AUDIO_WIZARD_STEPS = ['Setup', 'Upload', 'Review', 'Save'] as const;
 
 const UPLOAD_BATCH_SIZE = 10;
+// Concurrent analysis requests during the preview step. The backend buffers
+// each file fully in memory per request, and browsers cap HTTP/1.1 at ~6
+// connections per host, so raising this further may not help.
+const PROCESS_CONCURRENCY = 6;
 
 // Seconds of audio to include either side of the BirdNET detection window
 // when extracting a snippet, so reviewers get context around the call.
@@ -262,35 +266,68 @@ export function useAudioWizard() {
     setProcessProgress({ processed: 0, total: audioFiles.length, currentFilename: audioFiles[0]?.filename ?? '' });
 
     try {
-      const allDetections: WizardDetection[] = [];
+      // One request per file so progress updates per file; a small worker
+      // pool keeps several requests in flight since the server just waits
+      // on inference (in-process or Modal) per request.
+      const detectionsByFile: WizardDetection[][] = audioFiles.map(() => []);
       const allUnmatched: string[] = [];
+      const inFlight = new Set<string>();
+      let completed = 0;
+      let nextIndex = 0;
+      let failed = false;
 
-      // Process one file at a time for progress tracking
-      for (let i = 0; i < audioFiles.length; i++) {
-        const af = audioFiles[i];
-        setProcessProgress({ processed: i, total: audioFiles.length, currentFilename: af.filename });
-        const response = await audioAPI.processFiles(
-          [af.file],
-          selectedDevice?.latitude ?? undefined,
-          selectedDevice?.longitude ?? undefined,
-        );
+      const updateProgress = () => {
+        setProcessProgress({
+          processed: completed,
+          total: audioFiles.length,
+          currentFilename: Array.from(inFlight).join(', '),
+        });
+      };
 
-        for (const result of response.results) {
-          for (const det of result.detections) {
-            allDetections.push({ ...det, fileIndex: i });
-          }
-          for (const species of result.unmatched_species) {
-            if (!allUnmatched.includes(species)) {
-              allUnmatched.push(species);
+      const worker = async () => {
+        while (!failed && nextIndex < audioFiles.length) {
+          const i = nextIndex++;
+          const af = audioFiles[i];
+          inFlight.add(af.filename);
+          updateProgress();
+          try {
+            const response = await audioAPI.processFiles(
+              [af.file],
+              selectedDevice?.latitude ?? undefined,
+              selectedDevice?.longitude ?? undefined,
+            );
+            for (const result of response.results) {
+              for (const det of result.detections) {
+                detectionsByFile[i].push({ ...det, fileIndex: i });
+              }
+              for (const species of result.unmatched_species) {
+                if (!allUnmatched.includes(species)) {
+                  allUnmatched.push(species);
+                }
+              }
             }
+          } catch (err) {
+            failed = true;
+            throw err;
+          } finally {
+            inFlight.delete(af.filename);
           }
+          completed++;
+          updateProgress();
+          // Update detections progressively (in file order) so UI updates
+          setDetections(detectionsByFile.flat());
         }
+      };
 
-        setProcessProgress({ processed: i + 1, total: audioFiles.length, currentFilename: '' });
-        // Update detections progressively so UI updates
-        setDetections([...allDetections]);
-      }
+      await Promise.all(
+        Array.from(
+          { length: Math.min(PROCESS_CONCURRENCY, audioFiles.length) },
+          () => worker(),
+        ),
+      );
 
+      const allDetections = detectionsByFile.flat();
+      setDetections(allDetections);
       setUnmatchedSpecies(allUnmatched);
       // All species start deselected — user must explicitly tick to include
       const allSpeciesIds = new Set(

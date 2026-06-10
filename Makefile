@@ -1,4 +1,4 @@
-.PHONY: help dev dev-build staging staging-build prod prod-build down logs test-backend test-backend-build test-frontend test-frontend-build typecheck check build migrate migrate-staging migrate-prod shell
+.PHONY: help dev dev-build staging staging-build prod prod-build down logs test-backend test-backend-build test-frontend test-frontend-build typecheck check build migrate migrate-staging migrate-prod shell modal-deploy
 
 # Default environment
 ENV ?= dev
@@ -26,6 +26,9 @@ help:
 	@echo "  migrate          Run migrations (dev)"
 	@echo "  migrate-staging  Run migrations (staging)"
 	@echo "  migrate-prod     Run migrations (prod)"
+	@echo ""
+	@echo "Inference:"
+	@echo "  modal-deploy     Deploy the Modal inference app (see app/backend/modal_app/README.md)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  test-backend         Run backend pytest"
@@ -78,6 +81,13 @@ shell-staging:
 
 shell-prod:
 	docker compose --profile prod run --rm scripts-prod bash
+
+# =============================================================================
+# Inference
+# =============================================================================
+
+modal-deploy:
+	cd app/backend && modal deploy modal_app/canopy_inference.py
 
 # =============================================================================
 # Database Migrations

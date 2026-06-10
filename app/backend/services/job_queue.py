@@ -15,6 +15,7 @@ after which they are marked 'failed'.
 
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Callable, Optional
@@ -57,7 +58,7 @@ class JobDispatcher:
         max_attempts: Optional[int] = None,
         job_timeout: Optional[int] = None,
     ) -> None:
-        self.concurrency = concurrency or settings.job_concurrency
+        self.concurrency = concurrency or settings.effective_job_concurrency
         self.poll_interval = poll_interval or settings.job_poll_interval_seconds
         self.max_attempts = max_attempts or settings.job_max_attempts
         self.job_timeout = job_timeout or settings.job_timeout_seconds
@@ -66,6 +67,11 @@ class JobDispatcher:
         self._stopping = asyncio.Event()
         self._last_sweep: Optional[datetime] = None
         self._rotation = 0
+        # Dedicated pool: asyncio's default executor is sized ~cpu+4, which
+        # would silently cap concurrency below the configured value.
+        self._executor = ThreadPoolExecutor(
+            max_workers=self.concurrency, thread_name_prefix="job"
+        )
 
     async def start(self) -> None:
         self._loop_task = asyncio.create_task(self._loop())
@@ -82,6 +88,7 @@ class JobDispatcher:
         if self._tasks:
             logger.info(f"Waiting up to {SHUTDOWN_GRACE_SECONDS}s for {len(self._tasks)} job(s)")
             await asyncio.wait(self._tasks, timeout=SHUTDOWN_GRACE_SECONDS)
+        self._executor.shutdown(wait=False)
 
     async def _loop(self) -> None:
         while not self._stopping.is_set():
@@ -177,8 +184,12 @@ class JobDispatcher:
             db.commit()
 
     async def _run_job(self, kind: JobKind, row_id: int) -> None:
+        loop = asyncio.get_running_loop()
         try:
-            await asyncio.wait_for(asyncio.to_thread(kind.run, row_id), timeout=self.job_timeout)
+            await asyncio.wait_for(
+                loop.run_in_executor(self._executor, kind.run, row_id),
+                timeout=self.job_timeout,
+            )
         except Exception as e:
             if isinstance(e, TimeoutError):
                 error = f"Timed out after {self.job_timeout}s"

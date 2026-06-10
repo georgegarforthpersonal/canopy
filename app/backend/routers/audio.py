@@ -13,9 +13,7 @@ Endpoints:
 """
 
 import logging
-import tempfile
 from datetime import time
-from pathlib import Path
 from typing import Any, List
 
 from fastapi import (
@@ -91,10 +89,8 @@ async def process_audio_files(
     Process audio files with BirdNET and return detections.
     Files are NOT stored — this is for the audio wizard preview.
     """
-    from services.bird_audio import analyze_file, get_db_scientific_name, get_location_species
-
-    # Get location-filtered species list
-    species_list = get_location_species(lat, lon)
+    from services.bird_audio import get_db_scientific_name
+    from services.inference import analyze_audio_bytes
 
     SessionLocal = get_session_factory()
     results = []
@@ -105,66 +101,65 @@ async def process_audio_files(
                 detail=f"Invalid file type: {file.filename}. Only WAV files accepted.",
             )
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            local_path = Path(tmpdir) / file.filename
-            content = await file.read()
-            local_path.write_bytes(content)
-
-            try:
-                # BirdNET is CPU-bound and ~30s per file; run off the event loop
-                # and without holding a DB connection (Neon's pooler reaps idle
-                # sockets, which causes SSL EOF errors on the next query).
-                detections = await run_in_threadpool(analyze_file, local_path, species_list)
-            except Exception as e:
-                logger.exception(f"Error processing {file.filename}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to process {file.filename}: {str(e)}",
-                )
-
-            scientific_names = {get_db_scientific_name(det.species) for det in detections}
-
-            with SessionLocal() as db:
-                species_rows = (
-                    db.query(Species)
-                    .join(Species.species_type)
-                    .filter(
-                        col(Species.scientific_name).in_(scientific_names),
-                        SpeciesType.name == "bird",
-                    )
-                    .all()
-                )
-            species_by_scientific_name = {s.scientific_name: s for s in species_rows}
-
-            file_detections = []
-            unmatched: list[str] = []
-            for det in detections:
-                scientific_name = get_db_scientific_name(det.species)
-                species = species_by_scientific_name.get(scientific_name)
-
-                if species:
-                    file_detections.append(
-                        AudioDetectionResult(
-                            species_name=det.species,
-                            species_id=species.id,
-                            species_common_name=species.name,
-                            species_scientific_name=species.scientific_name,
-                            confidence=det.confidence,
-                            start_time=det.start.strftime("%H:%M:%S"),
-                            end_time=det.end.strftime("%H:%M:%S"),
-                            detection_timestamp=det.timestamp,
-                        )
-                    )
-                elif det.species not in unmatched:
-                    unmatched.append(det.species)
-
-            results.append(
-                FileProcessingResult(
-                    filename=file.filename,
-                    detections=file_detections,
-                    unmatched_species=unmatched,
-                )
+        content = await file.read()
+        try:
+            # Inference is CPU-bound locally (~30s per file) or a blocking
+            # network call on Modal; run off the event loop and without
+            # holding a DB connection (Neon's pooler reaps idle sockets,
+            # which causes SSL EOF errors on the next query).
+            detections = await run_in_threadpool(
+                analyze_audio_bytes, content, file.filename, lat, lon
             )
+        except Exception as e:
+            logger.exception(f"Error processing {file.filename}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to process {file.filename}: {str(e)}",
+            )
+
+        scientific_names = {get_db_scientific_name(det.species) for det in detections}
+
+        with SessionLocal() as db:
+            species_rows = (
+                db.query(Species)
+                .join(Species.species_type)
+                .filter(
+                    col(Species.scientific_name).in_(scientific_names),
+                    SpeciesType.name == "bird",
+                )
+                .all()
+            )
+        species_by_scientific_name = {s.scientific_name: s for s in species_rows}
+
+        file_detections = []
+        unmatched: list[str] = []
+        for det in detections:
+            scientific_name = get_db_scientific_name(det.species)
+            species = species_by_scientific_name.get(scientific_name)
+
+            if species:
+                file_detections.append(
+                    AudioDetectionResult(
+                        species_name=det.species,
+                        species_id=species.id,
+                        species_common_name=species.name,
+                        species_scientific_name=species.scientific_name,
+                        confidence=det.confidence,
+                        start_time=det.start.strftime("%H:%M:%S"),
+                        end_time=det.end.strftime("%H:%M:%S"),
+                        detection_timestamp=det.timestamp,
+                    )
+                )
+            elif det.species not in unmatched:
+                unmatched.append(det.species)
+
+        results.append(
+            FileProcessingResult(
+                filename=file.filename,
+                detections=file_detections,
+                unmatched_species=unmatched,
+            )
+        )
 
     return AudioProcessingResponse(results=results)
 

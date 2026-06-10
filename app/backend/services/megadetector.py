@@ -62,9 +62,11 @@ class MegaDetectorService:
         try:
             from PytorchWildlife.models import detection as pw_detection
             import numpy as np
+            import torch
 
-            logger.info("Loading MegaDetector V6 model...")
-            self.model = pw_detection.MegaDetectorV6(version="MDV6-yolov9-c")
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Loading MegaDetector V6 model (device={device})...")
+            self.model = pw_detection.MegaDetectorV6(version="MDV6-yolov9-c", device=device)
             self._np = np
             logger.info("MegaDetector V6 loaded successfully")
             self._loaded = True

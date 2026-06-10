@@ -9,13 +9,12 @@ Each function is idempotent — existing detections for the row are replaced,
 so a retried or manually re-triggered job never duplicates results. Heavy
 model inference happens between two short-lived DB sessions so no connection
 is held open during the ~30s of compute (Neon's pooler reaps idle sockets,
-which causes SSL EOF errors on the next query).
+which causes SSL EOF errors on the next query). Inference itself runs
+locally or on Modal depending on INFERENCE_MODE (see services/inference.py).
 """
 
 import logging
-import tempfile
 from datetime import datetime
-from pathlib import Path
 
 from sqlmodel import col
 
@@ -29,7 +28,7 @@ from models import (
     Species,
     SpeciesType,
 )
-from services.r2_storage import download_audio_file, download_image_file
+from services.inference import analyze_audio_recording, classify_camera_trap_image
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ DEFAULT_LON = -2.2525
 
 def process_audio_recording(recording_id: int) -> None:
     """Analyse an audio recording with BirdNET and store its detections."""
-    from services.bird_audio import analyze_file, get_db_scientific_name, get_location_species
+    from services.bird_audio import get_db_scientific_name
 
     SessionLocal = get_session_factory()
     with SessionLocal() as db:
@@ -52,11 +51,7 @@ def process_audio_recording(recording_id: int) -> None:
         filename = recording.filename
         survey_id = recording.survey_id
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        local_path = Path(tmpdir) / filename
-        download_audio_file(r2_key, local_path)
-        species_list = get_location_species(DEFAULT_LAT, DEFAULT_LON)
-        detections = analyze_file(local_path, species_list)
+    detections = analyze_audio_recording(r2_key, filename, DEFAULT_LAT, DEFAULT_LON)
 
     scientific_names = {get_db_scientific_name(det.species) for det in detections}
 
@@ -113,8 +108,6 @@ def process_audio_recording(recording_id: int) -> None:
 
 def process_camera_trap_image(image_id: int) -> None:
     """Classify a camera trap image and store its detections."""
-    from services.camera_trap import analyze_image, get_classifier
-
     SessionLocal = get_session_factory()
     with SessionLocal() as db:
         image = db.query(CameraTrapImage).filter(CameraTrapImage.id == image_id).first()
@@ -124,13 +117,7 @@ def process_camera_trap_image(image_id: int) -> None:
         r2_key = image.r2_key
         filename = image.filename
 
-    if not get_classifier().load():
-        raise RuntimeError("Species classification model failed to load")
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        local_path = Path(tmpdir) / filename
-        download_image_file(r2_key, local_path)
-        result = analyze_image(local_path)
+    result = classify_camera_trap_image(r2_key, filename)
 
     scientific_names = {p["scientific_name"] for p in result.top_predictions}
 

@@ -74,6 +74,7 @@ class SpeciesClassifier:
         self.transform: Any = None
         self.label_names: list[str] | None = None
         self.label_descriptions: dict[str, str] | None = None
+        self.device: str = "cpu"
         self._loaded = False
 
     def load(self) -> bool:
@@ -82,10 +83,13 @@ class SpeciesClassifier:
 
         try:
             import timm
+            import torch
 
-            logger.info("Loading species classification model...")
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Loading species classification model (device={self.device})...")
             self.model = timm.create_model(self.MODEL_NAME, pretrained=True)
             self.model.eval()
+            self.model.to(self.device)
 
             data_config = timm.data.resolve_model_data_config(self.model)
             self.transform = timm.data.create_transform(**data_config, is_training=False)
@@ -109,7 +113,7 @@ class SpeciesClassifier:
 
         try:
             image = Image.open(image_path).convert("RGB")
-            img_tensor = self.transform(image).unsqueeze(0)
+            img_tensor = self.transform(image).unsqueeze(0).to(self.device)
 
             with torch.no_grad():
                 outputs = self.model(img_tensor)
