@@ -253,10 +253,10 @@ class TestProcessingJobs:
         db, survey = committed_survey
         rec = add_recording(db, survey.id, filename="DEV1_20260101_120000.wav")
 
-        import services.bird_audio as bird_audio
         import services.processing as processing
+        from services.bird_audio import Detection
 
-        fake_detection = bird_audio.Detection(
+        fake_detection = Detection(
             filename=rec.filename,
             start=time(0, 0, 1),
             end=time(0, 0, 4),
@@ -265,11 +265,9 @@ class TestProcessingJobs:
             timestamp=datetime(2026, 1, 1, 12, 0, 1),
         )
         monkeypatch.setattr(
-            processing, "download_audio_file",
-            lambda r2_key, local_path: local_path.write_bytes(b"") or local_path,
+            processing, "analyze_audio_recording",
+            lambda r2_key, filename, lat, lon: [fake_detection],
         )
-        monkeypatch.setattr(bird_audio, "get_location_species", lambda lat, lon: [])
-        monkeypatch.setattr(bird_audio, "analyze_file", lambda path, species_list: [fake_detection])
 
         processing.process_audio_recording(rec.id)
         processing.process_audio_recording(rec.id)  # idempotent on retry
