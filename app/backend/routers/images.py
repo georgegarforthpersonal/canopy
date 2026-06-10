@@ -23,7 +23,6 @@ from typing import Any, List, Optional
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -37,7 +36,7 @@ from sqlalchemy.orm import Session
 from sqlmodel import col
 
 from auth import require_admin
-from database.connection import get_db, get_session_factory
+from database.connection import get_db
 from dependencies import get_current_organisation
 from models import (
     CameraTrapImage,
@@ -50,13 +49,11 @@ from models import (
     Location,
     Organisation,
     ProcessingStatus,
-    Species,
     Survey,
     SurveyImageDetectionsResponse,
 )
 from services.r2_storage import (
     delete_image_file,
-    download_image_file,
     generate_image_presigned_url,
     upload_image_file,
 )
@@ -230,7 +227,6 @@ async def list_images(
 )
 async def upload_images(
     survey_id: int,
-    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     skip_processing: bool = Query(False, description="Skip AI processing (for manual classification)"),
     metadata: Optional[str] = Form(None, description="JSON mapping filename to ISO timestamp"),
@@ -239,7 +235,8 @@ async def upload_images(
 ) -> list[dict[str, Any]]:
     """
     Upload one or more camera trap images to a survey.
-    Files are stored in R2 and processing is auto-triggered unless skip_processing=true.
+    Files are stored in R2. Pending images are picked up by the job
+    dispatcher unless skip_processing=true.
     """
     # Verify survey belongs to org
     survey = (
@@ -317,10 +314,6 @@ async def upload_images(
 
         uploaded.append(image)
 
-        # Auto-trigger background processing (unless skipped)
-        if not skip_processing:
-            background_tasks.add_task(process_image_background, image_id=image.id)
-
     db.commit()
 
     # Build response
@@ -334,13 +327,12 @@ async def upload_images(
 async def process_image(
     survey_id: int,
     image_id: int,
-    background_tasks: BackgroundTasks,
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """
-    Manually trigger processing for a camera trap image.
-    Processing runs in background; poll status via GET endpoint.
+    Manually (re)queue processing for a camera trap image.
+    The job dispatcher picks it up; poll status via GET endpoint.
     """
     image = (
         db.query(CameraTrapImage)
@@ -360,123 +352,13 @@ async def process_image(
             status_code=400, detail="Image is already being processed"
         )
 
-    # Mark as processing
-    image.processing_status = ProcessingStatus.processing
-    image.processing_started_at = datetime.utcnow()
+    # Requeue with a fresh attempt budget
+    image.processing_status = ProcessingStatus.pending
+    image.processing_attempts = 0
     image.processing_error = None
     db.commit()
 
-    # Queue background processing
-    background_tasks.add_task(process_image_background, image_id=image_id)
-
-    return {"status": "processing", "message": "Processing started"}
-
-
-def process_image_background(image_id: int) -> None:
-    """Background task to process image with species classification."""
-    from services.camera_trap import analyze_image
-
-    SessionLocal = get_session_factory()
-    db = SessionLocal()
-
-    try:
-        image = (
-            db.query(CameraTrapImage)
-            .filter(CameraTrapImage.id == image_id)
-            .first()
-        )
-        if not image:
-            logger.error(f"Image {image_id} not found for processing")
-            return
-
-        # Update status to processing
-        image.processing_status = ProcessingStatus.processing
-        image.processing_started_at = datetime.utcnow()
-        db.commit()
-
-        # Download file to temp location
-        with tempfile.TemporaryDirectory() as tmpdir:
-            local_path = Path(tmpdir) / image.filename
-            download_image_file(image.r2_key, local_path)
-
-            # Run species classification
-            result = analyze_image(local_path)
-
-            # Store detections, tracking unmatched species
-            unmatched = []
-            matched_count = 0
-
-            # Store top prediction as primary
-            if result.classification:
-                species = db.query(Species).filter(
-                    Species.scientific_name == result.classification.scientific_name
-                ).first()
-
-                detection = CameraTrapDetection(
-                    camera_trap_image_id=image_id,
-                    species_name=result.classification.common_name,
-                    scientific_name=result.classification.scientific_name,
-                    confidence=result.classification.confidence,
-                    taxonomic_level=result.classification.taxonomic_level,
-                    species_id=species.id if species else None,
-                    is_primary=True,
-                )
-                db.add(detection)
-
-                if species:
-                    matched_count += 1
-                else:
-                    if result.classification.scientific_name not in unmatched:
-                        unmatched.append(result.classification.scientific_name)
-
-            # Store top 5 predictions as non-primary
-            for pred in result.top_predictions[1:5]:  # Skip first (already stored as primary)
-                species = db.query(Species).filter(
-                    Species.scientific_name == pred["scientific_name"]
-                ).first()
-
-                detection = CameraTrapDetection(
-                    camera_trap_image_id=image_id,
-                    species_name=pred["common_name"],
-                    scientific_name=pred["scientific_name"],
-                    confidence=pred["confidence"],
-                    taxonomic_level="species",
-                    species_id=species.id if species else None,
-                    is_primary=False,
-                )
-                db.add(detection)
-
-            # Store flagging status from analysis
-            image.flagged_for_review = result.flagged_for_review
-            image.review_reason = result.review_reason
-            image.unmatched_species = unmatched if unmatched else None
-
-            # Update image status
-            image.processing_status = ProcessingStatus.completed
-            image.processing_completed_at = datetime.utcnow()
-            db.commit()
-
-            logger.info(
-                f"Processed image {image_id}: {matched_count} matched detections, "
-                f"{len(unmatched)} unmatched species, flagged={result.flagged_for_review}"
-            )
-
-    except Exception as e:
-        logger.exception(f"Error processing image {image_id}")
-        try:
-            image = (
-                db.query(CameraTrapImage)
-                .filter(CameraTrapImage.id == image_id)
-                .first()
-            )
-            if image:
-                image.processing_status = ProcessingStatus.failed
-                image.processing_error = str(e)
-                db.commit()
-        except Exception:
-            pass
-    finally:
-        db.close()
+    return {"status": "queued", "message": "Processing queued"}
 
 
 @router.get("/{survey_id}/images/{image_id}", response_model=CameraTrapImageRead)
