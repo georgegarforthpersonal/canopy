@@ -119,16 +119,36 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Inference
+    # =========================================================================
+    inference_mode: str = Field(
+        default="local",
+        description="Where model inference runs: 'local' (in-process) or 'modal' (serverless)"
+    )
+    modal_app_name: str = Field(
+        default="canopy-inference",
+        description="Name of the deployed Modal app providing inference functions"
+    )
+
+    # =========================================================================
     # Background Job Processing
     # =========================================================================
     job_dispatcher_enabled: bool = Field(
         default=True,
         description="Run the in-process dispatcher that processes pending media jobs"
     )
-    job_concurrency: int = Field(
-        default=2,
-        description="Maximum media processing jobs running at once"
+    job_concurrency: Optional[int] = Field(
+        default=None,
+        description="Maximum media processing jobs running at once "
+                    "(default: 2 for local inference, 16 for modal)"
     )
+
+    @property
+    def effective_job_concurrency(self) -> int:
+        """Local jobs are CPU-bound; modal jobs just wait on the network."""
+        if self.job_concurrency is not None:
+            return self.job_concurrency
+        return 16 if self.inference_mode.lower() == "modal" else 2
     job_poll_interval_seconds: float = Field(
         default=3.0,
         description="How often the dispatcher polls for pending jobs"
