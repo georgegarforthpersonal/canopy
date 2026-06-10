@@ -61,8 +61,8 @@ class JobDispatcher:
         self.poll_interval = poll_interval or settings.job_poll_interval_seconds
         self.max_attempts = max_attempts or settings.job_max_attempts
         self.job_timeout = job_timeout or settings.job_timeout_seconds
-        self._tasks: set[asyncio.Task] = set()  # type: ignore[type-arg]
-        self._loop_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
+        self._tasks: set["asyncio.Task[None]"] = set()
+        self._loop_task: Optional["asyncio.Task[None]"] = None
         self._stopping = asyncio.Event()
         self._last_sweep: Optional[datetime] = None
         self._rotation = 0
