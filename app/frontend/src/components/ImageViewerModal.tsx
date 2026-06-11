@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Box, Dialog, DialogContent, IconButton, Stack, Typography } from '@mui/material';
 import { ArrowBack, ArrowForward, Close } from '@mui/icons-material';
+import { useResponsive } from '../hooks/useResponsive';
 
 export interface ImageViewerItem {
   src: string;
@@ -29,6 +30,7 @@ export function ImageViewerModal({
   renderOverlay,
   renderActions,
 }: ImageViewerModalProps) {
+  const { isMobile } = useResponsive();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
   // Reset index when modal opens or initialIndex changes
@@ -68,7 +70,8 @@ export function ImageViewerModal({
       onClose={onClose}
       maxWidth="lg"
       fullWidth
-      PaperProps={{ sx: { maxHeight: '90vh' } }}
+      fullScreen={isMobile}
+      PaperProps={isMobile ? undefined : { sx: { maxHeight: '90vh' } }}
     >
       <DialogContent sx={{ p: 2 }}>
         {/* Header */}

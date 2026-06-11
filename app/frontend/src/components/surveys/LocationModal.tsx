@@ -2,6 +2,7 @@ import { Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, 
 import { Close } from '@mui/icons-material';
 import MultiLocationMapPicker, { type DraftIndividualLocation } from './MultiLocationMapPicker';
 import { useState, useEffect } from 'react';
+import { useResponsive } from '../../hooks/useResponsive';
 import type { BreedingStatusCode, LocationWithBoundary } from '../../services/api';
 
 interface LocationModalProps {
@@ -29,6 +30,7 @@ export function LocationModal({
   locationsWithBoundaries,
   surveyLocationId,
 }: LocationModalProps) {
+  const { isMobile } = useResponsive();
   const [individuals, setIndividuals] = useState<DraftIndividualLocation[]>(
     initialIndividuals || []
   );
@@ -63,12 +65,17 @@ export function LocationModal({
       onClose={handleCancel}
       maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          minHeight: '600px',
-          maxHeight: '90vh',
-        }
-      }}
+      fullScreen={isMobile}
+      PaperProps={
+        isMobile
+          ? undefined
+          : {
+              sx: {
+                minHeight: '600px',
+                maxHeight: '90vh',
+              },
+            }
+      }
     >
       <DialogTitle
         sx={{

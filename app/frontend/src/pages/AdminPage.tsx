@@ -32,6 +32,7 @@ import {
 import { Add, Delete, RestoreFromTrash, Edit, Lock, Download } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useResponsive } from '../hooks/useResponsive';
 import {
   surveyorsAPI,
   surveyTypesAPI,
@@ -80,6 +81,7 @@ function TabPanel(props: TabPanelProps) {
  */
 export function AdminPage() {
   const { isAuthenticated, isLoading: authLoading, requireAuth } = useAuth();
+  const { isMobile } = useResponsive();
   const [tabValue, setTabValue] = useState(0);
 
   // Surveyors state
@@ -1005,7 +1007,13 @@ export function AdminPage() {
       </TabPanel>
 
       {/* Add/Edit Surveyor Dialog */}
-      <Dialog open={surveyorDialogOpen} onClose={() => !savingSurveyor && setSurveyorDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={surveyorDialogOpen}
+        onClose={() => !savingSurveyor && setSurveyorDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>{surveyorDialogMode === 'add' ? 'Add New Surveyor' : 'Edit Surveyor'}</DialogTitle>
         <DialogContent>
           {surveyorFormError && (
@@ -1082,6 +1090,7 @@ export function AdminPage() {
         onClose={() => !savingSurveyType && setSurveyTypeDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>{surveyTypeDialogMode === 'add' ? 'Add New Survey Type' : 'Edit Survey Type'}</DialogTitle>
         <DialogContent>
@@ -1412,6 +1421,7 @@ export function AdminPage() {
         onClose={() => !savingDevice && setDeviceDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>{deviceDialogMode === 'add' ? 'Add New Device' : 'Edit Device'}</DialogTitle>
         <DialogContent>
