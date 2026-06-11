@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # Initialize Sentry error monitoring
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
+    environment=settings.env,
     traces_sample_rate=0.1,
 )
 
@@ -69,8 +70,16 @@ app.add_middleware(
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
-    """Handle custom application exceptions with consistent JSON responses."""
-    logger.error(f"{exc.__class__.__name__}: {exc.message}", extra=exc.context)
+    """Handle custom application exceptions with consistent JSON responses.
+
+    Sentry's logging integration promotes ERROR-level logs to Sentry events,
+    so only 5xx exceptions are logged at ERROR — expected client errors
+    (404, 401, validation) would otherwise flood Sentry with noise.
+    """
+    if exc.status_code >= 500:
+        logger.error(f"{exc.__class__.__name__}: {exc.message}", extra=exc.context)
+    else:
+        logger.warning(f"{exc.__class__.__name__}: {exc.message}", extra=exc.context)
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
