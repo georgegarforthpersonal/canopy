@@ -14,6 +14,8 @@ export interface SaveStepWizard {
   error: string | null;
   setError: (e: string | null) => void;
   handleSave: () => void;
+  /** True when a failed attempt left partial progress that retrying will resume */
+  hasPartialSave?: boolean;
 }
 
 interface SaveStepProps {
@@ -21,7 +23,7 @@ interface SaveStepProps {
 }
 
 export function SaveStep({ wizard }: SaveStepProps) {
-  const { saving, saveProgress, error, setError, handleSave } = wizard;
+  const { saving, saveProgress, error, setError, handleSave, hasPartialSave } = wizard;
 
   return (
     <Paper sx={{ p: 3, textAlign: 'center', boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
@@ -50,7 +52,7 @@ export function SaveStep({ wizard }: SaveStepProps) {
             onClick={() => { setError(null); handleSave(); }}
             sx={{ textTransform: 'none' }}
           >
-            Retry
+            {hasPartialSave ? 'Retry (resumes where it left off)' : 'Retry'}
           </Button>
         </>
       ) : (
