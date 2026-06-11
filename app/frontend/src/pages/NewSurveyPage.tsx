@@ -37,6 +37,8 @@ import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/
 import { SightingsEditor } from '../components/surveys/SightingsEditor';
 import type { DraftSighting } from '../components/surveys/SightingsEditor';
 import { PageHeader } from '../components/layout/PageHeader';
+import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { brandColors } from '../theme';
 
 /**
@@ -149,6 +151,27 @@ export function NewSurveyPage() {
     sightings?: string;
     endTime?: string;
   }>({});
+
+  // ============================================================================
+  // Unsaved Changes Guard
+  // ============================================================================
+
+  // Flipped synchronously just before the post-save navigation so the
+  // unsaved-changes guard does not block it (state would be one render stale).
+  const saveCompleteRef = useRef(false);
+
+  // Dirty once the user has entered anything beyond the defaults, until the
+  // survey is saved. Blocks Cancel, the back link, and browser back; the
+  // confirmation dialog below lets the user proceed or stay.
+  const blocker = useUnsavedChangesGuard(
+    () =>
+      !saveCompleteRef.current &&
+      (notes.trim() !== '' ||
+        pendingImageFiles.length > 0 ||
+        locationId !== null ||
+        selectedSurveyors.length > 0 ||
+        draftSightings.some((s) => s.species_id !== null)),
+  );
 
   // ============================================================================
   // Data Fetching - Initial Load
@@ -425,6 +448,7 @@ export function NewSurveyPage() {
       }
 
       // Success - navigate to survey detail page or surveys list
+      saveCompleteRef.current = true;
       saveResumeRef.current = emptySaveResumeState();
       if (allowImageUpload && pendingImageFiles.length > 0) {
         navigate(`/surveys/${surveyId}`);
@@ -790,6 +814,12 @@ export function NewSurveyPage() {
           />
         </Paper>
       )}
+
+      <UnsavedChangesDialog
+        open={blocker.state === 'blocked'}
+        onKeepWorking={() => blocker.reset?.()}
+        onDiscard={() => blocker.proceed?.()}
+      />
     </Box>
   );
 }

@@ -218,6 +218,9 @@ export function useCameraTrapWizard() {
   // ---- Step 6: Save ----
   const [saving, setSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ step: '', percent: 0 });
+  // Flipped synchronously just before the post-save navigation so the page's
+  // unsaved-changes guard does not block it (state would be one render stale).
+  const saveCompleteRef = useRef(false);
   const saveResumeRef = useRef<SaveResumeState>(emptySaveResumeState());
   const resetSaveResume = useCallback(() => {
     saveResumeRef.current = emptySaveResumeState();
@@ -722,6 +725,7 @@ export function useCameraTrapWizard() {
       }
 
       setSaveProgress({ step: 'Done!', percent: 100 });
+      saveCompleteRef.current = true;
       resetSaveResume();
       navigate(`/surveys/${surveyId}`);
     } catch (err: unknown) {
@@ -865,6 +869,7 @@ export function useCameraTrapWizard() {
     // Save
     saving,
     saveProgress,
+    saveCompleteRef,
     handleSave,
     // True when a failed attempt made partial progress a retry can resume
     hasPartialSave: saveResumeRef.current.surveyId != null,
