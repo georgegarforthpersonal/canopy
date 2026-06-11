@@ -39,8 +39,20 @@ const getApiBaseUrl = () => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:8000/api';
   }
-  // Otherwise (e.g., accessed via 192.168.x.x from mobile), use the same host
-  return `http://${window.location.hostname}:8000/api`;
+
+  // LAN IP addresses — self-hosted setup where frontend and backend share the same host on port 8000
+  if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(window.location.hostname)) {
+    return `http://${window.location.hostname}:8000/api`;
+  }
+
+  // Public domain without VITE_API_URL configured at build time.
+  // Port 8000 is never publicly reachable on cloud platforms (Railway, Render, etc.).
+  // Set VITE_API_URL as a build variable in your Railway service to fix this.
+  console.error(
+    `[canopy] VITE_API_URL is not set. API requests will fail on "${window.location.hostname}". ` +
+    `Add VITE_API_URL as a build variable in your Railway frontend service.`
+  );
+  return `${window.location.origin}/api`;
 };
 
 /**
