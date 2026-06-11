@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { authAPI } from '../services/api';
+import { authAPI, SESSION_EXPIRED_EVENT } from '../services/api';
 import { brandColors } from '../theme';
 
 interface AuthContextType {
@@ -25,6 +25,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((data) => setIsAuthenticated(data.authenticated))
       .catch(() => setIsAuthenticated(false))
       .finally(() => setIsLoading(false));
+  }, []);
+
+  // When any API call fails with an expired session, prompt for re-login
+  // in place so the user keeps their page state. Repeated 401s are harmless:
+  // the dialog is a single conditionally-rendered instance.
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setIsAuthenticated(false);
+      setShowPasswordDialog(true);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, []);
 
   const login = useCallback(async (password: string) => {
