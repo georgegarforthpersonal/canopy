@@ -117,6 +117,33 @@ function computeFilterDerived(
 }
 
 // ============================================================================
+// Save resume state
+// ============================================================================
+
+/**
+ * Progress from a failed save attempt. Lets Retry resume where it left off
+ * instead of creating a duplicate survey and re-uploading every image.
+ */
+interface SaveResumeState {
+  /** Serialised save inputs; a mismatch means inputs changed, so start fresh */
+  fingerprint: string;
+  surveyId: number | null;
+  /** original image index -> uploaded image record */
+  uploadedImages: Map<number, CameraTrapImage>;
+  /** species ids whose sighting has already been created */
+  createdSightingSpecies: Set<number>;
+}
+
+function emptySaveResumeState(): SaveResumeState {
+  return {
+    fingerprint: '',
+    surveyId: null,
+    uploadedImages: new Map(),
+    createdSightingSpecies: new Set(),
+  };
+}
+
+// ============================================================================
 // Hook
 // ============================================================================
 
@@ -187,6 +214,10 @@ export function useCameraTrapWizard() {
   // ---- Step 6: Save ----
   const [saving, setSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ step: '', percent: 0 });
+  const saveResumeRef = useRef<SaveResumeState>(emptySaveResumeState());
+  const resetSaveResume = useCallback(() => {
+    saveResumeRef.current = emptySaveResumeState();
+  }, []);
 
   // ---- Shared ----
   const [error, setError] = useState<string | null>(null);
@@ -313,12 +344,13 @@ export function useCameraTrapWizard() {
       setClassifications(new Map());
       setViewedImages(new Set());
       setCurrentImageIndex(0);
+      resetSaveResume();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to process images');
     } finally {
       setLoadingImages(false);
     }
-  }, [imageFiles]);
+  }, [imageFiles, resetSaveResume]);
 
   // ============================================================================
   // Step 3: Filter logic
@@ -540,18 +572,39 @@ export function useCameraTrapWizard() {
     setSaving(true);
     setError(null);
 
+    // Resume a previous failed attempt only if the save inputs are unchanged.
+    // (New files / redone classification already reset the ref directly.)
+    const fingerprint = JSON.stringify({
+      date: date.format('YYYY-MM-DD'),
+      surveyTypeId: selectedSurveyType.id,
+      deviceId: selectedDevice.id,
+      surveyorIds: selectedSurveyors.map((s) => s.id),
+      review: reviewData.map(({ speciesId, imageIndices }) => [speciesId, imageIndices]),
+      deselectedImages: Array.from(deselectedImages).sort(),
+    });
+    if (saveResumeRef.current.fingerprint !== fingerprint) {
+      resetSaveResume();
+      saveResumeRef.current.fingerprint = fingerprint;
+    }
+    const resume = saveResumeRef.current;
+
     try {
-      setSaveProgress({ step: 'Creating survey...', percent: 5 });
-      let survey;
-      try {
-        survey = await surveysAPI.create({
-          date: date.format('YYYY-MM-DD'),
-          survey_type_id: selectedSurveyType.id,
-          device_id: selectedDevice.id,
-          surveyor_ids: selectedSurveyors.map((s) => s.id),
-        });
-      } catch (createErr: unknown) {
-        throw new Error(`Failed to create survey: ${createErr instanceof Error ? createErr.message : String(createErr)}`);
+      // Create survey (skipped on retry if it already succeeded)
+      let surveyId = resume.surveyId;
+      if (surveyId == null) {
+        setSaveProgress({ step: 'Creating survey...', percent: 5 });
+        try {
+          const survey = await surveysAPI.create({
+            date: date.format('YYYY-MM-DD'),
+            survey_type_id: selectedSurveyType.id,
+            device_id: selectedDevice.id,
+            surveyor_ids: selectedSurveyors.map((s) => s.id),
+          });
+          surveyId = survey.id;
+        } catch (createErr: unknown) {
+          throw new Error(`Failed to create survey: ${createErr instanceof Error ? createErr.message : String(createErr)}`);
+        }
+        resume.surveyId = surveyId;
       }
 
       const imageIndicesToUpload = new Set<number>();
@@ -564,16 +617,20 @@ export function useCameraTrapWizard() {
         });
       });
 
-      const imagesToUpload = Array.from(imageIndicesToUpload).map((idx) => ({
-        idx,
-        file: imageFiles[idx].file,
-        exifDate: imageFiles[idx].exifDate,
-      }));
+      // Images uploaded by a previous failed attempt are skipped — their
+      // records are already in resume.uploadedImages, keyed by original index.
+      const imagesToUpload = Array.from(imageIndicesToUpload)
+        .filter((idx) => !resume.uploadedImages.has(idx))
+        .map((idx) => ({
+          idx,
+          file: imageFiles[idx].file,
+          exifDate: imageFiles[idx].exifDate,
+        }));
 
       const totalFiles = imagesToUpload.length;
 
       setSaveProgress({ step: `Uploading ${totalFiles} images...`, percent: 10 });
-      const uploadedImages = new Map<number, CameraTrapImage>();
+      const uploadedImages = resume.uploadedImages;
 
       for (let i = 0; i < imagesToUpload.length; i += UPLOAD_BATCH_SIZE) {
         const batch = imagesToUpload.slice(i, i + UPLOAD_BATCH_SIZE);
@@ -589,7 +646,7 @@ export function useCameraTrapWizard() {
         let result;
         try {
           result = await imagesAPI.uploadFilesWithMetadata(
-            survey.id,
+            surveyId,
             batchFiles,
             Object.keys(timestamps).length > 0 ? timestamps : undefined,
             true,
@@ -611,6 +668,7 @@ export function useCameraTrapWizard() {
       setSaveProgress({ step: 'Creating sightings...', percent: 75 });
 
       for (const { speciesId, imageIndices } of reviewData) {
+        if (resume.createdSightingSpecies.has(speciesId)) continue;
         const selectedIndices = imageIndices.filter(
           (idx) => !deselectedImages.has(`${speciesId}-${idx}`),
         );
@@ -622,7 +680,7 @@ export function useCameraTrapWizard() {
 
         if (imageIds.length === 0) continue;
 
-        await surveysAPI.addSighting(survey.id, {
+        await surveysAPI.addSighting(surveyId, {
           species_id: speciesId,
           count: 1,
           image_ids: imageIds,
@@ -631,15 +689,17 @@ export function useCameraTrapWizard() {
               ? [{ latitude: selectedDevice.latitude, longitude: selectedDevice.longitude, count: 1 }]
               : [],
         });
+        resume.createdSightingSpecies.add(speciesId);
       }
 
       setSaveProgress({ step: 'Done!', percent: 100 });
-      navigate(`/surveys/${survey.id}`);
+      resetSaveResume();
+      navigate(`/surveys/${surveyId}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save survey');
       setSaving(false);
     }
-  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, reviewData, deselectedImages, imageFiles, navigate]);
+  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, reviewData, deselectedImages, imageFiles, navigate, resetSaveResume]);
 
   // ============================================================================
   // Step validation
@@ -687,8 +747,9 @@ export function useCameraTrapWizard() {
     setCurrentImageIndex(0);
     setClassifications(new Map());
     setViewedImages(new Set());
+    resetSaveResume();
     setActiveStep(3);
-  }, []);
+  }, [resetSaveResume]);
 
   const skipFiltering = useCallback(() => {
     setFilterError(null);
@@ -700,7 +761,8 @@ export function useCameraTrapWizard() {
     setCurrentImageIndex(0);
     setClassifications(new Map());
     setViewedImages(new Set());
-  }, [imageFiles]);
+    resetSaveResume();
+  }, [imageFiles, resetSaveResume]);
 
   return {
     // Step
@@ -777,6 +839,8 @@ export function useCameraTrapWizard() {
     saving,
     saveProgress,
     handleSave,
+    // True when a failed attempt made partial progress a retry can resume
+    hasPartialSave: saveResumeRef.current.surveyId != null,
 
     // Navigation
     navigate,

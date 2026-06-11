@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -38,6 +38,34 @@ import { SightingsEditor } from '../components/surveys/SightingsEditor';
 import type { DraftSighting } from '../components/surveys/SightingsEditor';
 import { PageHeader } from '../components/layout/PageHeader';
 import { brandColors } from '../theme';
+
+/**
+ * Progress from a failed save attempt. Lets a retry resume where it left off
+ * instead of creating a duplicate survey and re-uploading photos.
+ */
+interface SaveResumeState {
+  /** Serialised save inputs; a mismatch means inputs changed, so start fresh */
+  fingerprint: string;
+  surveyId: number | null;
+  /** sighting tempId -> uploaded photo image ids */
+  sightingPhotoIds: Map<string, number[]>;
+  /** tempIds of sightings already created */
+  createdSightingTempIds: Set<string>;
+  surveyImagesUploaded: boolean;
+}
+
+function emptySaveResumeState(): SaveResumeState {
+  return {
+    fingerprint: '',
+    surveyId: null,
+    sightingPhotoIds: new Map(),
+    createdSightingTempIds: new Set(),
+    surveyImagesUploaded: false,
+  };
+}
+
+/** Stable identity for a File across renders (Files aren't JSON-serialisable) */
+const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
 
 /**
  * NewSurveyPage - Full-page form for creating surveys with inline sightings
@@ -106,6 +134,8 @@ export function NewSurveyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Survives across save attempts so retrying resumes instead of restarting
+  const saveResumeRef = useRef<SaveResumeState>(emptySaveResumeState());
 
   // ============================================================================
   // Validation State
@@ -302,7 +332,6 @@ export function NewSurveyPage() {
     setError(null);
 
     try {
-      // Step 1: Create survey
       const surveyData: Partial<Survey> & { survey_type_id?: number } = {
         date: date!.format('YYYY-MM-DD'),
         surveyor_ids: selectedSurveyors.map((s) => s.id),
@@ -319,21 +348,40 @@ export function NewSurveyPage() {
         surveyData.location_id = locationId ?? undefined;
       }
 
-      const newSurvey = await surveysAPI.create(surveyData);
-
-      // Step 2: Upload sighting photos if any (for sighting photo upload survey types)
       const validSightings = draftSightings.filter(
         (s) => s.species_id !== null && s.count > 0
       );
 
-      const sightingPhotoMap = new Map<string, number[]>();
+      // Resume a previous failed attempt only if the save inputs are
+      // unchanged; otherwise start fresh.
+      const fingerprint = JSON.stringify({
+        surveyData,
+        sightings: validSightings.map((s) => ({
+          ...s,
+          pendingPhotos: s.pendingPhotos?.map(fileKey),
+        })),
+        images: pendingImageFiles.map(fileKey),
+      });
+      if (saveResumeRef.current.fingerprint !== fingerprint) {
+        saveResumeRef.current = { ...emptySaveResumeState(), fingerprint };
+      }
+      const resume = saveResumeRef.current;
+
+      // Step 1: Create survey (skipped on retry if it already succeeded)
+      const surveyId = resume.surveyId ?? (await surveysAPI.create(surveyData)).id;
+      resume.surveyId = surveyId;
+
+      // Step 2: Upload sighting photos if any (for sighting photo upload
+      // survey types). Photos uploaded by a previous failed attempt are
+      // skipped — their image ids are already in resume.sightingPhotoIds.
+      const sightingPhotoMap = resume.sightingPhotoIds;
       if (allowSightingPhotoUpload) {
         await Promise.all(
           validSightings
-            .filter((s) => s.pendingPhotos && s.pendingPhotos.length > 0)
+            .filter((s) => s.pendingPhotos && s.pendingPhotos.length > 0 && !sightingPhotoMap.has(s.tempId))
             .map(async (sighting) => {
               const uploaded = await imagesAPI.uploadFilesWithMetadata(
-                newSurvey.id,
+                surveyId,
                 sighting.pendingPhotos!,
                 undefined,
                 true // skipProcessing
@@ -343,41 +391,53 @@ export function NewSurveyPage() {
         );
       }
 
-      // Step 3: Add sightings (with individual locations if provided)
+      // Step 3: Add sightings (with individual locations if provided),
+      // skipping any already created by a previous failed attempt
       await Promise.all(
-        validSightings.map((sighting) =>
-          surveysAPI.addSighting(newSurvey.id, {
-            species_id: sighting.species_id!,
-            count: sighting.count,
-            location_id: locationAtSightingLevel ? sighting.location_id : undefined,
-            device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
-            notes: sighting.notes,
-            // Include individual locations with count and breeding status codes
-            individuals: sighting.individuals?.map((ind) => ({
-              latitude: ind.latitude,
-              longitude: ind.longitude,
-              count: ind.count,
-              breeding_status_code: ind.breeding_status_code,
-              notes: ind.notes,
-            })),
-            image_ids: sightingPhotoMap.get(sighting.tempId),
-          })
-        )
+        validSightings
+          .filter((sighting) => !resume.createdSightingTempIds.has(sighting.tempId))
+          .map((sighting) =>
+            surveysAPI.addSighting(surveyId, {
+              species_id: sighting.species_id!,
+              count: sighting.count,
+              location_id: locationAtSightingLevel ? sighting.location_id : undefined,
+              device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
+              notes: sighting.notes,
+              // Include individual locations with count and breeding status codes
+              individuals: sighting.individuals?.map((ind) => ({
+                latitude: ind.latitude,
+                longitude: ind.longitude,
+                count: ind.count,
+                breeding_status_code: ind.breeding_status_code,
+                notes: ind.notes,
+              })),
+              image_ids: sightingPhotoMap.get(sighting.tempId),
+            }).then(() => {
+              resume.createdSightingTempIds.add(sighting.tempId);
+            })
+          )
       );
 
       // Step 4: Upload image files if any (for camera trap surveys)
-      if (pendingImageFiles.length > 0) {
-        await imagesAPI.uploadFiles(newSurvey.id, pendingImageFiles);
+      if (pendingImageFiles.length > 0 && !resume.surveyImagesUploaded) {
+        await imagesAPI.uploadFiles(surveyId, pendingImageFiles);
+        resume.surveyImagesUploaded = true;
       }
 
       // Success - navigate to survey detail page or surveys list
+      saveResumeRef.current = emptySaveResumeState();
       if (allowImageUpload && pendingImageFiles.length > 0) {
-        navigate(`/surveys/${newSurvey.id}`);
+        navigate(`/surveys/${surveyId}`);
       } else {
-        navigate(`/surveys?created=${newSurvey.id}`);
+        navigate(`/surveys?created=${surveyId}`);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create survey');
+      const message = err instanceof Error ? err.message : 'Failed to create survey';
+      setError(
+        saveResumeRef.current.surveyId != null
+          ? `${message} — click "Save Survey" again to retry; it will resume where it left off.`
+          : message
+      );
       console.error('Error creating survey:', err);
       setSaving(false);
     }
