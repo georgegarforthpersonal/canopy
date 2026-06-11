@@ -699,7 +699,9 @@ export function AdminPage() {
         )}
 
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-          <Table>
+          {/* minWidth lets TableContainer scroll horizontally on phones
+              instead of crushing the eight columns to unreadable widths */}
+          <Table sx={{ minWidth: 720 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
@@ -857,7 +859,9 @@ export function AdminPage() {
         </Box>
 
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-          <Table>
+          {/* minWidth lets TableContainer scroll horizontally on phones
+              instead of crushing the seven columns to unreadable widths */}
+          <Table sx={{ minWidth: 640 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Device ID</TableCell>
