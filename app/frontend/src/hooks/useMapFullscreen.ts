@@ -22,11 +22,16 @@ export function useMapFullscreen() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Swallow the event in the capture phase so it never reaches an
+        // enclosing MUI Dialog (which would otherwise close and discard
+        // the user's in-progress form).
+        e.stopPropagation();
+        e.preventDefault();
         setIsFullscreen(false);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [isFullscreen]);
 
   // Lock body scroll while fullscreen

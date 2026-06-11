@@ -99,6 +99,13 @@ export { ORG_SLUG, getOrgSlug };
 const AUTH_TOKEN_KEY = 'admin_session_token';
 
 /**
+ * Window event dispatched when an authenticated request fails with 401,
+ * meaning the stored session token is invalid or expired. AuthContext
+ * listens for this to prompt the user to log in again without a reload.
+ */
+export const SESSION_EXPIRED_EVENT = 'canopy:session-expired';
+
+/**
  * Get stored auth token from localStorage
  */
 const getAuthToken = (): string | null => {
@@ -168,6 +175,12 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
         } catch {
           // Ignore if we can't read the response
         }
+      }
+      // A 401 means the session token is invalid or expired — except on the
+      // login endpoint itself, where it just means a wrong password.
+      if (response.status === 401 && !endpoint.startsWith('/auth/login')) {
+        clearAuthToken();
+        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
       }
       throw new ApiError(errorMessage, response.status);
     }

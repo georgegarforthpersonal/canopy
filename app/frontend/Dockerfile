@@ -32,6 +32,12 @@ ENV VITE_API_URL=$VITE_API_URL
 ARG VITE_SENTRY_DSN
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 
+# Sentry source-map upload (skipped when the token is absent)
+ARG SENTRY_AUTH_TOKEN
+ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
+ARG SENTRY_ORG
+ENV SENTRY_ORG=$SENTRY_ORG
+
 # Copy package files
 COPY package*.json ./
 

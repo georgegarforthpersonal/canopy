@@ -4,7 +4,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useAuth } from '../context/AuthContext';
-import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI, devicesAPI } from '../services/api';
+import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI, devicesAPI, ApiError } from '../services/api';
 import type { SurveyDetail, Sighting, SightingAudioClip, Surveyor, Location, Species, Survey, BreedingStatusCode, LocationWithBoundary, SurveyType, Device } from '../services/api';
 import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/SurveyFormFields';
 import { SightingsEditor } from '../components/surveys/SightingsEditor';
@@ -253,8 +253,10 @@ export function SurveyDetailPage() {
     );
   }
 
-  // Show error state or survey not found
-  if (error || !survey) {
+  // Show error state when the survey itself failed to load. Errors that occur
+  // while the survey is on screen (e.g. a failed save) render inline instead,
+  // so the user keeps their edit state and can retry.
+  if (!survey) {
     return (
       <Box sx={{ p: 4 }}>
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -385,6 +387,27 @@ export function SurveyDetailPage() {
     setSaving(true);
     setError(null);
 
+    // Saving is a chain of individual API calls, not an atomic operation. Work
+    // against mutable copies of the draft and the server baseline, recording
+    // each completed operation as it happens. If a call fails partway through,
+    // the catch path persists this reconciled state back into React state so
+    // pressing Save again only retries what actually failed (no duplicate
+    // sightings/photos, no deletes of already-deleted rows), and Cancel shows
+    // the server's current state rather than the stale pre-edit snapshot.
+    const workingDraft: DraftSighting[] = editDraftSightings.map((s) => ({
+      ...s,
+      individuals: s.individuals?.map((ind) => ({ ...ind })),
+      pendingPhotos: s.pendingPhotos ? [...s.pendingPhotos] : undefined,
+      existingImageIds: s.existingImageIds ? [...s.existingImageIds] : undefined,
+      removedImageIds: s.removedImageIds ? [...s.removedImageIds] : undefined,
+    }));
+    let workingBaseline: Sighting[] = sightings;
+
+    // Treat 404 on delete as success: the row is already gone server-side
+    // (e.g. deleted during a previous partially-failed save attempt).
+    const isNotFound = (err: unknown): boolean =>
+      err instanceof ApiError && err.status === 404;
+
     try {
       // Step 1: Update survey
       const surveyData: Partial<Survey> = {
@@ -406,30 +429,47 @@ export function SurveyDetailPage() {
 
       // Step 2: Handle sightings changes
       // Get valid sightings (non-empty rows)
-      const validSightings = editDraftSightings.filter(
+      const validSightings = workingDraft.filter(
         (s) => s.species_id !== null && s.count > 0
       );
 
       // Identify which sightings to delete (existing sightings not in the new list)
-      const existingSightingIds = sightings.map((s) => s.id);
       const keptSightingIds = validSightings
         .filter((s) => s.id)
         .map((s) => s.id!);
-      const sightingsToDelete = existingSightingIds.filter(
-        (id) => !keptSightingIds.includes(id)
-      );
+      const sightingsToDelete = workingBaseline
+        .map((s) => s.id)
+        .filter((sightingId) => !keptSightingIds.includes(sightingId));
 
-      // Delete removed sightings
-      await Promise.all(
-        sightingsToDelete.map((sightingId) =>
-          surveysAPI.deleteSighting(Number(id), sightingId)
-        )
+      // Delete removed sightings. Use allSettled so successful deletes are
+      // recorded in the baseline even when a sibling delete fails.
+      const deleteResults = await Promise.allSettled(
+        sightingsToDelete.map(async (sightingId) => {
+          try {
+            await surveysAPI.deleteSighting(Number(id), sightingId);
+          } catch (err) {
+            if (!isNotFound(err)) throw err;
+          }
+          return sightingId;
+        })
       );
+      const deletedIds = new Set<number>();
+      let firstDeleteError: unknown = null;
+      for (const result of deleteResults) {
+        if (result.status === 'fulfilled') {
+          deletedIds.add(result.value);
+        } else if (firstDeleteError === null) {
+          firstDeleteError = result.reason;
+        }
+      }
+      workingBaseline = workingBaseline.filter((s) => !deletedIds.has(s.id));
+      if (firstDeleteError !== null) {
+        throw firstDeleteError;
+      }
 
       // Update existing sightings and add new ones
       for (const sighting of validSightings) {
         // Upload any pending photos for this sighting
-        let newPhotoIds: number[] = [];
         if (allowSightingPhotoUpload && sighting.pendingPhotos && sighting.pendingPhotos.length > 0) {
           const uploaded = await imagesAPI.uploadFilesWithMetadata(
             Number(id),
@@ -437,17 +477,21 @@ export function SurveyDetailPage() {
             undefined,
             true // skipProcessing
           );
-          newPhotoIds = uploaded.map((img) => img.id);
+          // Photos now exist server-side: fold them into existingImageIds and
+          // clear pendingPhotos so a retry never re-uploads them. They are
+          // attached to the sighting by the update/add call below.
+          sighting.existingImageIds = [
+            ...(sighting.existingImageIds || []),
+            ...uploaded.map((img) => img.id),
+          ];
+          sighting.pendingPhotos = [];
         }
 
-        // Compute final image_ids (existing - removed + new)
+        // Compute final image_ids (existing + already-uploaded new, minus removed)
         const finalImageIds = allowSightingPhotoUpload
-          ? [
-              ...(sighting.existingImageIds || []).filter(
-                (imgId) => !(sighting.removedImageIds || []).includes(imgId)
-              ),
-              ...newPhotoIds,
-            ]
+          ? (sighting.existingImageIds || []).filter(
+              (imgId) => !(sighting.removedImageIds || []).includes(imgId)
+            )
           : undefined;
 
         if (sighting.id) {
@@ -461,9 +505,15 @@ export function SurveyDetailPage() {
             image_ids: finalImageIds,
           });
 
+          // Image links are now committed server-side
+          if (finalImageIds) {
+            sighting.existingImageIds = finalImageIds;
+            sighting.removedImageIds = [];
+          }
+
           // Sync individual locations for this existing sighting
           // Find the original sighting to compare individuals
-          const originalSighting = sightings.find((s: any) => s.id === sighting.id);
+          const originalSighting = workingBaseline.find((s: any) => s.id === sighting.id);
           const originalIndividuals = originalSighting?.individuals || [];
           const currentIndividuals = sighting.individuals || [];
 
@@ -475,11 +525,15 @@ export function SurveyDetailPage() {
             (ind: any) => ind.id && !currentIndividualIds.includes(ind.id)
           );
 
-          // Delete removed individuals
+          // Delete removed individuals (tolerating already-deleted rows)
           await Promise.all(
-            individualsToDelete.map((ind: any) =>
-              surveysAPI.deleteIndividualLocation(Number(id), sighting.id!, ind.id)
-            )
+            individualsToDelete.map(async (ind: any) => {
+              try {
+                await surveysAPI.deleteIndividualLocation(Number(id), sighting.id!, ind.id);
+              } catch (err) {
+                if (!isNotFound(err)) throw err;
+              }
+            })
           );
 
           // Update existing individuals (those with id that are still in the list)
@@ -496,9 +550,11 @@ export function SurveyDetailPage() {
             )
           );
 
-          // Add new individuals (those without id)
+          // Add new individuals (those without id). Use allSettled and assign
+          // server ids to the ones that succeeded so a retry updates them
+          // instead of re-adding duplicates.
           const newIndividuals = currentIndividuals.filter((ind) => !ind.id);
-          await Promise.all(
+          const addIndividualResults = await Promise.allSettled(
             newIndividuals.map((ind) =>
               surveysAPI.addIndividualLocation(Number(id), sighting.id!, {
                 latitude: ind.latitude,
@@ -509,9 +565,20 @@ export function SurveyDetailPage() {
               })
             )
           );
+          let firstAddIndividualError: unknown = null;
+          addIndividualResults.forEach((result, idx) => {
+            if (result.status === 'fulfilled') {
+              newIndividuals[idx].id = result.value.id;
+            } else if (firstAddIndividualError === null) {
+              firstAddIndividualError = result.reason;
+            }
+          });
+          if (firstAddIndividualError !== null) {
+            throw firstAddIndividualError;
+          }
         } else {
           // Add new sighting with individual locations
-          await surveysAPI.addSighting(Number(id), {
+          const created = await surveysAPI.addSighting(Number(id), {
             species_id: sighting.species_id!,
             count: sighting.count,
             location_id: locationAtSightingLevel ? sighting.location_id : undefined,
@@ -526,12 +593,47 @@ export function SurveyDetailPage() {
             })),
             image_ids: finalImageIds,
           });
+
+          // Record the server id (and individual ids) so a retry after a later
+          // failure updates this sighting instead of creating a duplicate.
+          sighting.id = created.id;
+          if (sighting.individuals && created.individuals) {
+            sighting.individuals.forEach((ind, idx) => {
+              const serverInd = created.individuals[idx];
+              if (serverInd?.id != null) {
+                ind.id = serverInd.id;
+              }
+            });
+          }
+          if (finalImageIds) {
+            sighting.existingImageIds = finalImageIds;
+            sighting.removedImageIds = [];
+          }
         }
       }
 
       // Success - navigate back to surveys list with edited parameter
       navigate(`/surveys?edited=${id}`);
     } catch (err) {
+      // Persist the reconciled draft: sightings created before the failure now
+      // carry their server ids, uploaded photos are no longer pending, etc.
+      setEditDraftSightings(workingDraft);
+
+      // Refresh the baseline from the server so a retry diffs against what was
+      // actually committed, and so Cancel shows the real current state.
+      try {
+        const [freshSurvey, freshSightings] = await Promise.all([
+          surveysAPI.getById(Number(id)),
+          surveysAPI.getSightings(Number(id)),
+        ]);
+        setSurvey(freshSurvey);
+        setSightings(freshSightings);
+      } catch {
+        // Re-fetch failed (likely the same outage). Fall back to the locally
+        // reconciled baseline; 404-tolerant deletes cover any remaining drift.
+        setSightings(workingBaseline);
+      }
+
       setError(err instanceof Error ? err.message : 'Failed to update survey');
       console.error('Error updating survey:', err);
       setSaving(false);

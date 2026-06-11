@@ -12,7 +12,6 @@ import type {
   Surveyor,
   SurveyType,
   Device,
-  AudioRecording,
   AudioDetectionResult,
 } from '../services/api';
 import { extractWavSnippet } from '../utils/wavSnippet';
@@ -76,6 +75,31 @@ export function paddedSnippetRange(startTime: string, endTime: string): {
   };
 }
 
+/**
+ * Progress from a failed save attempt. Lets Retry resume where it left off
+ * instead of creating a duplicate survey and re-uploading every snippet.
+ */
+interface SaveResumeState {
+  /** Serialised save inputs; a mismatch means inputs changed, so start fresh */
+  fingerprint: string;
+  surveyId: number | null;
+  detectionsSaved: boolean;
+  /** snippet filename -> uploaded recording id */
+  uploadedSnippets: Map<string, number>;
+  /** species ids whose sighting has already been created */
+  createdSightingSpecies: Set<number>;
+}
+
+function emptySaveResumeState(): SaveResumeState {
+  return {
+    fingerprint: '',
+    surveyId: null,
+    detectionsSaved: false,
+    uploadedSnippets: new Map(),
+    createdSightingSpecies: new Set(),
+  };
+}
+
 // ============================================================================
 // Hook
 // ============================================================================
@@ -117,6 +141,10 @@ export function useAudioWizard() {
   // Flipped synchronously just before the post-save navigation so the page's
   // unsaved-changes guard does not block it (state would be one render stale).
   const saveCompleteRef = useRef(false);
+  const saveResumeRef = useRef<SaveResumeState>(emptySaveResumeState());
+  const resetSaveResume = useCallback(() => {
+    saveResumeRef.current = emptySaveResumeState();
+  }, []);
 
   // ---- Shared ----
   const [error, setError] = useState<string | null>(null);
@@ -252,12 +280,13 @@ export function useAudioWizard() {
       setDeselectedSpecies(new Set());
       setProcessedFileSet(null);
       setProcessError(null);
+      resetSaveResume();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to process files');
     } finally {
       setLoadingFiles(false);
     }
-  }, [audioFiles]);
+  }, [audioFiles, resetSaveResume]);
 
   const runProcessing = useCallback(async () => {
     if (audioFiles.length === 0) return;
@@ -266,6 +295,7 @@ export function useAudioWizard() {
     setProcessError(null);
     setDetections([]);
     setUnmatchedSpecies([]);
+    resetSaveResume();
     setProcessProgress({ processed: 0, total: audioFiles.length, currentFilename: audioFiles[0]?.filename ?? '' });
 
     try {
@@ -343,7 +373,7 @@ export function useAudioWizard() {
     } finally {
       setProcessing(false);
     }
-  }, [audioFiles, selectedDevice]);
+  }, [audioFiles, selectedDevice, resetSaveResume]);
 
   // Auto-start processing when entering Upload step with new files
   useEffect(() => {
@@ -381,23 +411,42 @@ export function useAudioWizard() {
     setSaving(true);
     setError(null);
 
+    // Resume a previous failed attempt only if the save inputs are unchanged.
+    // (New files / re-processing already reset the ref directly.)
+    const selectedReviewData = reviewData.filter((s) => !deselectedSpecies.has(s.speciesId));
+    const fingerprint = JSON.stringify({
+      date: date.format('YYYY-MM-DD'),
+      surveyTypeId: selectedSurveyType.id,
+      deviceId: selectedDevice.id,
+      surveyorIds: selectedSurveyors.map((s) => s.id),
+      selectedSpeciesIds: selectedReviewData.map((s) => s.speciesId),
+    });
+    if (saveResumeRef.current.fingerprint !== fingerprint) {
+      resetSaveResume();
+      saveResumeRef.current.fingerprint = fingerprint;
+    }
+    const resume = saveResumeRef.current;
+
     try {
-      // 1. Create survey
-      setSaveProgress({ step: 'Creating survey...', percent: 5 });
-      let survey;
-      try {
-        survey = await surveysAPI.create({
-          date: date.format('YYYY-MM-DD'),
-          survey_type_id: selectedSurveyType.id,
-          device_id: selectedDevice.id,
-          surveyor_ids: selectedSurveyors.map((s) => s.id),
-        });
-      } catch (createErr: unknown) {
-        throw new Error(`Failed to create survey: ${createErr instanceof Error ? createErr.message : String(createErr)}`);
+      // 1. Create survey (skipped on retry if it already succeeded)
+      let surveyId = resume.surveyId;
+      if (surveyId == null) {
+        setSaveProgress({ step: 'Creating survey...', percent: 5 });
+        try {
+          const survey = await surveysAPI.create({
+            date: date.format('YYYY-MM-DD'),
+            survey_type_id: selectedSurveyType.id,
+            device_id: selectedDevice.id,
+            surveyor_ids: selectedSurveyors.map((s) => s.id),
+          });
+          surveyId = survey.id;
+        } catch (createErr: unknown) {
+          throw new Error(`Failed to create survey: ${createErr instanceof Error ? createErr.message : String(createErr)}`);
+        }
+        resume.surveyId = surveyId;
       }
 
       // 2. Collect top 3 snippets per selected species
-      const selectedReviewData = reviewData.filter((s) => !deselectedSpecies.has(s.speciesId));
       const snippetDetections = new Set<WizardDetection>();
       for (const speciesData of selectedReviewData) {
         for (const det of speciesData.topDetections) {
@@ -425,13 +474,14 @@ export function useAudioWizard() {
           end_time: d.end_time,
           detection_timestamp: d.detection_timestamp,
         }));
-      if (allDetectionsToSave.length > 0) {
+      if (allDetectionsToSave.length > 0 && !resume.detectionsSaved) {
         try {
-          await audioAPI.saveDetections(survey.id, allDetectionsToSave);
+          await audioAPI.saveDetections(surveyId, allDetectionsToSave);
         } catch (saveErr: unknown) {
           throw new Error(`Failed to save detections: ${saveErr instanceof Error ? saveErr.message : String(saveErr)}`);
         }
       }
+      resume.detectionsSaved = true;
       interface SnippetInfo {
         speciesId: number;
         speciesData: SpeciesReviewData;
@@ -452,13 +502,18 @@ export function useAudioWizard() {
         }
       }
 
-      // 4. Extract WAV snippets from local files and upload
-      const totalSnippets = snippetsToExtract.length;
+      // 4. Extract WAV snippets from local files and upload.
+      // Snippets uploaded by a previous failed attempt are skipped — their
+      // recording ids are already in resume.uploadedSnippets.
+      const snippetsToUpload = snippetsToExtract.filter(
+        (s) => !resume.uploadedSnippets.has(s.snippetFilename),
+      );
+      const totalSnippets = snippetsToUpload.length;
       setSaveProgress({ step: `Extracting ${totalSnippets} audio snippets...`, percent: 10 });
 
       const snippetFiles: File[] = [];
-      for (let i = 0; i < snippetsToExtract.length; i++) {
-        const { det, snippetFilename } = snippetsToExtract[i];
+      for (let i = 0; i < snippetsToUpload.length; i++) {
+        const { det, snippetFilename } = snippetsToUpload[i];
         const sourceFile = audioFiles[det.fileIndex]?.file;
         if (!sourceFile) continue;
 
@@ -471,30 +526,30 @@ export function useAudioWizard() {
       }
 
       setSaveProgress({ step: `Uploading ${totalSnippets} snippets...`, percent: 40 });
-      const uploadedRecordings: AudioRecording[] = [];
       for (let i = 0; i < snippetFiles.length; i += UPLOAD_BATCH_SIZE) {
         const batch = snippetFiles.slice(i, i + UPLOAD_BATCH_SIZE);
         let result;
         try {
-          result = await audioAPI.uploadFilesSkipProcessing(survey.id, batch);
+          result = await audioAPI.uploadFilesSkipProcessing(surveyId, batch);
         } catch (uploadErr: unknown) {
           throw new Error(`Failed to upload snippets: ${uploadErr instanceof Error ? uploadErr.message : String(uploadErr)}`);
         }
-        uploadedRecordings.push(...result);
+        // Record each upload as it lands so a retry doesn't redo it
+        for (const rec of result) {
+          resume.uploadedSnippets.set(rec.filename, rec.id);
+        }
         const uploadPercent = 40 + Math.round(((i + batch.length) / totalSnippets) * 30);
         setSaveProgress({ step: `Uploaded ${Math.min(i + UPLOAD_BATCH_SIZE, totalSnippets)} of ${totalSnippets} snippets...`, percent: uploadPercent });
       }
 
-      // Build snippet filename -> recording ID mapping
-      const filenameToRecordingId = new Map<string, number>();
-      for (const rec of uploadedRecordings) {
-        filenameToRecordingId.set(rec.filename, rec.id);
-      }
+      // Snippet filename -> recording ID mapping (this and prior attempts)
+      const filenameToRecordingId = resume.uploadedSnippets;
 
       // 5. Create sightings for selected species
       setSaveProgress({ step: 'Creating sightings...', percent: 75 });
 
       for (const speciesData of selectedReviewData) {
+        if (resume.createdSightingSpecies.has(speciesData.speciesId)) continue;
         const audioDetections = speciesData.topDetections
           .map((det) => {
             const snippetFilename = `snippet_${speciesData.speciesId}_${det.start_time.replace(/:/g, '')}_${det.fileIndex}.wav`;
@@ -516,7 +571,7 @@ export function useAudioWizard() {
 
         if (audioDetections.length === 0) continue;
 
-        await surveysAPI.addSighting(survey.id, {
+        await surveysAPI.addSighting(surveyId, {
           species_id: speciesData.speciesId,
           count: 1,
           audio_detections: audioDetections,
@@ -525,16 +580,18 @@ export function useAudioWizard() {
               ? [{ latitude: selectedDevice.latitude, longitude: selectedDevice.longitude, count: 1 }]
               : [],
         });
+        resume.createdSightingSpecies.add(speciesData.speciesId);
       }
 
       setSaveProgress({ step: 'Done!', percent: 100 });
       saveCompleteRef.current = true;
-      navigate(`/surveys/${survey.id}`);
+      resetSaveResume();
+      navigate(`/surveys/${surveyId}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save survey');
       setSaving(false);
     }
-  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, audioFiles, detections, reviewData, deselectedSpecies, navigate]);
+  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, audioFiles, detections, reviewData, deselectedSpecies, navigate, resetSaveResume]);
 
   // ============================================================================
   // Step validation
@@ -600,6 +657,8 @@ export function useAudioWizard() {
     saveProgress,
     saveCompleteRef,
     handleSave,
+    // True when a failed attempt made partial progress a retry can resume
+    hasPartialSave: saveResumeRef.current.surveyId != null,
 
     // Navigation
     navigate,

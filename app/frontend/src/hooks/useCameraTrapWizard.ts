@@ -117,6 +117,33 @@ function computeFilterDerived(
 }
 
 // ============================================================================
+// Save resume state
+// ============================================================================
+
+/**
+ * Progress from a failed save attempt. Lets Retry resume where it left off
+ * instead of creating a duplicate survey and re-uploading every image.
+ */
+interface SaveResumeState {
+  /** Serialised save inputs; a mismatch means inputs changed, so start fresh */
+  fingerprint: string;
+  surveyId: number | null;
+  /** original image index -> uploaded image record */
+  uploadedImages: Map<number, CameraTrapImage>;
+  /** species ids whose sighting has already been created */
+  createdSightingSpecies: Set<number>;
+}
+
+function emptySaveResumeState(): SaveResumeState {
+  return {
+    fingerprint: '',
+    surveyId: null,
+    uploadedImages: new Map(),
+    createdSightingSpecies: new Set(),
+  };
+}
+
+// ============================================================================
 // Hook
 // ============================================================================
 
@@ -151,6 +178,8 @@ export function useCameraTrapWizard() {
   const [filterReviewIdx, setFilterReviewIdx] = useState(0);
   // Track which imageFiles the filter results correspond to (to detect re-selection)
   const [filteredImageSet, setFilteredImageSet] = useState<ImageFile[] | null>(null);
+  // Whether the user skipped filtering (so returning to this step isn't a dead end)
+  const [skippedFiltering, setSkippedFiltering] = useState(false);
 
   // ---- Step 4: Classify ----
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -161,6 +190,8 @@ export function useCameraTrapWizard() {
   const speciesInputRef = useRef<HTMLInputElement>(null);
   const thumbnailStripRef = useRef<HTMLDivElement>(null);
   const [classifyViewerOpen, setClassifyViewerOpen] = useState(false);
+  // Track which filtered images the classifications correspond to (to detect changes)
+  const [classifiedImageSet, setClassifiedImageSet] = useState<ImageFile[] | null>(null);
 
   // ---- Detection box visibility (shared across Filter + Classify steps) ----
   const [showDetectionBoxes, setShowDetectionBoxes] = useState(true);
@@ -190,6 +221,10 @@ export function useCameraTrapWizard() {
   // Flipped synchronously just before the post-save navigation so the page's
   // unsaved-changes guard does not block it (state would be one render stale).
   const saveCompleteRef = useRef(false);
+  const saveResumeRef = useRef<SaveResumeState>(emptySaveResumeState());
+  const resetSaveResume = useCallback(() => {
+    saveResumeRef.current = emptySaveResumeState();
+  }, []);
 
   // ---- Shared ----
   const [error, setError] = useState<string | null>(null);
@@ -316,22 +351,30 @@ export function useCameraTrapWizard() {
       setClassifications(new Map());
       setViewedImages(new Set());
       setCurrentImageIndex(0);
+      setDeselectedImages(new Set());
+      setSkippedFiltering(false);
+      resetSaveResume();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to process images');
     } finally {
       setLoadingImages(false);
     }
-  }, [imageFiles]);
+  }, [imageFiles, resetSaveResume]);
 
   // ============================================================================
   // Step 3: Filter logic
   // ============================================================================
 
+  // Bumped to invalidate an in-flight filtering run (e.g. when the user skips)
+  const filterRunRef = useRef(0);
+
   const runFiltering = useCallback(async () => {
     if (imageFiles.length === 0) return;
 
+    const runId = ++filterRunRef.current;
     setFiltering(true);
     setFilterError(null);
+    setSkippedFiltering(false);
     setFilterResults(new Map());
     setFilterOverrides(new Map());
     setFilterProgress({ processed: 0, total: imageFiles.length });
@@ -344,6 +387,7 @@ export function useCameraTrapWizard() {
         const batchFiles = batch.map((img) => img.file);
 
         const response = await imagesAPI.filterImages(batchFiles);
+        if (filterRunRef.current !== runId) return; // cancelled (skipped)
 
         response.results.forEach((result: ImageFilterResult, batchIdx: number) => {
           results.set(i + batchIdx, result);
@@ -357,9 +401,13 @@ export function useCameraTrapWizard() {
       }
       setFilteredImageSet(imageFiles);
     } catch (err: unknown) {
-      setFilterError(err instanceof Error ? err.message : 'Failed to filter images');
+      if (filterRunRef.current === runId) {
+        setFilterError(err instanceof Error ? err.message : 'Failed to filter images');
+      }
     } finally {
-      setFiltering(false);
+      if (filterRunRef.current === runId) {
+        setFiltering(false);
+      }
     }
   }, [imageFiles]);
 
@@ -421,6 +469,19 @@ export function useCameraTrapWizard() {
       });
     }
   }, [currentImageIndex, activeStep, filteredImageFiles.length]);
+
+  // Reset classification state when entering Classify (only if the image set changed
+  // since classifications were built — mirrors the filteredImageSet pattern above)
+  useEffect(() => {
+    if (activeStep !== 3) return;
+    if (classifiedImageSet === filteredImageFiles) return;
+    setClassifiedImageSet(filteredImageFiles);
+    setCurrentImageIndex(0);
+    setClassifications(new Map());
+    setViewedImages(new Set());
+    setDeselectedImages(new Set());
+    resetSaveResume();
+  }, [activeStep, classifiedImageSet, filteredImageFiles, resetSaveResume]);
 
   const findNextUnviewed = useCallback((fromIndex: number): number | null => {
     for (let i = fromIndex + 1; i < filteredImageFiles.length; i++) {
@@ -543,18 +604,39 @@ export function useCameraTrapWizard() {
     setSaving(true);
     setError(null);
 
+    // Resume a previous failed attempt only if the save inputs are unchanged.
+    // (New files / redone classification already reset the ref directly.)
+    const fingerprint = JSON.stringify({
+      date: date.format('YYYY-MM-DD'),
+      surveyTypeId: selectedSurveyType.id,
+      deviceId: selectedDevice.id,
+      surveyorIds: selectedSurveyors.map((s) => s.id),
+      review: reviewData.map(({ speciesId, imageIndices }) => [speciesId, imageIndices]),
+      deselectedImages: Array.from(deselectedImages).sort(),
+    });
+    if (saveResumeRef.current.fingerprint !== fingerprint) {
+      resetSaveResume();
+      saveResumeRef.current.fingerprint = fingerprint;
+    }
+    const resume = saveResumeRef.current;
+
     try {
-      setSaveProgress({ step: 'Creating survey...', percent: 5 });
-      let survey;
-      try {
-        survey = await surveysAPI.create({
-          date: date.format('YYYY-MM-DD'),
-          survey_type_id: selectedSurveyType.id,
-          device_id: selectedDevice.id,
-          surveyor_ids: selectedSurveyors.map((s) => s.id),
-        });
-      } catch (createErr: unknown) {
-        throw new Error(`Failed to create survey: ${createErr instanceof Error ? createErr.message : String(createErr)}`);
+      // Create survey (skipped on retry if it already succeeded)
+      let surveyId = resume.surveyId;
+      if (surveyId == null) {
+        setSaveProgress({ step: 'Creating survey...', percent: 5 });
+        try {
+          const survey = await surveysAPI.create({
+            date: date.format('YYYY-MM-DD'),
+            survey_type_id: selectedSurveyType.id,
+            device_id: selectedDevice.id,
+            surveyor_ids: selectedSurveyors.map((s) => s.id),
+          });
+          surveyId = survey.id;
+        } catch (createErr: unknown) {
+          throw new Error(`Failed to create survey: ${createErr instanceof Error ? createErr.message : String(createErr)}`);
+        }
+        resume.surveyId = surveyId;
       }
 
       const imageIndicesToUpload = new Set<number>();
@@ -567,16 +649,20 @@ export function useCameraTrapWizard() {
         });
       });
 
-      const imagesToUpload = Array.from(imageIndicesToUpload).map((idx) => ({
-        idx,
-        file: imageFiles[idx].file,
-        exifDate: imageFiles[idx].exifDate,
-      }));
+      // Images uploaded by a previous failed attempt are skipped — their
+      // records are already in resume.uploadedImages, keyed by original index.
+      const imagesToUpload = Array.from(imageIndicesToUpload)
+        .filter((idx) => !resume.uploadedImages.has(idx))
+        .map((idx) => ({
+          idx,
+          file: imageFiles[idx].file,
+          exifDate: imageFiles[idx].exifDate,
+        }));
 
       const totalFiles = imagesToUpload.length;
 
       setSaveProgress({ step: `Uploading ${totalFiles} images...`, percent: 10 });
-      const uploadedImages = new Map<number, CameraTrapImage>();
+      const uploadedImages = resume.uploadedImages;
 
       for (let i = 0; i < imagesToUpload.length; i += UPLOAD_BATCH_SIZE) {
         const batch = imagesToUpload.slice(i, i + UPLOAD_BATCH_SIZE);
@@ -592,7 +678,7 @@ export function useCameraTrapWizard() {
         let result;
         try {
           result = await imagesAPI.uploadFilesWithMetadata(
-            survey.id,
+            surveyId,
             batchFiles,
             Object.keys(timestamps).length > 0 ? timestamps : undefined,
             true,
@@ -614,6 +700,7 @@ export function useCameraTrapWizard() {
       setSaveProgress({ step: 'Creating sightings...', percent: 75 });
 
       for (const { speciesId, imageIndices } of reviewData) {
+        if (resume.createdSightingSpecies.has(speciesId)) continue;
         const selectedIndices = imageIndices.filter(
           (idx) => !deselectedImages.has(`${speciesId}-${idx}`),
         );
@@ -625,7 +712,7 @@ export function useCameraTrapWizard() {
 
         if (imageIds.length === 0) continue;
 
-        await surveysAPI.addSighting(survey.id, {
+        await surveysAPI.addSighting(surveyId, {
           species_id: speciesId,
           count: 1,
           image_ids: imageIds,
@@ -634,16 +721,18 @@ export function useCameraTrapWizard() {
               ? [{ latitude: selectedDevice.latitude, longitude: selectedDevice.longitude, count: 1 }]
               : [],
         });
+        resume.createdSightingSpecies.add(speciesId);
       }
 
       setSaveProgress({ step: 'Done!', percent: 100 });
       saveCompleteRef.current = true;
-      navigate(`/surveys/${survey.id}`);
+      resetSaveResume();
+      navigate(`/surveys/${surveyId}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save survey');
       setSaving(false);
     }
-  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, reviewData, deselectedImages, imageFiles, navigate]);
+  }, [selectedSurveyType, selectedDevice, date, selectedSurveyors, reviewData, deselectedImages, imageFiles, navigate, resetSaveResume]);
 
   // ============================================================================
   // Step validation
@@ -664,6 +753,7 @@ export function useCameraTrapWizard() {
         case 1:
           return imageFiles.length > 0;
         case 2:
+          if (skippedFiltering) return true;
           return !filtering && filterResults.size === imageFiles.length && filteredImageFiles.length > 0;
         case 3:
           return classifiedCount > 0;
@@ -673,7 +763,7 @@ export function useCameraTrapWizard() {
           return false;
       }
     },
-    [selectedSurveyType, selectedDevice, date, selectedSurveyors.length, imageFiles.length, filtering, filterResults.size, filteredImageFiles.length, classifiedCount, selectedImageCount],
+    [selectedSurveyType, selectedDevice, date, selectedSurveyors.length, imageFiles.length, skippedFiltering, filtering, filterResults.size, filteredImageFiles.length, classifiedCount, selectedImageCount],
   );
 
   // ============================================================================
@@ -687,24 +777,23 @@ export function useCameraTrapWizard() {
     // Don't clear filter results — they'll be re-used if images haven't changed
   }, []);
 
-  const goToClassifyStep = useCallback(() => {
-    setCurrentImageIndex(0);
-    setClassifications(new Map());
-    setViewedImages(new Set());
-    setActiveStep(3);
-  }, []);
+  // Classification state is reset on entry only if the image set changed (see effect above)
+  const goToClassifyStep = useCallback(() => setActiveStep(3), []);
 
   const skipFiltering = useCallback(() => {
+    filterRunRef.current++; // cancel any in-flight filtering run
+    setFiltering(false);
     setFilterError(null);
-    // Reset filter results so all images pass through
-    setFilterResults(new Map());
-    setFilterOverrides(new Map());
+    setSkippedFiltering(true);
     setFilteredImageSet(imageFiles);
+    // Reset filter results so all images pass through. Skip if already empty, so
+    // returning here after classifying doesn't change the image set and wipe work.
+    if (filterResults.size > 0 || filterOverrides.size > 0) {
+      setFilterResults(new Map());
+      setFilterOverrides(new Map());
+    }
     setActiveStep(3);
-    setCurrentImageIndex(0);
-    setClassifications(new Map());
-    setViewedImages(new Set());
-  }, [imageFiles]);
+  }, [imageFiles, filterResults, filterOverrides]);
 
   return {
     // Step
@@ -782,6 +871,8 @@ export function useCameraTrapWizard() {
     saveProgress,
     saveCompleteRef,
     handleSave,
+    // True when a failed attempt made partial progress a retry can resume
+    hasPartialSave: saveResumeRef.current.surveyId != null,
 
     // Navigation
     navigate,
