@@ -9,17 +9,13 @@ Security model:
 - Local development: X-Org-Slug header or defaults to 'heal'
 """
 
-from fastapi import Request, HTTPException, Depends
-from sqlalchemy.orm import Session
-from database.connection import get_db
+from fastapi import Request, HTTPException
+from database.connection import get_session_factory
 from models import Organisation
 from auth import get_session_org_slug
 
 
-async def get_current_organisation(
-    request: Request,
-    db: Session = Depends(get_db)
-) -> Organisation:
+async def get_current_organisation(request: Request) -> Organisation:
     """
     Extract organisation from session token or X-Org-Slug header.
 
@@ -28,9 +24,15 @@ async def get_current_organisation(
     2. X-Org-Slug header (for login flow before session exists)
     3. Default to 'heal' for localhost (development convenience)
 
+    Opens and closes its own session rather than using Depends(get_db): a
+    request-scoped session stays checked out for the whole request, and on
+    long-running endpoints (e.g. audio wizard inference) Neon's pooler reaps
+    the idle socket, so teardown fails after the handler has succeeded. The
+    returned Organisation is detached — column attributes are loaded, but
+    relationships must not be lazy-loaded from it.
+
     Args:
         request: FastAPI request object
-        db: Database session
 
     Returns:
         Organisation object for the current request
@@ -62,10 +64,12 @@ async def get_current_organisation(
             detail="Organisation not specified. Include X-Org-Slug header."
         )
 
-    org = db.query(Organisation).filter(
-        Organisation.slug == org_slug,
-        Organisation.is_active == True
-    ).first()
+    SessionLocal = get_session_factory()
+    with SessionLocal() as db:
+        org = db.query(Organisation).filter(
+            Organisation.slug == org_slug,
+            Organisation.is_active == True
+        ).first()
 
     if not org:
         raise HTTPException(

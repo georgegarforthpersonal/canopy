@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from typing import Optional, Generator, Any
 
 from sqlalchemy import create_engine, Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker, Session
 from sqlmodel import SQLModel
 
@@ -310,7 +311,14 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        except OperationalError:
+            # close() rolls back over the wire; if Neon's pooler reaped the
+            # socket while the request held the connection idle, that raises
+            # here — after the handler has already succeeded. Discard the dead
+            # connection instead of failing the request.
+            db.invalidate()
 
 
 def close_engine() -> None:

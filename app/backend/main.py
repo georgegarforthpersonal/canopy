@@ -77,6 +77,28 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
     )
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Return unhandled errors as JSON the browser is allowed to read.
+
+    Starlette serves this response from ServerErrorMiddleware, *outside*
+    CORSMiddleware, so the CORS headers must be set by hand — without them a
+    cross-origin fetch can't read the 500 and rejects with a bare
+    "Failed to fetch". Starlette re-raises the exception after sending the
+    response, so it still reaches the server log and Sentry.
+    """
+    headers = {}
+    origin = request.headers.get("origin")
+    if origin and origin in settings.allowed_origins:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=headers,
+    )
+
+
 # ============================================================================
 # Include Routers - Organize endpoints by resource
 # ============================================================================
