@@ -1,6 +1,7 @@
 import { createTheme } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
 import { getOrgSlug } from './services/api';
+import { FONT_SIZES, MOBILE_BREAKPOINT } from './config/responsive';
 
 // Organisation-specific color palettes
 const orgColors = {
@@ -158,6 +159,16 @@ export const theme: Theme = createTheme({
         root: {
           boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
         },
+      },
+    },
+    MuiInputBase: {
+      styleOverrides: {
+        input: ({ theme }) => ({
+          // iOS/Android auto-zoom on focus when the input font is below 16px
+          [theme.breakpoints.down(MOBILE_BREAKPOINT)]: {
+            fontSize: FONT_SIZES.MOBILE_INPUT_MIN,
+          },
+        }),
       },
     },
   },
