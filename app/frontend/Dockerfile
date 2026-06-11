@@ -28,6 +28,10 @@ WORKDIR /app
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
+# Sentry DSN for frontend error monitoring (baked in at build time)
+ARG VITE_SENTRY_DSN
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
+
 # Copy package files
 COPY package*.json ./
 
