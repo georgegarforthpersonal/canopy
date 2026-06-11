@@ -8,6 +8,26 @@
  * - Ready to be enhanced with React Query later
  */
 
+import { reportApiError } from './sentry';
+
+/**
+ * Error thrown for non-OK API responses. Carries the HTTP status so error
+ * reporting can distinguish server faults (5xx) from expected client
+ * errors (4xx).
+ */
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+const statusOf = (error: unknown): number | undefined =>
+  error instanceof ApiError ? error.status : undefined;
+
 // API base URL - uses environment variable if available, otherwise falls back to auto-detection
 const getApiBaseUrl = () => {
   // First check if environment variable is set (for production deployments)
@@ -149,7 +169,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
           // Ignore if we can't read the response
         }
       }
-      throw new Error(errorMessage);
+      throw new ApiError(errorMessage, response.status);
     }
 
     // Handle 204 No Content responses
@@ -177,6 +197,11 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
       method: options?.method || 'GET',
       error: error instanceof Error ? error.message : String(error)
     });
+    reportApiError(error, {
+      endpoint,
+      method: options?.method || 'GET',
+      status: statusOf(error),
+    });
     throw error;
   }
 }
@@ -197,27 +222,32 @@ async function uploadMediaFiles<T>(endpoint: string, files: File[]): Promise<T> 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method: 'POST',
-    credentials: 'include',
-    headers,
-    body: formData,
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: formData,
+    });
 
-  if (!response.ok) {
-    let errorMessage = `Upload failed: ${response.status}`;
-    try {
-      const error = await response.json();
-      if (error.detail) {
-        errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+    if (!response.ok) {
+      let errorMessage = `Upload failed: ${response.status}`;
+      try {
+        const error = await response.json();
+        if (error.detail) {
+          errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+        }
+      } catch {
+        // Ignore parse errors
       }
-    } catch {
-      // Ignore parse errors
+      throw new ApiError(errorMessage, response.status);
     }
-    throw new Error(errorMessage);
-  }
 
-  return response.json();
+    return response.json();
+  } catch (error) {
+    reportApiError(error, { endpoint, method: 'POST', status: statusOf(error) });
+    throw error;
+  }
 }
 
 // ============================================================================
@@ -1211,10 +1241,16 @@ export const exportAPI = {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}/export/sqlite`, {
-      credentials: 'include',
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/export/sqlite`, {
+        credentials: 'include',
+        headers,
+      });
+    } catch (error) {
+      reportApiError(error, { endpoint: '/export/sqlite', method: 'GET' });
+      throw error;
+    }
 
     if (!response.ok) {
       let errorMessage = `Export failed: ${response.status}`;
@@ -1226,7 +1262,9 @@ export const exportAPI = {
       } catch {
         // Ignore parse errors
       }
-      throw new Error(errorMessage);
+      const apiError = new ApiError(errorMessage, response.status);
+      reportApiError(apiError, { endpoint: '/export/sqlite', method: 'GET', status: response.status });
+      throw apiError;
     }
 
     // Extract filename from Content-Disposition header
@@ -1583,9 +1621,12 @@ export const imagesAPI = {
             errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
           }
         } catch { /* ignore parse error */ }
-        throw new Error(errorMessage);
+        throw new ApiError(errorMessage, response.status);
       }
       return response.json();
+    }).catch((error) => {
+      reportApiError(error, { endpoint: '/surveys/filter-images', method: 'POST', status: statusOf(error) });
+      throw error;
     });
   },
 
@@ -1647,9 +1688,12 @@ export const imagesAPI = {
             errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
           }
         } catch { /* ignore parse error */ }
-        throw new Error(errorMessage);
+        throw new ApiError(errorMessage, response.status);
       }
       return response.json();
+    }).catch((error) => {
+      reportApiError(error, { endpoint, method: 'POST', status: statusOf(error) });
+      throw error;
     });
   },
 
