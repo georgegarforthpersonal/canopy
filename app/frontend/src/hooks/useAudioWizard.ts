@@ -114,6 +114,9 @@ export function useAudioWizard() {
   // ---- Step 3: Save ----
   const [saving, setSaving] = useState(false);
   const [saveProgress, setSaveProgress] = useState({ step: '', percent: 0 });
+  // Flipped synchronously just before the post-save navigation so the page's
+  // unsaved-changes guard does not block it (state would be one render stale).
+  const saveCompleteRef = useRef(false);
 
   // ---- Shared ----
   const [error, setError] = useState<string | null>(null);
@@ -525,6 +528,7 @@ export function useAudioWizard() {
       }
 
       setSaveProgress({ step: 'Done!', percent: 100 });
+      saveCompleteRef.current = true;
       navigate(`/surveys/${survey.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to save survey');
@@ -594,6 +598,7 @@ export function useAudioWizard() {
     // Save
     saving,
     saveProgress,
+    saveCompleteRef,
     handleSave,
 
     // Navigation

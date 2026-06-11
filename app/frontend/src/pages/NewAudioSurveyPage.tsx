@@ -11,7 +11,9 @@ import { Cancel } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAudioWizard, AUDIO_WIZARD_STEPS } from '../hooks/useAudioWizard';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { PageHeader } from '../components/layout/PageHeader';
+import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import {
   SetupStep,
   UploadStep,
@@ -23,6 +25,13 @@ export function NewAudioSurveyPage() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const wizard = useAudioWizard();
+
+  // Dirty once the wizard has progressed or files are selected, until the
+  // survey is saved. Blocks Cancel, the back link, and browser back; the
+  // confirmation dialog below lets the user proceed or stay.
+  const blocker = useUnsavedChangesGuard(
+    () => (wizard.activeStep > 0 || wizard.audioFiles.length > 0) && !wizard.saveCompleteRef.current,
+  );
 
   if (authLoading) {
     return (
@@ -82,6 +91,12 @@ export function NewAudioSurveyPage() {
       {wizard.activeStep === 1 && <UploadStep wizard={wizard} />}
       {wizard.activeStep === 2 && <ReviewStep wizard={wizard} />}
       {wizard.activeStep === 3 && <SaveStep wizard={wizard} />}
+
+      <UnsavedChangesDialog
+        open={blocker.state === 'blocked'}
+        onKeepWorking={() => blocker.reset?.()}
+        onDiscard={() => blocker.proceed?.()}
+      />
     </Box>
   );
 }
