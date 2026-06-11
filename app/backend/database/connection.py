@@ -310,7 +310,15 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            # Neon's pooler reaps idle SSL connections; if the connection was
+            # dropped while the request was in-flight (e.g. during long audio
+            # inference), the rollback inside db.close() raises OperationalError.
+            # The server-side transaction is already gone at that point, so
+            # silently discarding the cleanup error is safe.
+            pass
 
 
 def close_engine() -> None:
