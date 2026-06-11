@@ -6,10 +6,12 @@ import {
   Stepper,
   Step,
   StepLabel,
+  Typography,
 } from '@mui/material';
 import { Cancel } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useResponsive } from '../hooks/useResponsive';
 import { useAudioWizard, AUDIO_WIZARD_STEPS } from '../hooks/useAudioWizard';
 import { PageHeader } from '../components/layout/PageHeader';
 import {
@@ -22,6 +24,7 @@ import {
 export function NewAudioSurveyPage() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isMobile } = useResponsive();
   const wizard = useAudioWizard();
 
   if (authLoading) {
@@ -64,13 +67,20 @@ export function NewAudioSurveyPage() {
         }
       />
 
-      <Stepper activeStep={wizard.activeStep} sx={{ mb: 4 }}>
+      {/* On phones the labelled horizontal stepper overflows, so show
+          icon-only steps with the current step named underneath */}
+      <Stepper activeStep={wizard.activeStep} sx={{ mb: isMobile ? 1.5 : 4 }}>
         {AUDIO_WIZARD_STEPS.map((label) => (
           <Step key={label}>
-            <StepLabel>{label}</StepLabel>
+            <StepLabel>{isMobile ? '' : label}</StepLabel>
           </Step>
         ))}
       </Stepper>
+      {isMobile && (
+        <Typography variant="subtitle2" align="center" sx={{ mb: 3, fontWeight: 600 }}>
+          {AUDIO_WIZARD_STEPS[wizard.activeStep]}
+        </Typography>
+      )}
 
       {wizard.error && wizard.activeStep !== 3 && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => wizard.setError(null)}>
