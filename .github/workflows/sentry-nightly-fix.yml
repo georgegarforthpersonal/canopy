@@ -23,54 +23,71 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_PROJECT_BACKEND: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_PROJECT_FRONTEND: ${{ secrets.SENTRY_PROJECT_FRONTEND }}
         run: |
-          # Fetch unresolved issues from last 24 hours
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" \
-            "https://sentry.io/api/0/projects/${SENTRY_ORG}/${SENTRY_PROJECT}/issues/?query=is%3Aunresolved&statsPeriod=24h")
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-          echo "Sentry API status: ${HTTP_CODE}"
+          # Fetch unresolved issues from the last 24 hours, from both the
+          # backend and frontend Sentry projects. Issues carry an "area"
+          # label (backend/frontend) instead of the project slug: the slug is
+          # a secret, and a secret value embedded in a job output causes
+          # GitHub to drop the output entirely (same reason the Sentry
+          # permalink is rebuilt in the fix job rather than emitted here).
+          ALL="[]"
+          for AREA in backend frontend; do
+            if [ "$AREA" = "backend" ]; then
+              PROJECT="$SENTRY_PROJECT_BACKEND"
+            else
+              PROJECT="$SENTRY_PROJECT_FRONTEND"
+            fi
+            if [ -z "$PROJECT" ]; then
+              echo "No Sentry project secret configured for ${AREA}; skipping"
+              continue
+            fi
 
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Sentry API error: ${BODY}"
-            echo "issue_count=0" >> "$GITHUB_OUTPUT"
-            echo "issues=[]" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Take the top 5 issues with metadata
-          # Omit the Sentry permalink here: it embeds the SENTRY_ORG secret, which
-          # would cause GitHub to drop this job output. The link is rebuilt in the fix job.
-          ISSUES=$(echo "$BODY" | jq -c '[.[:5] | .[] | {id, title, culprit, count, level}]')
-          COUNT=$(echo "$ISSUES" | jq 'length')
-          echo "issue_count=${COUNT}" >> "$GITHUB_OUTPUT"
-          echo "Found ${COUNT} unresolved Sentry issues"
-
-          if [ "$COUNT" = "0" ]; then
-            echo "issues=[]" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Enrich each issue with its latest event's stack trace
-          for ISSUE_ID in $(echo "$ISSUES" | jq -r '.[].id'); do
-            # Fetch latest event (org-scoped path; the bare /issues/{id}/ path 404s)
-            EVENT_RESP=$(curl -s -w "\n%{http_code}" \
+            RESPONSE=$(curl -s -w "\n%{http_code}" \
               -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" \
-              "https://sentry.io/api/0/organizations/${SENTRY_ORG}/issues/${ISSUE_ID}/events/latest/")
-            EVENT_CODE=$(echo "$EVENT_RESP" | tail -1)
-            EVENT=$(echo "$EVENT_RESP" | sed '$d')
-            echo "Event fetch for issue ${ISSUE_ID}: HTTP ${EVENT_CODE}"
+              "https://sentry.io/api/0/projects/${SENTRY_ORG}/${PROJECT}/issues/?query=is%3Aunresolved&statsPeriod=24h")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "Sentry API status for ${AREA}: ${HTTP_CODE}"
 
-            STACKTRACE=$(echo "$EVENT" | jq -c '[.entries[]? | select(.type=="exception") | .data.values[]? | {type: .type, value: .value, frames: [.stacktrace.frames[]? | {filename, function, lineNo, inApp: .inApp}]}]' 2>/dev/null || echo "[]")
-            [ -z "$STACKTRACE" ] && STACKTRACE="[]"
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "Sentry API error for ${AREA}: ${BODY}"
+              continue
+            fi
 
-            ISSUES=$(echo "$ISSUES" | jq -c --arg id "$ISSUE_ID" --argjson st "$STACKTRACE" \
-              'map(if (.id|tostring) == $id then . + {stacktrace: $st} else . end)')
+            # Take the top 5 issues per project with metadata. firstSeen and
+            # lastSeen let the fix job judge whether an existing PR predates
+            # or postdates the issue.
+            ISSUES=$(echo "$BODY" | jq -c --arg area "$AREA" \
+              '[.[:5] | .[] | {id, title, culprit, count, level, firstSeen, lastSeen, area: $area}]')
+            COUNT=$(echo "$ISSUES" | jq 'length')
+            echo "Found ${COUNT} unresolved ${AREA} issues"
+
+            # Enrich each issue with its latest event's stack trace
+            for ISSUE_ID in $(echo "$ISSUES" | jq -r '.[].id'); do
+              # Fetch latest event (org-scoped path; the bare /issues/{id}/ path 404s)
+              EVENT_RESP=$(curl -s -w "\n%{http_code}" \
+                -H "Authorization: Bearer ${SENTRY_AUTH_TOKEN}" \
+                "https://sentry.io/api/0/organizations/${SENTRY_ORG}/issues/${ISSUE_ID}/events/latest/")
+              EVENT_CODE=$(echo "$EVENT_RESP" | tail -1)
+              EVENT=$(echo "$EVENT_RESP" | sed '$d')
+              echo "Event fetch for issue ${ISSUE_ID}: HTTP ${EVENT_CODE}"
+
+              STACKTRACE=$(echo "$EVENT" | jq -c '[.entries[]? | select(.type=="exception") | .data.values[]? | {type: .type, value: .value, frames: [.stacktrace.frames[]? | {filename, function, lineNo, inApp: .inApp}]}]' 2>/dev/null || echo "[]")
+              [ -z "$STACKTRACE" ] && STACKTRACE="[]"
+
+              ISSUES=$(echo "$ISSUES" | jq -c --arg id "$ISSUE_ID" --argjson st "$STACKTRACE" \
+                'map(if (.id|tostring) == $id then . + {stacktrace: $st} else . end)')
+            done
+
+            ALL=$(jq -c -n --argjson a "$ALL" --argjson b "$ISSUES" '$a + $b')
           done
 
-          echo "issues=${ISSUES}" >> "$GITHUB_OUTPUT"
+          TOTAL=$(echo "$ALL" | jq 'length')
+          echo "issue_count=${TOTAL}" >> "$GITHUB_OUTPUT"
+          echo "issues=${ALL}" >> "$GITHUB_OUTPUT"
+          echo "Total unresolved issues across projects: ${TOTAL}"
 
   fix:
     needs: discover
@@ -90,31 +107,51 @@ jobs:
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: "--max-turns 40 --allowedTools 'Bash,Read,Write,Edit,Glob,Grep'"
           show_full_output: true
           prompt: |
-            You are fixing a single bug in the Canopy Data wildlife monitoring platform (FastAPI + PostgreSQL).
-            Source files are under app/backend/ in this repository.
+            You are triaging a single Sentry issue in the Canopy Data wildlife monitoring
+            platform (FastAPI backend + React frontend).
+
+            This issue came from the ${{ matrix.issue.area }}. Its source files live under
+            ${{ matrix.issue.area == 'frontend' && 'app/frontend/src/' || 'app/backend/' }} in this repository.
 
             Below is one unresolved Sentry issue from the last 24 hours as JSON
-            (title, culprit, occurrence count, level, and stack-trace frames):
+            (title, culprit, occurrence count, level, first/last seen, area, and stack-trace frames):
 
             ${{ toJson(matrix.issue) }}
 
             Sentry link: https://${{ secrets.SENTRY_ORG }}.sentry.io/issues/${{ matrix.issue.id }}/
 
-            Always open a PR for this issue — it serves as the diagnosis, whether or not a fix was made.
-
             Instructions:
-            1. Read ONLY the source files referenced in the stack trace above, and diagnose the root cause.
-            2. Decide whether a safe, correct fix exists. Do not attempt speculative fixes.
-            3. Create a branch named fix/sentry-${{ matrix.issue.id }}-${{ github.run_number }}.
-            4. If you can safely fix it: apply the fix and commit it. Title the PR "Sentry fix: <short description>".
+            1. First check whether this issue is already handled — recurring issues reappear here
+               every night, and a duplicate PR helps nobody. The `gh` CLI is authenticated. Run:
+                 gh pr list --state all --limit 50 --search "${{ matrix.issue.id }}" --json number,title,state,url,mergedAt
+               (PRs opened by this workflow reference the Sentry issue ID in branch name and body.)
+               - If an OPEN PR references this issue: stop. Do not open another PR.
+               - If a MERGED PR references this issue: compare its mergedAt with the issue's
+                 lastSeen. If the merge is recent and the fix plausibly just hasn't deployed yet,
+                 stop. Only proceed if events clearly continue well after the fix was merged —
+                 and say so explicitly in the new PR.
+               Also skim recently merged PRs that touched the files in the stack trace
+               (gh pr list --state merged --limit 20 --json title,files,mergedAt,url) — if one of
+               them already fixes this root cause, stop.
+            2. Read ONLY the source files referenced in the stack trace, and diagnose the root cause.
+               Frontend caveat: stack frames may be minified bundle positions (no source maps are
+               uploaded yet). In that case locate the relevant code under app/frontend/src/ using
+               the issue title, culprit, error message, and tags such as api.endpoint and api.method.
+            3. Decide whether a safe, correct fix exists. Do not attempt speculative fixes.
+            4. Unless step 1 told you to stop, always open a PR for this issue — it serves as the
+               diagnosis, whether or not a fix was made. Create a branch named
+               fix/sentry-${{ matrix.issue.id }}-${{ github.run_number }}.
+            5. If you can safely fix it: apply the fix and commit it. Title the PR "Sentry fix: <short description>".
                If you cannot (external/network error, needs a human decision, too complex, or nothing to change):
                make an empty commit (git commit --allow-empty) so a PR can still be opened, and title the PR
                "Sentry diagnosis (no fix): <short description>".
-            5. The PR description must always include: the Sentry link, the root-cause diagnosis, and either
+            6. The PR description must always include: the Sentry link, the root-cause diagnosis, and either
                what changed and any caveats (if fixed), or why it is not fixable and what a human should check (if not).
-            6. Only modify files directly implicated by the stack trace. Never push directly to main.
+            7. Only modify files directly implicated by the stack trace. Never push directly to main.

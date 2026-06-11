@@ -178,6 +178,8 @@ export function useCameraTrapWizard() {
   const [filterReviewIdx, setFilterReviewIdx] = useState(0);
   // Track which imageFiles the filter results correspond to (to detect re-selection)
   const [filteredImageSet, setFilteredImageSet] = useState<ImageFile[] | null>(null);
+  // Whether the user skipped filtering (so returning to this step isn't a dead end)
+  const [skippedFiltering, setSkippedFiltering] = useState(false);
 
   // ---- Step 4: Classify ----
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -188,6 +190,8 @@ export function useCameraTrapWizard() {
   const speciesInputRef = useRef<HTMLInputElement>(null);
   const thumbnailStripRef = useRef<HTMLDivElement>(null);
   const [classifyViewerOpen, setClassifyViewerOpen] = useState(false);
+  // Track which filtered images the classifications correspond to (to detect changes)
+  const [classifiedImageSet, setClassifiedImageSet] = useState<ImageFile[] | null>(null);
 
   // ---- Detection box visibility (shared across Filter + Classify steps) ----
   const [showDetectionBoxes, setShowDetectionBoxes] = useState(true);
@@ -344,6 +348,8 @@ export function useCameraTrapWizard() {
       setClassifications(new Map());
       setViewedImages(new Set());
       setCurrentImageIndex(0);
+      setDeselectedImages(new Set());
+      setSkippedFiltering(false);
       resetSaveResume();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to process images');
@@ -356,11 +362,16 @@ export function useCameraTrapWizard() {
   // Step 3: Filter logic
   // ============================================================================
 
+  // Bumped to invalidate an in-flight filtering run (e.g. when the user skips)
+  const filterRunRef = useRef(0);
+
   const runFiltering = useCallback(async () => {
     if (imageFiles.length === 0) return;
 
+    const runId = ++filterRunRef.current;
     setFiltering(true);
     setFilterError(null);
+    setSkippedFiltering(false);
     setFilterResults(new Map());
     setFilterOverrides(new Map());
     setFilterProgress({ processed: 0, total: imageFiles.length });
@@ -373,6 +384,7 @@ export function useCameraTrapWizard() {
         const batchFiles = batch.map((img) => img.file);
 
         const response = await imagesAPI.filterImages(batchFiles);
+        if (filterRunRef.current !== runId) return; // cancelled (skipped)
 
         response.results.forEach((result: ImageFilterResult, batchIdx: number) => {
           results.set(i + batchIdx, result);
@@ -386,9 +398,13 @@ export function useCameraTrapWizard() {
       }
       setFilteredImageSet(imageFiles);
     } catch (err: unknown) {
-      setFilterError(err instanceof Error ? err.message : 'Failed to filter images');
+      if (filterRunRef.current === runId) {
+        setFilterError(err instanceof Error ? err.message : 'Failed to filter images');
+      }
     } finally {
-      setFiltering(false);
+      if (filterRunRef.current === runId) {
+        setFiltering(false);
+      }
     }
   }, [imageFiles]);
 
@@ -450,6 +466,19 @@ export function useCameraTrapWizard() {
       });
     }
   }, [currentImageIndex, activeStep, filteredImageFiles.length]);
+
+  // Reset classification state when entering Classify (only if the image set changed
+  // since classifications were built — mirrors the filteredImageSet pattern above)
+  useEffect(() => {
+    if (activeStep !== 3) return;
+    if (classifiedImageSet === filteredImageFiles) return;
+    setClassifiedImageSet(filteredImageFiles);
+    setCurrentImageIndex(0);
+    setClassifications(new Map());
+    setViewedImages(new Set());
+    setDeselectedImages(new Set());
+    resetSaveResume();
+  }, [activeStep, classifiedImageSet, filteredImageFiles, resetSaveResume]);
 
   const findNextUnviewed = useCallback((fromIndex: number): number | null => {
     for (let i = fromIndex + 1; i < filteredImageFiles.length; i++) {
@@ -720,6 +749,7 @@ export function useCameraTrapWizard() {
         case 1:
           return imageFiles.length > 0;
         case 2:
+          if (skippedFiltering) return true;
           return !filtering && filterResults.size === imageFiles.length && filteredImageFiles.length > 0;
         case 3:
           return classifiedCount > 0;
@@ -729,7 +759,7 @@ export function useCameraTrapWizard() {
           return false;
       }
     },
-    [selectedSurveyType, selectedDevice, date, selectedSurveyors.length, imageFiles.length, filtering, filterResults.size, filteredImageFiles.length, classifiedCount, selectedImageCount],
+    [selectedSurveyType, selectedDevice, date, selectedSurveyors.length, imageFiles.length, skippedFiltering, filtering, filterResults.size, filteredImageFiles.length, classifiedCount, selectedImageCount],
   );
 
   // ============================================================================
@@ -743,26 +773,23 @@ export function useCameraTrapWizard() {
     // Don't clear filter results — they'll be re-used if images haven't changed
   }, []);
 
-  const goToClassifyStep = useCallback(() => {
-    setCurrentImageIndex(0);
-    setClassifications(new Map());
-    setViewedImages(new Set());
-    resetSaveResume();
-    setActiveStep(3);
-  }, [resetSaveResume]);
+  // Classification state is reset on entry only if the image set changed (see effect above)
+  const goToClassifyStep = useCallback(() => setActiveStep(3), []);
 
   const skipFiltering = useCallback(() => {
+    filterRunRef.current++; // cancel any in-flight filtering run
+    setFiltering(false);
     setFilterError(null);
-    // Reset filter results so all images pass through
-    setFilterResults(new Map());
-    setFilterOverrides(new Map());
+    setSkippedFiltering(true);
     setFilteredImageSet(imageFiles);
+    // Reset filter results so all images pass through. Skip if already empty, so
+    // returning here after classifying doesn't change the image set and wipe work.
+    if (filterResults.size > 0 || filterOverrides.size > 0) {
+      setFilterResults(new Map());
+      setFilterOverrides(new Map());
+    }
     setActiveStep(3);
-    setCurrentImageIndex(0);
-    setClassifications(new Map());
-    setViewedImages(new Set());
-    resetSaveResume();
-  }, [imageFiles, resetSaveResume]);
+  }, [imageFiles, filterResults, filterOverrides]);
 
   return {
     // Step

@@ -89,3 +89,67 @@ describe('getOrgSlug', () => {
     expect(getOrgSlug()).toBe('heal');
   });
 });
+
+describe('session expiry handling', () => {
+  const TOKEN_KEY = 'admin_session_token';
+  const sessionExpiredEvents: Event[] = [];
+  const recordEvent = (e: Event) => sessionExpiredEvents.push(e);
+
+  // Mock fetch to return an error response with the given status
+  const mockFetchError = (status: number, detail: string) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status,
+      json: async () => ({ detail }),
+      text: async () => detail,
+    }));
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    mockLocation('localhost');
+    localStorage.setItem(TOKEN_KEY, 'stale-token');
+    sessionExpiredEvents.length = 0;
+    window.addEventListener('canopy:session-expired', recordEvent);
+  });
+
+  afterEach(() => {
+    window.removeEventListener('canopy:session-expired', recordEvent);
+    localStorage.clear();
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+    });
+  });
+
+  it('should clear the token and dispatch session-expired on a 401', async () => {
+    mockFetchError(401, 'Invalid or expired session');
+    const { authAPI } = await import('./api');
+
+    await expect(authAPI.status()).rejects.toThrowError('Invalid or expired session');
+
+    expect(sessionExpiredEvents).toHaveLength(1);
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
+  });
+
+  it('should not treat a failed login (401) as session expiry', async () => {
+    mockFetchError(401, 'Invalid password');
+    const { authAPI } = await import('./api');
+
+    await expect(authAPI.login('wrong-password')).rejects.toThrowError('Invalid password');
+
+    expect(sessionExpiredEvents).toHaveLength(0);
+    expect(localStorage.getItem(TOKEN_KEY)).toBe('stale-token');
+  });
+
+  it('should not dispatch session-expired for non-401 errors', async () => {
+    mockFetchError(500, 'Internal server error');
+    const { authAPI } = await import('./api');
+
+    await expect(authAPI.status()).rejects.toThrowError('Internal server error');
+
+    expect(sessionExpiredEvents).toHaveLength(0);
+    expect(localStorage.getItem(TOKEN_KEY)).toBe('stale-token');
+  });
+});
