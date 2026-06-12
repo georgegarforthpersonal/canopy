@@ -32,6 +32,7 @@ import {
 import { Add, Delete, RestoreFromTrash, Edit, Lock, Download } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { SPACING } from '../config/responsive';
 import { useResponsive } from '../hooks/useResponsive';
 import {
   surveyorsAPI,
@@ -553,7 +554,7 @@ export function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
+      <Box sx={{ p: SPACING.PAGE_PADDING, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
         <Lock sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
         <Typography variant="h6" sx={{ mb: 1 }}>
           Admin Access Required
@@ -573,7 +574,7 @@ export function AdminPage() {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>

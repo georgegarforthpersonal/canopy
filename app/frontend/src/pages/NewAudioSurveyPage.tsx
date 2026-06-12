@@ -15,6 +15,7 @@ import { useResponsive } from '../hooks/useResponsive';
 import { useAudioWizard, AUDIO_WIZARD_STEPS } from '../hooks/useAudioWizard';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { PageHeader } from '../components/layout/PageHeader';
+import { SPACING } from '../config/responsive';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import {
   SetupStep,
@@ -61,7 +62,7 @@ export function NewAudioSurveyPage() {
   }
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       <PageHeader
         backButton={{ href: '/surveys' }}
         actions={

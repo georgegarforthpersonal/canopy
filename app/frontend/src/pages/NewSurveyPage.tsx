@@ -40,6 +40,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { brandColors } from '../theme';
+import { SPACING } from '../config/responsive';
 
 /**
  * Progress from a failed save attempt. Lets a retry resume where it left off
@@ -515,7 +516,7 @@ export function NewSurveyPage() {
 
   if (!isAuthenticated) {
     return (
-      <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
+      <Box sx={{ p: SPACING.PAGE_PADDING, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
         <Lock sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
         <Typography variant="h6" sx={{ mb: 1 }}>
           Admin Access Required
@@ -569,7 +570,7 @@ export function NewSurveyPage() {
   // ============================================================================
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       {/* Page Header */}
       <PageHeader
         backButton={{ href: '/surveys' }}

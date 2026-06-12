@@ -15,6 +15,7 @@ import { useResponsive } from '../hooks/useResponsive';
 import { useCameraTrapWizard, WIZARD_STEPS } from '../hooks/useCameraTrapWizard';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { PageHeader } from '../components/layout/PageHeader';
+import { SPACING } from '../config/responsive';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import {
   SetupStep,
@@ -63,7 +64,7 @@ export function NewCameraTrapSurveyPage() {
   }
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       <PageHeader
         backButton={{ href: '/surveys' }}
         actions={
