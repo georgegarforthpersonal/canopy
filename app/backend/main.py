@@ -12,6 +12,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import sentry_sdk
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -34,6 +36,10 @@ sentry_sdk.init(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Run the media job dispatcher for the lifetime of the app."""
+    alembic_cfg = AlembicConfig("alembic.ini")
+    alembic_command.upgrade(alembic_cfg, "head")
+    logger.info("Database migrations applied")
+
     if settings.job_dispatcher_enabled:
         await start_dispatcher()
     yield
