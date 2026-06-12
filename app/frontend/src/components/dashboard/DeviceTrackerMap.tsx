@@ -305,7 +305,7 @@ export function DeviceTrackerMap() {
               return (
                 <Marker key={group.key} position={[group.latitude, group.longitude]} icon={icon}>
                   <Popup>
-                    <Box sx={{ minWidth: 190, maxHeight: 240, overflowY: 'auto', p: 0.5 }}>
+                    <Box sx={{ minWidth: 'min(190px, calc(100vw - 112px))', maxHeight: 240, overflowY: 'auto', p: 0.5 }}>
                       {!single && (
                         <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
                           {group.devices.length} tags at this location

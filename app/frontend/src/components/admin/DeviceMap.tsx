@@ -270,7 +270,7 @@ export default function DeviceMap({
                 icon={getDeviceIcon(device)}
               >
                 <Popup>
-                  <Box sx={{ minWidth: 180, p: 0.5 }}>
+                  <Box sx={{ minWidth: 'min(180px, calc(100vw - 112px))', p: 0.5 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
                       {device.name || device.device_id}
                     </Typography>
