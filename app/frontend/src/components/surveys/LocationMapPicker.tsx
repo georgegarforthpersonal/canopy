@@ -230,7 +230,7 @@ export default function LocationMapPicker({
         </Box>
       </Paper>
 
-      <Stack direction="row" spacing={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField
           label="Latitude"
           type="number"
