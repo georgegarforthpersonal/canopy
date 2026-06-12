@@ -25,7 +25,5 @@ COPY . .
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run uvicorn server
-# --host 0.0.0.0 allows external connections
-# --reload enables auto-reload for development
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Run migrations then start the server so schema changes are applied on every deploy.
+CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
