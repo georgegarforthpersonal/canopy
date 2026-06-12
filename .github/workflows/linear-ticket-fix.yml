@@ -32,7 +32,7 @@ jobs:
           # PR attachment are excluded — the Linear GitHub integration
           # attaches PRs automatically, so that attachment is the primary
           # dedup signal across nightly runs.
-          QUERY='{ issues(filter: { team: { key: { eq: "GEO" } }, state: { type: { in: [unstarted, started] } } }, first: 50) { nodes { id identifier title description url priority estimate state { name type } labels { nodes { name } } attachments { nodes { sourceType } } } } }'
+          QUERY='{ issues(filter: { team: { key: { eq: "GEO" } }, state: { type: { in: ["unstarted", "started"] } } }, first: 50) { nodes { id identifier title description url priority estimate state { name type } labels { nodes { name } } attachments { nodes { sourceType } } } } }'
 
           RESPONSE=$(curl -s -w "\n%{http_code}" https://api.linear.app/graphql \
             -H "Authorization: ${LINEAR_API_KEY}" \
