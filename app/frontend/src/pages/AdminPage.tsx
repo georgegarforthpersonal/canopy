@@ -33,6 +33,7 @@ import { Add, Delete, RestoreFromTrash, Edit, Lock, Download } from '@mui/icons-
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { SPACING } from '../config/responsive';
+import { useResponsive } from '../hooks/useResponsive';
 import {
   surveyorsAPI,
   surveyTypesAPI,
@@ -81,6 +82,7 @@ function TabPanel(props: TabPanelProps) {
  */
 export function AdminPage() {
   const { isAuthenticated, isLoading: authLoading, requireAuth } = useAuth();
+  const { isMobile } = useResponsive();
   const [tabValue, setTabValue] = useState(0);
 
   // Surveyors state
@@ -700,7 +702,9 @@ export function AdminPage() {
         )}
 
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-          <Table>
+          {/* minWidth lets TableContainer scroll horizontally on phones
+              instead of crushing the eight columns to unreadable widths */}
+          <Table sx={{ minWidth: 720 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
@@ -858,7 +862,9 @@ export function AdminPage() {
         </Box>
 
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-          <Table>
+          {/* minWidth lets TableContainer scroll horizontally on phones
+              instead of crushing the seven columns to unreadable widths */}
+          <Table sx={{ minWidth: 640 }}>
             <TableHead>
               <TableRow>
                 <TableCell>Device ID</TableCell>
@@ -1006,7 +1012,13 @@ export function AdminPage() {
       </TabPanel>
 
       {/* Add/Edit Surveyor Dialog */}
-      <Dialog open={surveyorDialogOpen} onClose={() => !savingSurveyor && setSurveyorDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={surveyorDialogOpen}
+        onClose={() => !savingSurveyor && setSurveyorDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>{surveyorDialogMode === 'add' ? 'Add New Surveyor' : 'Edit Surveyor'}</DialogTitle>
         <DialogContent>
           {surveyorFormError && (
@@ -1083,6 +1095,7 @@ export function AdminPage() {
         onClose={() => !savingSurveyType && setSurveyTypeDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>{surveyTypeDialogMode === 'add' ? 'Add New Survey Type' : 'Edit Survey Type'}</DialogTitle>
         <DialogContent>
@@ -1413,6 +1426,7 @@ export function AdminPage() {
         onClose={() => !savingDevice && setDeviceDialogOpen(false)}
         maxWidth="md"
         fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>{deviceDialogMode === 'add' ? 'Add New Device' : 'Edit Device'}</DialogTitle>
         <DialogContent>

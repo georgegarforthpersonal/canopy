@@ -162,7 +162,7 @@ function AddPopupForm({
       onClick={stopPropagation}
       onDoubleClick={stopPropagation}
       onWheel={stopPropagation}
-      sx={{ minWidth: 240, p: 0.5 }}
+      sx={{ minWidth: 'min(240px, calc(100vw - 112px))', p: 0.5 }}
     >
       <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
         Add Sighting
@@ -308,7 +308,7 @@ function EditPopupForm({
       onClick={stopPropagation}
       onDoubleClick={stopPropagation}
       onWheel={stopPropagation}
-      sx={{ minWidth: 240, p: 0.5 }}
+      sx={{ minWidth: 'min(240px, calc(100vw - 112px))', p: 0.5 }}
     >
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
@@ -386,7 +386,7 @@ function ViewPopupContent({
       onClick={stopPropagation}
       onDoubleClick={stopPropagation}
       onWheel={stopPropagation}
-      sx={{ minWidth: 200, p: 0.5 }}
+      sx={{ minWidth: 'min(200px, calc(100vw - 112px))', p: 0.5 }}
     >
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
         <SpeciesIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
@@ -472,7 +472,7 @@ export function GroupedMarkerPopupContent({
       onClick={stopPropagation}
       onDoubleClick={stopPropagation}
       onWheel={stopPropagation}
-      sx={{ minWidth: 240, p: 0.5 }}
+      sx={{ minWidth: 'min(240px, calc(100vw - 112px))', p: 0.5 }}
     >
       {/* Header with location and total */}
       <Stack spacing={0.5} sx={{ mb: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>

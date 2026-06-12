@@ -6,13 +6,17 @@ import {
   Stepper,
   Step,
   StepLabel,
+  Typography,
 } from '@mui/material';
 import { Cancel } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useResponsive } from '../hooks/useResponsive';
 import { useCameraTrapWizard, WIZARD_STEPS } from '../hooks/useCameraTrapWizard';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { PageHeader } from '../components/layout/PageHeader';
 import { SPACING } from '../config/responsive';
+import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import {
   SetupStep,
   UploadStep,
@@ -25,7 +29,15 @@ import {
 export function NewCameraTrapSurveyPage() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isMobile } = useResponsive();
   const wizard = useCameraTrapWizard();
+
+  // Dirty once the wizard has progressed or images are selected, until the
+  // survey is saved. Blocks Cancel, the back link, and browser back; the
+  // confirmation dialog below lets the user proceed or stay.
+  const blocker = useUnsavedChangesGuard(
+    () => (wizard.activeStep > 0 || wizard.imageFiles.length > 0) && !wizard.saveCompleteRef.current,
+  );
 
   if (authLoading) {
     return (
@@ -67,13 +79,20 @@ export function NewCameraTrapSurveyPage() {
         }
       />
 
-      <Stepper activeStep={wizard.activeStep} sx={{ mb: 4 }}>
+      {/* On phones the labelled horizontal stepper overflows, so show
+          icon-only steps with the current step named underneath */}
+      <Stepper activeStep={wizard.activeStep} sx={{ mb: isMobile ? 1.5 : 4 }}>
         {WIZARD_STEPS.map((label) => (
           <Step key={label}>
-            <StepLabel>{label}</StepLabel>
+            <StepLabel>{isMobile ? '' : label}</StepLabel>
           </Step>
         ))}
       </Stepper>
+      {isMobile && (
+        <Typography variant="subtitle2" align="center" sx={{ mb: 3, fontWeight: 600 }}>
+          {WIZARD_STEPS[wizard.activeStep]}
+        </Typography>
+      )}
 
       {wizard.error && wizard.activeStep !== 5 && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => wizard.setError(null)}>
@@ -87,6 +106,12 @@ export function NewCameraTrapSurveyPage() {
       {wizard.activeStep === 3 && wizard.filteredImageFiles.length > 0 && <ClassifyStep wizard={wizard} />}
       {wizard.activeStep === 4 && <ReviewStep wizard={wizard} />}
       {wizard.activeStep === 5 && <SaveStep wizard={wizard} />}
+
+      <UnsavedChangesDialog
+        open={blocker.state === 'blocked'}
+        onKeepWorking={() => blocker.reset?.()}
+        onDiscard={() => blocker.proceed?.()}
+      />
     </Box>
   );
 }

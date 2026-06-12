@@ -179,7 +179,7 @@ export function SurveyFormFields({
 
       {/* Start/End Time Pickers */}
       {showStartEndTime && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: { xs: 2, md: 3 } }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: { xs: 2, md: 3 } }}>
           <TimePicker
             label="Start Time"
             value={startTime ?? null}
@@ -217,7 +217,7 @@ export function SurveyFormFields({
 
       {/* Temperature and Sun Percentage */}
       {(showTemperature || showSunPercentage) && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: showTemperature && showSunPercentage ? '1fr 1fr' : '1fr', gap: { xs: 2, md: 3 } }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: showTemperature && showSunPercentage ? '1fr 1fr' : '1fr' }, gap: { xs: 2, md: 3 } }}>
           {showTemperature && (
             <TextField
               label="Temperature (°C)"

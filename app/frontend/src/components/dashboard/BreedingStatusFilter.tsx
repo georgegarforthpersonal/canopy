@@ -110,7 +110,7 @@ export default function BreedingStatusFilter({
         onClose={() => setAnchorEl(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { width: 320, maxHeight: 480, p: 0 } } }}
+        slotProps={{ paper: { sx: { width: 'min(320px, calc(100vw - 32px))', maxHeight: 480, p: 0 } } }}
       >
         <Box sx={{ px: 2, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
