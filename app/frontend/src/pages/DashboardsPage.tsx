@@ -533,7 +533,7 @@ export function DashboardsPage() {
                 size="small"
               />
             )}
-            sx={{ minWidth: 300 }}
+            sx={{ minWidth: { xs: '100%', sm: 300 } }}
             isOptionEqualToValue={(option, value) => option.id === value.id}
             selectOnFocus
             clearOnBlur
