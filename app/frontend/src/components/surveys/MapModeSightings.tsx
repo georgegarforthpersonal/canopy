@@ -15,7 +15,7 @@ import LayersIcon from '@mui/icons-material/Layers';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import 'leaflet/dist/leaflet.css';
-import { useMapFullscreen, MapResizeHandler } from '../../hooks';
+import { useMapFullscreen, MapResizeHandler, MapStopOnUnmount } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
 
 import type { Species, BreedingStatusCode, LocationWithBoundary, Device } from '../../services/api';
@@ -277,6 +277,7 @@ export function MapModeSightings({
             <MapClickHandler onClick={mapIsReadOnly ? undefined : handleMapClick} />
             <FitBoundsToPoints points={fitPoints} surveyLocationId={surveyLocationId} locationsWithBoundaries={locationsWithBoundaries} />
             <MapResizeHandler isFullscreen={isFullscreen} />
+            <MapStopOnUnmount />
 
             {locationsWithBoundaries && locationsWithBoundaries.length > 0 && (
               <FieldBoundaryOverlay locations={locationsWithBoundaries} />

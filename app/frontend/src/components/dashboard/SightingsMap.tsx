@@ -11,7 +11,7 @@ import dayjs from 'dayjs';
 import 'leaflet/dist/leaflet.css';
 import type { SpeciesSightingLocation, LocationWithBoundary } from '../../services/api';
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
-import { useMapFullscreen, MapResizeHandler } from '../../hooks';
+import { useMapFullscreen, MapResizeHandler, MapStopOnUnmount } from '../../hooks';
 import { getSurveyTypeColorStyles } from '../SurveyTypeColors';
 import { brandColors } from '../../theme';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
@@ -661,6 +661,7 @@ export default function SightingsMap({ sightings, loading, error, locationsWithB
 
             <FitBounds sightings={sightings} />
             <MapResizeHandler isFullscreen={isFullscreen} />
+            <MapStopOnUnmount />
           </MapContainer>
         </Box>
       </Paper>

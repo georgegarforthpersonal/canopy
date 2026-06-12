@@ -86,3 +86,22 @@ export function MapResizeHandler({ isFullscreen }: { isFullscreen: boolean }) {
 
   return null;
 }
+
+/**
+ * react-leaflet child component that cancels any in-progress pan/zoom
+ * animation before the MapContainer unmounts. Without this, Leaflet's
+ * CSS transitionend callback (_onZoomTransitionEnd) can fire after
+ * map.remove() has already cleared _mapPane, throwing:
+ *   TypeError: Cannot read properties of undefined (reading '_leaflet_pos')
+ */
+export function MapStopOnUnmount() {
+  const map = useMap();
+
+  useEffect(() => {
+    return () => {
+      map.stop();
+    };
+  }, [map]);
+
+  return null;
+}

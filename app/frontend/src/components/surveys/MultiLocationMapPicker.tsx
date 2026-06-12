@@ -27,7 +27,7 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import 'leaflet/dist/leaflet.css';
 
 import type { BreedingStatusCode, BreedingCategory, LocationWithBoundary } from '../../services/api';
-import { useMapFullscreen, MapResizeHandler } from '../../hooks';
+import { useMapFullscreen, MapResizeHandler, MapStopOnUnmount } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from './breedingConstants';
 import FieldBoundaryOverlay from './FieldBoundaryOverlay';
@@ -314,6 +314,7 @@ export default function MultiLocationMapPicker({
             <MapClickHandler onClick={handleMapClick} disabled={disabled || isAtMax} />
             <FitBoundsToMarkers locations={locations} surveyLocationId={surveyLocationId} locationsWithBoundaries={locationsWithBoundaries} />
             <MapResizeHandler isFullscreen={isFullscreen} />
+            <MapStopOnUnmount />
 
             {/* Field boundaries layer (rendered before markers so markers appear on top) */}
             {locationsWithBoundaries && locationsWithBoundaries.length > 0 && (

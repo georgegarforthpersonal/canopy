@@ -24,7 +24,7 @@ import dayjs from 'dayjs';
 import 'leaflet/dist/leaflet.css';
 import { ecotopiaAPI } from '../../services/api';
 import type { EcotopiaDevice, EcotopiaGpsFix } from '../../services/api';
-import { useMapFullscreen, MapResizeHandler } from '../../hooks';
+import { useMapFullscreen, MapResizeHandler, MapStopOnUnmount } from '../../hooks';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
 import { brandColors } from '../../theme';
 
@@ -322,6 +322,7 @@ export function DeviceTrackerMap() {
 
             <FitBounds points={fitPoints} />
             <MapResizeHandler isFullscreen={isFullscreen} />
+            <MapStopOnUnmount />
           </MapContainer>
         </Box>
       </Paper>

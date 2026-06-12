@@ -32,7 +32,7 @@ import RestoreFromTrashIcon from '@mui/icons-material/RestoreFromTrash';
 import 'leaflet/dist/leaflet.css';
 import type { Device, LocationWithBoundary } from '../../services/api';
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
-import { useMapFullscreen, MapResizeHandler } from '../../hooks';
+import { useMapFullscreen, MapResizeHandler, MapStopOnUnmount } from '../../hooks';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
 import { DEVICE_COLORS, DEVICE_SVG, getDeviceIcon } from '../../utils/deviceIcon';
 
@@ -348,6 +348,7 @@ export default function DeviceMap({
 
             <FitBoundsToDevices devices={devices} />
             <MapResizeHandler isFullscreen={isFullscreen} />
+            <MapStopOnUnmount />
           </MapContainer>
         </Box>
       </Paper>

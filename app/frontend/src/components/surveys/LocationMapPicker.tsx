@@ -8,7 +8,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import LayersIcon from '@mui/icons-material/Layers';
 import 'leaflet/dist/leaflet.css';
-import { useMapFullscreen, MapResizeHandler } from '../../hooks';
+import { useMapFullscreen, MapResizeHandler, MapStopOnUnmount } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
 import FieldBoundaryOverlay from './FieldBoundaryOverlay';
 
@@ -206,6 +206,7 @@ export default function LocationMapPicker({
             <MapClickHandler onClick={handleMapClick} />
             {position && <Marker position={position} />}
             <MapResizeHandler isFullscreen={isFullscreen} />
+            <MapStopOnUnmount />
             <BoundaryFitter boundary={locationBoundary} />
             {/* Render boundaries — prefer the full list overlay, fall back to single boundary */}
             {locationBoundaries && locationBoundaries.length > 0 ? (
