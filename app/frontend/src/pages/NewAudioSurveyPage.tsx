@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAudioWizard, AUDIO_WIZARD_STEPS } from '../hooks/useAudioWizard';
 import { PageHeader } from '../components/layout/PageHeader';
+import { SPACING } from '../config/responsive';
 import {
   SetupStep,
   UploadStep,
@@ -49,7 +50,7 @@ export function NewAudioSurveyPage() {
   }
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       <PageHeader
         backButton={{ href: '/surveys' }}
         actions={

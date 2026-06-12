@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCameraTrapWizard, WIZARD_STEPS } from '../hooks/useCameraTrapWizard';
 import { PageHeader } from '../components/layout/PageHeader';
+import { SPACING } from '../config/responsive';
 import {
   SetupStep,
   UploadStep,
@@ -51,7 +52,7 @@ export function NewCameraTrapSurveyPage() {
   }
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       <PageHeader
         backButton={{ href: '/surveys' }}
         actions={

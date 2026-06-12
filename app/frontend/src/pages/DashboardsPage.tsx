@@ -10,6 +10,7 @@ import { DeviceTrackerMap } from '../components/dashboard/DeviceTrackerMap';
 import { useAuth } from '../context/AuthContext';
 import { speciesTypes, getSpeciesIcon, getSpeciesDisplayName } from '../config';
 import { notionColors, brandColors } from '../theme';
+import { SPACING } from '../config/responsive';
 
 /**
  * DashboardsPage displays cumulative species count charts
@@ -356,7 +357,7 @@ export function DashboardsPage() {
   // ============================================================================
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       {isCannwood && (
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={activeTab} onChange={(_e, v) => handleTabChange(v)}>

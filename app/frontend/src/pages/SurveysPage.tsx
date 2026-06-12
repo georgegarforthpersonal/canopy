@@ -10,6 +10,7 @@ import { useState, useEffect, useRef } from 'react';
 import { surveysAPI, surveyorsAPI, surveyTypesAPI } from '../services/api';
 import type { Survey, Surveyor, PaginationMeta, SurveyType } from '../services/api';
 import { getSurveyorName, getInitials, formatDate } from '../utils/formatters';
+import { SPACING } from '../config/responsive';
 
 /**
  * SurveysPage displays a table of wildlife surveys with:
@@ -222,7 +223,7 @@ export function SurveysPage() {
   // Show error state
   if (error) {
     return (
-      <Box sx={{ p: 4 }}>
+      <Box sx={{ p: SPACING.PAGE_PADDING }}>
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
@@ -234,7 +235,7 @@ export function SurveysPage() {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       {/* Filters and Action Button */}
       <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center" justifyContent="space-between">
         <Stack direction="row" spacing={2} alignItems="center">

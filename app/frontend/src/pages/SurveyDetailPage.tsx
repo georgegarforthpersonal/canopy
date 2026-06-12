@@ -16,6 +16,7 @@ import { getSpeciesIcon } from '../config';
 import { PageHeader } from '../components/layout/PageHeader';
 import { getSurveyorName, formatDate } from '../utils/formatters';
 import { ImageViewerModal, type ImageViewerItem } from '../components/ImageViewerModal';
+import { SPACING } from '../config/responsive';
 
 /**
  * Small thumbnail component that lazily loads a presigned URL for a camera trap image
@@ -258,7 +259,7 @@ export function SurveyDetailPage() {
   // so the user keeps their edit state and can retry.
   if (!survey) {
     return (
-      <Box sx={{ p: 4 }}>
+      <Box sx={{ p: SPACING.PAGE_PADDING }}>
         <Alert severity="error" sx={{ mb: 2 }}>
           {error || 'Survey not found'}
         </Alert>
@@ -693,7 +694,7 @@ export function SurveyDetailPage() {
   // ============================================================================
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+    <Box sx={{ p: SPACING.PAGE_PADDING }}>
       {/* Page Header */}
       <PageHeader
         backButton={{ href: '/surveys' }}
