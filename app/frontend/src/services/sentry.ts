@@ -54,6 +54,13 @@ export function reportApiError(error: unknown, context: ApiErrorContext): void {
   if (context.status === undefined && !navigator.onLine) {
     return;
   }
+  // "Failed to fetch" is the browser's generic network error: the server was
+  // unreachable (cold start, transient blip, CORS preflight failure). It is
+  // the same class of problem as being offline — not a code bug, and not
+  // actionable. The caller already surfaces an error to the user.
+  if (error instanceof TypeError && error.message === 'Failed to fetch') {
+    return;
+  }
 
   Sentry.captureException(error, {
     tags: {
