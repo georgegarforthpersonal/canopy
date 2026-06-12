@@ -1,0 +1,144 @@
+name: Linear Ticket Fix
+
+on:
+  # schedule:
+  #   - cron: "0 5 * * *" # 5am UTC daily — uncomment after a successful trial run
+  workflow_dispatch: # Manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: linear-ticket-fix
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ticket_count: ${{ steps.linear.outputs.ticket_count }}
+      tickets: ${{ steps.linear.outputs.tickets }}
+    steps:
+      - name: Fetch active Linear tickets
+        id: linear
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          # Fetch the GEO team's active board: unstarted (Todo) and started
+          # (In Progress) issues. Tickets that already have a linked GitHub
+          # PR attachment are excluded — the Linear GitHub integration
+          # attaches PRs automatically, so that attachment is the primary
+          # dedup signal across nightly runs.
+          QUERY='{ issues(filter: { team: { key: { eq: "GEO" } }, state: { type: { in: [unstarted, started] } } }, first: 50) { nodes { id identifier title description url priority estimate state { name type } labels { nodes { name } } attachments { nodes { sourceType } } } } }'
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" https://api.linear.app/graphql \
+            -H "Authorization: ${LINEAR_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -n --arg q "$QUERY" '{query: $q}')")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "Linear API status: ${HTTP_CODE}"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Linear API error: ${BODY}"
+            exit 1
+          fi
+          if [ "$(echo "$BODY" | jq 'has("errors")')" = "true" ]; then
+            echo "Linear GraphQL errors: $(echo "$BODY" | jq -c '.errors')"
+            exit 1
+          fi
+
+          ALL=$(echo "$BODY" | jq -c '[.data.issues.nodes[]
+            | select((.attachments.nodes | map(select((.sourceType // "") | test("github"; "i"))) | length) == 0)
+            | {id, identifier, title, url, priority, estimate,
+               state: .state.name,
+               labels: [.labels.nodes[].name],
+               description: ((.description // "") | .[0:3000])}]')
+          TOTAL=$(echo "$ALL" | jq 'length')
+          SKIPPED=$(echo "$BODY" | jq '[.data.issues.nodes[] | select((.attachments.nodes | map(select((.sourceType // "") | test("github"; "i"))) | length) > 0)] | length')
+          echo "Active tickets without a linked PR: ${TOTAL} (skipped ${SKIPPED} with linked PRs)"
+
+          # Cap per run to bound cost; remaining tickets are picked up next run.
+          TICKETS=$(echo "$ALL" | jq -c '.[0:10]')
+          COUNT=$(echo "$TICKETS" | jq 'length')
+          if [ "$COUNT" != "$TOTAL" ]; then
+            echo "Capping this run to ${COUNT} of ${TOTAL} tickets"
+          fi
+
+          echo "ticket_count=${COUNT}" >> "$GITHUB_OUTPUT"
+          echo "tickets=${TICKETS}" >> "$GITHUB_OUTPUT"
+
+  fix:
+    needs: discover
+    if: needs.discover.outputs.ticket_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        ticket: ${{ fromJson(needs.discover.outputs.tickets) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--max-turns 75 --allowedTools 'Bash,Read,Write,Edit,Glob,Grep'"
+          show_full_output: true
+          prompt: |
+            You are implementing a single Linear ticket for the Canopy Data wildlife
+            monitoring platform (FastAPI backend in app/backend/, React frontend in
+            app/frontend/src/).
+
+            Below is the ticket as JSON (identifier, title, description, priority,
+            labels, state, and Linear URL):
+
+            ${{ toJson(matrix.ticket) }}
+
+            Linear ticket: ${{ matrix.ticket.url }}
+
+            Instructions:
+            1. Dedup first. The `gh` CLI is authenticated. Run:
+                 gh pr list --state all --limit 50 --search "${{ matrix.ticket.identifier }}" --json number,title,state,url,mergedAt
+               - If an OPEN PR references this ticket: stop. Do not open another PR.
+               - If a MERGED PR references it and the ticket is still active, the state
+                 move may just not have synced — stop unless the ticket clearly asks for
+                 more than that PR delivered.
+            2. Read the ticket carefully, then explore the codebase to understand what the
+               change involves. Use the repo's existing patterns and conventions.
+            3. Decide whether this ticket is concrete and small enough to implement safely
+               in ONE focused PR. Implement it only if you are confident you understand the
+               requirement. Do NOT attempt speculative or partial implementations, and do
+               NOT start tickets that are really multi-PR projects.
+            4. If you implement it:
+               - Branch name: claude/${{ matrix.ticket.identifier }}-<short-slug>
+                 (the ticket identifier in the branch name is what links the PR to Linear).
+               - Make the change, keeping the diff as small as the ticket allows.
+               - Do not run the full test suite (it needs docker compose); CI runs on the
+                 PR and gates the merge. You may run quick targeted checks if cheap.
+               - Open a PR titled "${{ matrix.ticket.identifier }}: <short description>".
+                 The PR body MUST contain the line "Fixes ${{ matrix.ticket.identifier }}"
+                 (this closes the Linear ticket on merge), the Linear URL, a summary of
+                 the approach, and any caveats for the reviewer.
+            5. If you decide NOT to implement it (too vague, too large, needs a product
+               decision, or blocked): do not open a PR. Instead post a comment on the
+               Linear ticket explaining what is missing or what a human should decide.
+               Post it with:
+                 curl -s https://api.linear.app/graphql \
+                   -H "Authorization: ${LINEAR_API_KEY}" \
+                   -H "Content-Type: application/json" \
+                   --data "$(jq -n --arg id "${{ matrix.ticket.id }}" --arg body "<your comment in markdown>" '{query: "mutation($id: String!, $body: String!) { commentCreate(input: {issueId: $id, body: $body}) { success } }", variables: {id: $id, body: $body}}')"
+               Sign the comment "— Claude (linear-ticket-fix workflow)" so it is clearly
+               automated.
+            6. Never push directly to main. Only modify files relevant to this ticket.
