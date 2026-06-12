@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { useResponsive } from '../../hooks/useResponsive';
 import {
   Box,
   Typography,
@@ -43,6 +44,8 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
     canProceed, setActiveStep,
   } = wizard;
 
+  const { isMobile } = useResponsive();
+
   const currentImage = filteredImageFiles[currentImageIndex];
   const origIdx = filteredToOriginalIndex[currentImageIndex];
   const currentClassifications = classifications.get(origIdx);
@@ -73,12 +76,14 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
     <Paper sx={{ p: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
       {/* Progress bar */}
       <Box sx={{ mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
           <Typography variant="body2" color="text.secondary">
             Image {currentImageIndex + 1} of {filteredImageFiles.length}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Viewed {viewedCount} of {filteredImageFiles.length} · {uniqueSpeciesCount} species identified
+            {isMobile
+              ? `${viewedCount}/${filteredImageFiles.length} viewed · ${uniqueSpeciesCount} sp.`
+              : `Viewed ${viewedCount} of ${filteredImageFiles.length} · ${uniqueSpeciesCount} species identified`}
           </Typography>
         </Box>
         <LinearProgress
@@ -297,7 +302,9 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
           onClick={() => setActiveStep(4)}
           sx={{ textTransform: 'none' }}
         >
-          Next: Review ({uniqueSpeciesCount} species identified)
+          {isMobile
+            ? `Next: Review (${uniqueSpeciesCount} sp.)`
+            : `Next: Review (${uniqueSpeciesCount} species identified)`}
         </Button>
       </Box>
     </Paper>

@@ -17,6 +17,7 @@ import {
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
+import { useResponsive } from '../../hooks/useResponsive';
 import { ImageViewerModal } from '../ImageViewerModal';
 import { DetectionBoxOverlay } from '../DetectionBoxOverlay';
 import { DetectionBoxToggleButton } from '../DetectionBoxToggleButton';
@@ -38,6 +39,8 @@ export function FilterStep({ wizard }: FilterStepProps) {
     canProceed, goBackToUpload, goToClassifyStep, skipFiltering,
     filteredImageFiles,
   } = wizard;
+
+  const { isMobile } = useResponsive();
 
   const { summary, animalIndices, emptyIndices } = filterDerived;
 
@@ -263,7 +266,15 @@ export function FilterStep({ wizard }: FilterStepProps) {
       )}
 
       {/* Navigation */}
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
+      <Box
+        sx={{
+          mt: 3,
+          display: 'flex',
+          flexDirection: isMobile ? 'column-reverse' : 'row',
+          justifyContent: 'space-between',
+          gap: 1,
+        }}
+      >
         <Button
           startIcon={<ArrowBack />}
           onClick={goBackToUpload}
@@ -271,11 +282,12 @@ export function FilterStep({ wizard }: FilterStepProps) {
         >
           Back
         </Button>
-        <Stack direction="row" spacing={1}>
+        <Stack direction={isMobile ? 'column' : 'row'} spacing={1}>
           <Button
             variant="outlined"
             onClick={skipFiltering}
             sx={{ textTransform: 'none' }}
+            fullWidth={isMobile}
           >
             Skip Filtering
           </Button>
@@ -285,8 +297,11 @@ export function FilterStep({ wizard }: FilterStepProps) {
             disabled={!canProceed(2)}
             onClick={goToClassifyStep}
             sx={{ textTransform: 'none' }}
+            fullWidth={isMobile}
           >
-            Next: Classify ({filteredImageFiles.length} images)
+            {isMobile
+              ? `Next: Classify (${filteredImageFiles.length})`
+              : `Next: Classify (${filteredImageFiles.length} images)`}
           </Button>
         </Stack>
       </Box>
