@@ -20,6 +20,17 @@ body,
   min-width: 240px;
 }
 
+/* On narrow phones a 240px+ popup overflows the map (the page padding
+   leaves maps well under viewport width), so let popups shrink and cap
+   them below the viewport. max-width also overrides the inline width
+   Leaflet derives from the Popup minWidth/maxWidth props. */
+@media (max-width: 480px) {
+  .map-mode-popup .leaflet-popup-content {
+    min-width: 0;
+    max-width: calc(100vw - 112px) !important;
+  }
+}
+
 .map-mode-popup .leaflet-popup-content-wrapper {
   border-radius: 8px;
   padding: 0;

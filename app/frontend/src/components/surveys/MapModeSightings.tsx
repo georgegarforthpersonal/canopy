@@ -299,7 +299,7 @@ export function MapModeSightings({
                     maxWidth={320}
                     className="map-mode-popup"
                   >
-                    <Box sx={{ minWidth: 180, p: 0.5 }}>
+                    <Box sx={{ minWidth: 'min(180px, calc(100vw - 112px))', p: 0.5 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.75 }}>
                         {group.device.name}
                       </Typography>
