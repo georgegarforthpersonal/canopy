@@ -10,6 +10,7 @@ import {
   Chip,
 } from '@mui/material';
 import { ArrowBack, Save, PhotoCamera } from '@mui/icons-material';
+import { useResponsive } from '../../hooks/useResponsive';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
 import { ThumbnailGrid, type ThumbnailGridItem } from '../ThumbnailGrid';
 
@@ -22,6 +23,8 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
     imageFiles, reviewData, deselectedImages, selectedImageCount,
     toggleImageSelection, canProceed, setActiveStep, handleSave,
   } = wizard;
+
+  const { isMobile } = useResponsive();
 
   return (
     <Paper sx={{ p: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
@@ -53,13 +56,13 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
         ))}
       </Stack>
 
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
+      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
         <Button
           startIcon={<ArrowBack />}
           onClick={() => setActiveStep(3)}
           sx={{ textTransform: 'none' }}
         >
-          Back to Classify
+          {isMobile ? 'Back' : 'Back to Classify'}
         </Button>
         <Button
           variant="contained"
@@ -68,7 +71,9 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
           onClick={() => { setActiveStep(5); handleSave(); }}
           sx={{ textTransform: 'none' }}
         >
-          Save Survey ({selectedImageCount} images)
+          {isMobile
+            ? `Save (${selectedImageCount} images)`
+            : `Save Survey (${selectedImageCount} images)`}
         </Button>
       </Box>
     </Paper>
