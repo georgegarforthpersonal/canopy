@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Paper,
-  Stack,
   Button,
   Alert,
   LinearProgress,
@@ -79,10 +78,20 @@ export function FilterStep({ wizard }: FilterStepProps) {
 
   return (
     <Paper sx={{ p: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
-      <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-        <FilterList sx={{ mr: 1, verticalAlign: 'middle' }} />
-        Filter False Positives
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          <FilterList sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Filter False Positives
+        </Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={skipFiltering}
+          sx={{ textTransform: 'none', flexShrink: 0, ml: 2 }}
+        >
+          Skip Filtering
+        </Button>
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         AI is analysing your images to identify and remove empty frames (false positives triggered by wind, vegetation, etc.).
       </Typography>
@@ -276,34 +285,26 @@ export function FilterStep({ wizard }: FilterStepProps) {
         }}
       >
         <Button
+          variant="outlined"
           startIcon={<ArrowBack />}
           onClick={goBackToUpload}
           sx={{ textTransform: 'none' }}
+          fullWidth={isMobile}
         >
           Back
         </Button>
-        <Stack direction={isMobile ? 'column' : 'row'} spacing={1}>
-          <Button
-            variant="outlined"
-            onClick={skipFiltering}
-            sx={{ textTransform: 'none' }}
-            fullWidth={isMobile}
-          >
-            Skip Filtering
-          </Button>
-          <Button
-            variant="contained"
-            endIcon={<ArrowForward />}
-            disabled={!canProceed(2)}
-            onClick={goToClassifyStep}
-            sx={{ textTransform: 'none' }}
-            fullWidth={isMobile}
-          >
-            {isMobile
-              ? `Next: Classify (${filteredImageFiles.length})`
-              : `Next: Classify (${filteredImageFiles.length} images)`}
-          </Button>
-        </Stack>
+        <Button
+          variant="contained"
+          endIcon={<ArrowForward />}
+          disabled={!canProceed(2)}
+          onClick={goToClassifyStep}
+          sx={{ textTransform: 'none' }}
+          fullWidth={isMobile}
+        >
+          {isMobile
+            ? `Next: Classify (${filteredImageFiles.length})`
+            : `Next: Classify (${filteredImageFiles.length} images)`}
+        </Button>
       </Box>
     </Paper>
   );
