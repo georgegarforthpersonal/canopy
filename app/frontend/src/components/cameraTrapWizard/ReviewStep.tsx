@@ -62,7 +62,7 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
           onClick={() => setActiveStep(3)}
           sx={{ textTransform: 'none' }}
         >
-          {isMobile ? 'Back' : 'Back to Classify'}
+          Back to Classify
         </Button>
         <Button
           variant="contained"

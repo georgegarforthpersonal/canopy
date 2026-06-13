@@ -280,7 +280,7 @@ export function FilterStep({ wizard }: FilterStepProps) {
           onClick={goBackToUpload}
           sx={{ textTransform: 'none' }}
         >
-          Back
+          Back to Upload
         </Button>
         <Stack direction={isMobile ? 'column' : 'row'} spacing={1}>
           <Button

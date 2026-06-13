@@ -157,7 +157,7 @@ export function UploadStep({ wizard }: UploadStepProps) {
           onClick={() => setActiveStep(0)}
           sx={{ textTransform: 'none' }}
         >
-          Back
+          Back to Setup
         </Button>
         <Button
           variant="contained"

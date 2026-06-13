@@ -109,7 +109,7 @@ export function SetupStep({ wizard, noDevicesText = 'No devices found. Add one i
               onClick={() => setActiveStep(1)}
               sx={{ textTransform: 'none' }}
             >
-              Next
+              Next: Upload
             </Button>
           </Box>
         </Paper>
