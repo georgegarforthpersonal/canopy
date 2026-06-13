@@ -6,7 +6,6 @@ import {
   Stepper,
   Step,
   StepLabel,
-  Typography,
 } from '@mui/material';
 import { Cancel } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -79,20 +78,14 @@ export function NewCameraTrapSurveyPage() {
         }
       />
 
-      {/* On phones the labelled horizontal stepper overflows, so show
-          icon-only steps with the current step named underneath */}
-      <Stepper activeStep={wizard.activeStep} sx={{ mb: isMobile ? 1.5 : 4 }}>
+      {/* On phones the labelled horizontal stepper overflows, so show icon-only steps */}
+      <Stepper activeStep={wizard.activeStep} sx={{ mb: 4 }}>
         {WIZARD_STEPS.map((label) => (
           <Step key={label}>
             <StepLabel>{isMobile ? '' : label}</StepLabel>
           </Step>
         ))}
       </Stepper>
-      {isMobile && (
-        <Typography variant="subtitle2" align="center" sx={{ mb: 3, fontWeight: 600 }}>
-          {WIZARD_STEPS[wizard.activeStep]}
-        </Typography>
-      )}
 
       {wizard.error && wizard.activeStep !== 5 && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => wizard.setError(null)}>
