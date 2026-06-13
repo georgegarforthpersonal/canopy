@@ -291,7 +291,7 @@ export function FilterStep({ wizard }: FilterStepProps) {
           sx={{ textTransform: 'none' }}
           fullWidth={isMobile}
         >
-          Back
+          Back to Upload
         </Button>
         <Button
           variant="contained"

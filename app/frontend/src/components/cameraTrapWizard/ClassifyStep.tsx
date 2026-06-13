@@ -293,7 +293,7 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
           onClick={() => setActiveStep(2)}
           sx={{ textTransform: 'none' }}
         >
-          Back
+          Back to Filter
         </Button>
         <Button
           variant="contained"

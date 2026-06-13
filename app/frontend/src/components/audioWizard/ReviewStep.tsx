@@ -198,7 +198,7 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
           onClick={() => setActiveStep(1)}
           sx={{ textTransform: 'none' }}
         >
-          Back
+          Back to Upload
         </Button>
         <Button
           variant="contained"
