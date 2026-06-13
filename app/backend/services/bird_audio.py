@@ -55,11 +55,17 @@ def _seconds_to_time(seconds: float) -> time:
 
 
 def _extract_recording_timestamp(file: Path) -> datetime:
+    # AudioMoth / standard recorder format: 20260611_185458
     match = re.search(r"(\d{8})_(\d{6})", file.name)
-    if not match:
-        raise ValueError(f"Could not extract timestamp from filename: {file.name}")
-    date_str, time_str = match.groups()
-    return datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+    if match:
+        date_str, time_str = match.groups()
+        return datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+    # WhatsApp Audio format: "WhatsApp Audio 2026-06-11 at 18.54.58"
+    match = re.search(r"(\d{4}-\d{2}-\d{2}) at (\d{2}\.\d{2}\.\d{2})", file.name)
+    if match:
+        date_str, time_str = match.groups()
+        return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H.%M.%S")
+    raise ValueError(f"Could not extract timestamp from filename: {file.name}")
 
 
 @lru_cache(maxsize=1)
