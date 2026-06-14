@@ -15,6 +15,7 @@ import LayersIcon from '@mui/icons-material/Layers';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import 'leaflet/dist/leaflet.css';
+import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
 
@@ -89,7 +90,7 @@ function FitBoundsToPoints({ points, surveyLocationId, locationsWithBoundaries }
         hasFittedRef.current = true;
       }
     }
-    return () => { map.stop(); };
+    return () => { stopMapAnimation(map); };
   }, [points, map, surveyLocationId, locationsWithBoundaries]);
 
   return null;

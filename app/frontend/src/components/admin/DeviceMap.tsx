@@ -30,6 +30,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreFromTrashIcon from '@mui/icons-material/RestoreFromTrash';
 import 'leaflet/dist/leaflet.css';
+import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import type { Device, LocationWithBoundary } from '../../services/api';
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
@@ -61,7 +62,7 @@ function FitBoundsToDevices({ devices }: { devices: Device[] }) {
       );
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
-    return () => { map.stop(); };
+    return () => { stopMapAnimation(map); };
   }, [devices, map]);
 
   return null;

@@ -20,6 +20,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import dayjs from 'dayjs';
 import 'leaflet/dist/leaflet.css';
+import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import { ecotopiaAPI } from '../../services/api';
 import type { EcotopiaDevice, EcotopiaGpsFix } from '../../services/api';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
@@ -87,13 +88,13 @@ function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
   const key = points.map((p) => p.join(',')).join('|');
   useEffect(() => {
-    if (points.length === 0) return () => { map.stop(); };
+    if (points.length === 0) return () => { stopMapAnimation(map); };
     if (points.length === 1) {
       map.setView(points[0], 14);
     } else {
       map.fitBounds(new LatLngBounds(points.map((p) => new LatLng(p[0], p[1]))), { padding: [60, 60], maxZoom: 15 });
     }
-    return () => { map.stop(); };
+    return () => { stopMapAnimation(map); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, map]);
   return null;

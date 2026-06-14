@@ -25,6 +25,7 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import 'leaflet/dist/leaflet.css';
+import { stopMapAnimation } from '../../utils/stopMapAnimation';
 
 import type { BreedingStatusCode, BreedingCategory, LocationWithBoundary } from '../../services/api';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
@@ -89,7 +90,7 @@ function FitBoundsToMarkers({ locations, surveyLocationId, locationsWithBoundari
         hasFittedRef.current = true;
       }
     }
-    return () => { map.stop(); };
+    return () => { stopMapAnimation(map); };
   }, [locations, map, surveyLocationId, locationsWithBoundaries]);
 
   return null;
