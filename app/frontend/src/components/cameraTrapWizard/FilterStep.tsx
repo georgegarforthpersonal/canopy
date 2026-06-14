@@ -8,15 +8,13 @@ import {
   LinearProgress,
 } from '@mui/material';
 import {
-  ArrowBack,
-  ArrowForward,
   FilterList,
   Restore,
   RemoveCircleOutline,
 } from '@mui/icons-material';
+import { WizardNavigation } from '../wizard/WizardNavigation';
 import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
-import { useResponsive } from '../../hooks/useResponsive';
 import { ImageViewerModal } from '../ImageViewerModal';
 import { DetectionBoxOverlay } from '../DetectionBoxOverlay';
 import { DetectionBoxToggleButton } from '../DetectionBoxToggleButton';
@@ -36,10 +34,7 @@ export function FilterStep({ wizard }: FilterStepProps) {
     toggleFilterOverride, filterDerived,
     showDetectionBoxes, toggleDetectionBoxes,
     canProceed, goBackToUpload, goToClassifyStep, skipFiltering,
-    filteredImageFiles,
   } = wizard;
-
-  const { isMobile } = useResponsive();
 
   const { summary, animalIndices, emptyIndices } = filterDerived;
 
@@ -274,38 +269,13 @@ export function FilterStep({ wizard }: FilterStepProps) {
         </>
       )}
 
-      {/* Navigation */}
-      <Box
-        sx={{
-          mt: 3,
-          display: 'flex',
-          flexDirection: isMobile ? 'column-reverse' : 'row',
-          justifyContent: 'space-between',
-          gap: 1,
-        }}
-      >
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBack />}
-          onClick={goBackToUpload}
-          sx={{ textTransform: 'none' }}
-          fullWidth={isMobile}
-        >
-          Back to Upload
-        </Button>
-        <Button
-          variant="contained"
-          endIcon={<ArrowForward />}
-          disabled={!canProceed(2)}
-          onClick={goToClassifyStep}
-          sx={{ textTransform: 'none' }}
-          fullWidth={isMobile}
-        >
-          {isMobile
-            ? `Next: Classify (${filteredImageFiles.length})`
-            : `Next: Classify (${filteredImageFiles.length} images)`}
-        </Button>
-      </Box>
+      <WizardNavigation
+        backLabel="Back: Upload"
+        nextLabel="Next: Classify"
+        onBack={goBackToUpload}
+        onNext={goToClassifyStep}
+        nextDisabled={!canProceed(2)}
+      />
     </Paper>
   );
 }

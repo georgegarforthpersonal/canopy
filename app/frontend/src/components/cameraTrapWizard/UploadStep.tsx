@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
 import {
-  Box,
   Typography,
   Paper,
   Button,
   CircularProgress,
 } from '@mui/material';
-import { ArrowBack, ArrowForward, CloudUpload } from '@mui/icons-material';
+import { CloudUpload } from '@mui/icons-material';
+import { WizardNavigation } from '../wizard/WizardNavigation';
 import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
 import { ThumbnailGrid, type ThumbnailGridItem } from '../ThumbnailGrid';
@@ -116,24 +116,13 @@ export function UploadStep({ wizard }: UploadStepProps) {
         </>
       )}
 
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={() => setActiveStep(0)}
-          sx={{ textTransform: 'none' }}
-        >
-          Back to Setup
-        </Button>
-        <Button
-          variant="contained"
-          endIcon={<ArrowForward />}
-          disabled={!canProceed(1)}
-          onClick={goToFilterStep}
-          sx={{ textTransform: 'none' }}
-        >
-          Next: Filter Images
-        </Button>
-      </Box>
+      <WizardNavigation
+        backLabel="Back: Setup"
+        nextLabel="Next: Filter"
+        onBack={() => setActiveStep(0)}
+        onNext={goToFilterStep}
+        nextDisabled={!canProceed(1)}
+      />
     </Paper>
   );
 }

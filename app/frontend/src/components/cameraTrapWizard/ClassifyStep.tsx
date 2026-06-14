@@ -18,6 +18,7 @@ import {
   ArrowForward,
   CheckCircle,
 } from '@mui/icons-material';
+import { WizardNavigation } from '../wizard/WizardNavigation';
 import dayjs from 'dayjs';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
 import { ImageViewerModal } from '../ImageViewerModal';
@@ -287,26 +288,13 @@ export function ClassifyStep({ wizard }: ClassifyStepProps) {
         </Alert>
       )}
 
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={() => setActiveStep(2)}
-          sx={{ textTransform: 'none' }}
-        >
-          Back to Filter
-        </Button>
-        <Button
-          variant="contained"
-          endIcon={<ArrowForward />}
-          disabled={!canProceed(3)}
-          onClick={() => setActiveStep(4)}
-          sx={{ textTransform: 'none' }}
-        >
-          {isMobile
-            ? `Next: Review (${uniqueSpeciesCount} sp.)`
-            : `Next: Review (${uniqueSpeciesCount} species identified)`}
-        </Button>
-      </Box>
+      <WizardNavigation
+        backLabel="Back: Filter"
+        nextLabel="Next: Review"
+        onBack={() => setActiveStep(2)}
+        onNext={() => setActiveStep(4)}
+        nextDisabled={!canProceed(3)}
+      />
     </Paper>
   );
 }

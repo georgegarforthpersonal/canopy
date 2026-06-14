@@ -4,13 +4,12 @@ import {
   Typography,
   Paper,
   Stack,
-  Button,
   Alert,
   Checkbox,
   Chip,
 } from '@mui/material';
-import { ArrowBack, Save, PhotoCamera } from '@mui/icons-material';
-import { useResponsive } from '../../hooks/useResponsive';
+import { PhotoCamera } from '@mui/icons-material';
+import { WizardNavigation } from '../wizard/WizardNavigation';
 import type { CameraTrapWizardState } from '../../hooks/useCameraTrapWizard';
 import { ThumbnailGrid, type ThumbnailGridItem } from '../ThumbnailGrid';
 
@@ -23,8 +22,6 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
     imageFiles, reviewData, deselectedImages, selectedImageCount,
     toggleImageSelection, canProceed, setActiveStep, handleSave,
   } = wizard;
-
-  const { isMobile } = useResponsive();
 
   return (
     <Paper sx={{ p: 3, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
@@ -56,26 +53,14 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
         ))}
       </Stack>
 
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={() => setActiveStep(3)}
-          sx={{ textTransform: 'none' }}
-        >
-          Back to Classify
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<Save />}
-          disabled={!canProceed(4)}
-          onClick={() => { setActiveStep(5); handleSave(); }}
-          sx={{ textTransform: 'none' }}
-        >
-          {isMobile
-            ? `Save (${selectedImageCount} images)`
-            : `Save Survey (${selectedImageCount} images)`}
-        </Button>
-      </Box>
+      <WizardNavigation
+        backLabel="Back: Classify"
+        nextLabel="Save Survey"
+        onBack={() => setActiveStep(3)}
+        onNext={() => { setActiveStep(5); handleSave(); }}
+        nextDisabled={!canProceed(4)}
+        nextIcon="save"
+      />
     </Paper>
   );
 }
