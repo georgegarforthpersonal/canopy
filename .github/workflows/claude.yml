@@ -1,0 +1,101 @@
+name: Claude PR Responder
+
+# Responds when someone mentions @claude in a pull request comment, an inline
+# review comment, a PR review summary, or an issue. This is the interactive
+# sibling of the scheduled linear-ticket-fix.yml and sentry-nightly-fix.yml
+# jobs — those run on a cron with a fixed prompt; this one reacts to a person.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, assigned]
+
+permissions:
+  contents: write # push fixes to the PR branch
+  pull-requests: write # post replies / update the PR
+  issues: write # respond on issues
+  id-token: write
+  actions: read # read CI run logs when asked to fix failing tests
+
+# One run per PR/issue; don't cancel an in-flight fix when a follow-up comment lands.
+concurrency:
+  group: claude-responder-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  respond:
+    # Only act on @claude mentions, and never react to the bot's own comments.
+    if: |
+      github.actor != 'claude[bot]' && (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+        (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # track_progress keeps interactive "tag mode" (the action still ingests
+          # the triggering comment + full PR diff/thread and posts threaded
+          # replies) while ALSO applying the custom prompt below as extra guidance.
+          track_progress: true
+          claude_args: "--max-turns 30"
+          show_full_output: false
+          prompt: |
+            You are responding to an @claude mention from a maintainer on the Canopy Data
+            wildlife-monitoring platform (FastAPI backend in app/backend/, React + TypeScript
+            frontend in app/frontend/src/). You already have the full GitHub context for this
+            thread: the triggering comment, the pull request (its description, branch, and
+            diff), the surrounding conversation, and — for inline comments — the file and line
+            it is attached to.
+
+            Ground yourself before doing anything:
+            - The triggering comment is the actual instruction. Do exactly what it asks — no
+              more, no less. If it is an inline review comment, the file/line it hangs off is
+              the focus of the request.
+            - Read the PR as a whole first: what it is trying to achieve (title/description),
+              what the diff actually changes, and anything already said in the thread. A
+              request like "address my comment", "fix this", or "do the same here" only makes
+              sense against that context, so reconstruct it before acting.
+
+            Then classify the request and respond accordingly:
+            - A question or a request for explanation -> reply in the thread. Do NOT change code.
+            - A change request (e.g. "fix the failing tests", "rename X", "address the review")
+              -> make the smallest correct change on THIS PR's existing branch, matching the
+              repo's existing patterns and conventions, then summarise what you changed. Do not
+              open a new PR, do not push to main, and do not expand scope beyond what was asked.
+            - Vague, risky, or out-of-scope -> ask one focused clarifying question, or explain
+              why you won't do it. Do not guess or make speculative changes.
+
+            Verifying changes — this repo has a specific CI gap, so do not skip this:
+            - The `type-check` CI job is mypy and covers the BACKEND ONLY. Frontend TypeScript
+              errors (unused imports/vars TS6133, type mismatches TS2345, etc.) are caught ONLY
+              by the `frontend-build` job, which runs `tsc -b`. So for ANY change under
+              app/frontend/, run `cd app/frontend && npm ci && npm run build` and fix everything
+              it reports before you finish. This is the single most common cause of red PRs here.
+            - If you were asked to fix failing CI, read the actual failing job's logs first
+              (don't guess the cause), fix the root cause, and re-run the matching check to
+              confirm it now passes.
+            - Backend test/type suites run via the Makefile (`make test-backend`, `make typecheck`)
+              but need Docker, which may be unavailable on this runner. If so, reason carefully
+              and let the PR's CI gate the merge rather than trying to run the full suite here.
+
+            When you are done, leave a concise reply: what you changed (with file references) and
+            any caveats, or your answer to the question. Be direct — no filler, and no restating
+            the request back to the user.
