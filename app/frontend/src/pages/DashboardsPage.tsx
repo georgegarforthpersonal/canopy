@@ -362,7 +362,7 @@ export function DashboardsPage() {
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={activeTab} onChange={(_e, v) => handleTabChange(v)}>
             <Tab label="Species" />
-            <Tab label="Devices" />
+            <Tab label="GPS tracking" />
           </Tabs>
         </Box>
       )}
