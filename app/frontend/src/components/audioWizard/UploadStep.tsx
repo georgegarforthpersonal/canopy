@@ -8,7 +8,8 @@ import {
   CircularProgress,
   LinearProgress,
 } from '@mui/material';
-import { ArrowBack, ArrowForward, CloudUpload, AudioFile, Warning } from '@mui/icons-material';
+import { CloudUpload, AudioFile, Warning } from '@mui/icons-material';
+import { WizardNavigation } from '../wizard/WizardNavigation';
 import type { AudioWizardState } from '../../hooks/useAudioWizard';
 
 interface UploadStepProps {
@@ -151,24 +152,13 @@ export function UploadStep({ wizard }: UploadStepProps) {
         </Alert>
       )}
 
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={() => setActiveStep(0)}
-          sx={{ textTransform: 'none' }}
-        >
-          Back to Setup
-        </Button>
-        <Button
-          variant="contained"
-          endIcon={<ArrowForward />}
-          disabled={!canProceed(1)}
-          onClick={() => setActiveStep(2)}
-          sx={{ textTransform: 'none' }}
-        >
-          Next: Review Detections
-        </Button>
-      </Box>
+      <WizardNavigation
+        backLabel="Back: Setup"
+        nextLabel="Next: Review"
+        onBack={() => setActiveStep(0)}
+        onNext={() => setActiveStep(2)}
+        nextDisabled={!canProceed(1)}
+      />
     </Paper>
   );
 }

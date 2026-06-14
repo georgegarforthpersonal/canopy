@@ -3,10 +3,9 @@ import {
   Typography,
   Paper,
   Stack,
-  Button,
   Checkbox,
 } from '@mui/material';
-import { ArrowBack, Save } from '@mui/icons-material';
+import { WizardNavigation } from '../wizard/WizardNavigation';
 import { paddedSnippetRange, type AudioWizardState } from '../../hooks/useAudioWizard';
 import { AudioClipPlayer } from '../audio/AudioClipPlayer';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -192,24 +191,14 @@ export function ReviewStep({ wizard }: ReviewStepProps) {
         )}
       </Box>
 
-      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between' }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={() => setActiveStep(1)}
-          sx={{ textTransform: 'none' }}
-        >
-          Back to Upload
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<Save />}
-          disabled={!canProceed(2)}
-          onClick={() => { setActiveStep(3); handleSave(); }}
-          sx={{ textTransform: 'none' }}
-        >
-          Save Survey ({selectedSpeciesCount} species)
-        </Button>
-      </Box>
+      <WizardNavigation
+        backLabel="Back: Upload"
+        nextLabel="Save Survey"
+        onBack={() => setActiveStep(1)}
+        onNext={() => { setActiveStep(3); handleSave(); }}
+        nextDisabled={!canProceed(2)}
+        nextIcon="save"
+      />
     </Paper>
   );
 }

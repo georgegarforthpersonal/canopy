@@ -1,14 +1,12 @@
 import {
-  Box,
   Typography,
   Paper,
   Stack,
-  Button,
   Alert,
   Autocomplete,
   TextField,
 } from '@mui/material';
-import { ArrowForward } from '@mui/icons-material';
+import { WizardNavigation } from './WizardNavigation';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import type { Dayjs } from 'dayjs';
 import type { SurveyType, Device, Surveyor } from '../../services/api';
@@ -101,17 +99,11 @@ export function SetupStep({ wizard, noDevicesText = 'No devices found. Add one i
               )}
             />
           </Stack>
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="contained"
-              endIcon={<ArrowForward />}
-              disabled={!canProceed(0)}
-              onClick={() => setActiveStep(1)}
-              sx={{ textTransform: 'none' }}
-            >
-              Next: Upload
-            </Button>
-          </Box>
+          <WizardNavigation
+            nextLabel="Next: Upload"
+            onNext={() => setActiveStep(1)}
+            nextDisabled={!canProceed(0)}
+          />
         </Paper>
       )}
     </>
