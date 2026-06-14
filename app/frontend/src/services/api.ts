@@ -937,6 +937,8 @@ export interface EcotopiaDevice {
   sex: string | null;
   ring_number: string | null;
   ring_colour: string | null;
+  // Stable map colour for this bird's track/pin (from the server-side mapping).
+  track_colour: string | null;
 }
 
 /** A single successful GNSS fix for a tracker device. */

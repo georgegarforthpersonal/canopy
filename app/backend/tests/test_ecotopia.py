@@ -73,6 +73,7 @@ class TestGetEcotopiaDevices:
             "sex": "male",
             "ring_number": "1847/1848",
             "ring_colour": "black",
+            "track_colour": "#6940A5",
         }
 
     def test_503_when_credentials_missing(self, cannwood_client: TestClient, monkeypatch) -> None:

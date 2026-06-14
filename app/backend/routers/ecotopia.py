@@ -40,6 +40,7 @@ class EcotopiaDevice(BaseModel):
     sex: Optional[str] = None
     ring_number: Optional[str] = None
     ring_colour: Optional[str] = None
+    track_colour: Optional[str] = None
 
 
 class EcotopiaGpsFix(BaseModel):
@@ -65,6 +66,7 @@ def _to_device(d: Dict[str, Any]) -> EcotopiaDevice:
         sex=bird.sex if bird else None,
         ring_number=bird.ring_number if bird else None,
         ring_colour=bird.ring_colour if bird else None,
+        track_colour=bird.track_colour if bird else None,
     )
 
 
