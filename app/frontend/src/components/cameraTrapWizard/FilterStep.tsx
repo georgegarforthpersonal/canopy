@@ -34,7 +34,6 @@ export function FilterStep({ wizard }: FilterStepProps) {
     toggleFilterOverride, filterDerived,
     showDetectionBoxes, toggleDetectionBoxes,
     canProceed, goBackToUpload, goToClassifyStep, skipFiltering,
-    filteredImageFiles,
   } = wizard;
 
   const { summary, animalIndices, emptyIndices } = filterDerived;
