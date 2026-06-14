@@ -46,6 +46,7 @@ function FitBounds({ sightings }: { sightings: SpeciesSightingLocation[] }) {
       );
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
+    return () => { map.stop(); };
   }, [sightings, map]);
 
   return null;

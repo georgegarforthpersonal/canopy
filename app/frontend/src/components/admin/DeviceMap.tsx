@@ -61,6 +61,7 @@ function FitBoundsToDevices({ devices }: { devices: Device[] }) {
       );
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
+    return () => { map.stop(); };
   }, [devices, map]);
 
   return null;

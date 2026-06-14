@@ -77,12 +77,13 @@ function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
   const key = points.map((p) => p.join(',')).join('|');
   useEffect(() => {
-    if (points.length === 0) return;
+    if (points.length === 0) return () => { map.stop(); };
     if (points.length === 1) {
       map.setView(points[0], 14);
-      return;
+    } else {
+      map.fitBounds(new LatLngBounds(points.map((p) => new LatLng(p[0], p[1]))), { padding: [60, 60], maxZoom: 15 });
     }
-    map.fitBounds(new LatLngBounds(points.map((p) => new LatLng(p[0], p[1]))), { padding: [60, 60], maxZoom: 15 });
+    return () => { map.stop(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, map]);
   return null;

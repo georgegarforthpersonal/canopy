@@ -89,6 +89,7 @@ function FitBoundsToMarkers({ locations, surveyLocationId, locationsWithBoundari
         hasFittedRef.current = true;
       }
     }
+    return () => { map.stop(); };
   }, [locations, map, surveyLocationId, locationsWithBoundaries]);
 
   return null;
