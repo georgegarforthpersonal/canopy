@@ -29,13 +29,6 @@ import { brandColors } from '../../theme';
 // Group tags within ~100m (3 dp) into one marker, like co-located sightings.
 const COLOCATION_DECIMALS = 3;
 
-// Distinct track colours drawn from the notionColors text palette.
-const TRACK_COLORS = ['#2B5F86', '#6940A5', '#D9730D', '#4D6461', '#AD5E99', '#E03E3E', '#64473A', '#DFAB01'];
-
-function getTrackColor(index: number): string {
-  return TRACK_COLORS[index % TRACK_COLORS.length];
-}
-
 function tagName(device: EcotopiaDevice): string {
   return device.uuid ? device.uuid.slice(-4).toUpperCase() : device.id;
 }
@@ -188,11 +181,12 @@ export function DeviceTrackerMap() {
   const groups = useMemo(() => groupByLocation(devices), [devices]);
   const locatedCount = useMemo(() => devices.filter((d) => d.latitude != null && d.longitude != null).length, [devices]);
 
-  // Stable colour assignment: sort devices by id so colours don't shift when the list reorders.
-  const deviceColors = useMemo<Map<string, string>>(() => {
-    const sorted = [...devices].sort((a, b) => a.id.localeCompare(b.id));
-    return new Map(sorted.map((d, i) => [d.id, getTrackColor(i)]));
-  }, [devices]);
+  // Each tracker's colour is defined server-side on the bird mapping, so it stays
+  // stable across renders and consistent with any other view that uses it.
+  const deviceColors = useMemo<Map<string, string>>(
+    () => new Map(devices.map((d) => [d.id, d.track_colour ?? brandColors.main])),
+    [devices],
+  );
 
   const fitPoints = useMemo<[number, number][]>(() => {
     if (viewMode === 'historical' && allTracks.size > 0) {
@@ -300,7 +294,7 @@ export function DeviceTrackerMap() {
 
             {viewMode === 'historical' &&
               Array.from(allTracks.entries()).map(([deviceId, fixes]) => {
-                const color = deviceColors.get(deviceId) ?? TRACK_COLORS[0];
+                const color = deviceColors.get(deviceId) ?? brandColors.main;
                 const points: [number, number][] = fixes.map((f) => [f.latitude, f.longitude]);
                 if (points.length === 0) return null;
                 const lastPoint = points[points.length - 1];
