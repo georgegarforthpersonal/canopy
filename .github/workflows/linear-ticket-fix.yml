@@ -125,8 +125,16 @@ jobs:
                - Branch name: claude/${{ matrix.ticket.identifier }}-<short-slug>
                  (the ticket identifier in the branch name is what links the PR to Linear).
                - Make the change, keeping the diff as small as the ticket allows.
-               - Do not run the full test suite (it needs docker compose); CI runs on the
-                 PR and gates the merge. You may run quick targeted checks if cheap.
+               - Before opening the PR, run the checks that match what you changed so
+                 CI passes on the first attempt:
+                   - If you touched the frontend (app/frontend/), run
+                     `cd app/frontend && npm ci && npm run build`. This runs `tsc -b`,
+                     which catches type errors and unused imports/vars — the most
+                     common cause of red PRs. It does NOT need docker. Fix anything it
+                     reports before opening the PR.
+                   - If you touched the backend (app/backend/), you may run quick
+                     targeted checks, but do NOT run the full suite (it needs docker
+                     compose) — CI runs it on the PR and gates the merge.
                - Open a PR titled "${{ matrix.ticket.identifier }}: <short description>".
                  The PR body MUST contain the line "Fixes ${{ matrix.ticket.identifier }}"
                  (this closes the Linear ticket on merge), the Linear URL, a summary of
