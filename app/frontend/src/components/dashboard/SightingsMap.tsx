@@ -9,6 +9,7 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { BarChart, Bar, ResponsiveContainer, XAxis } from 'recharts';
 import dayjs from 'dayjs';
 import 'leaflet/dist/leaflet.css';
+import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import type { SpeciesSightingLocation, LocationWithBoundary } from '../../services/api';
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
@@ -46,7 +47,7 @@ function FitBounds({ sightings }: { sightings: SpeciesSightingLocation[] }) {
       );
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
     }
-    return () => { map.stop(); };
+    return () => { stopMapAnimation(map); };
   }, [sightings, map]);
 
   return null;

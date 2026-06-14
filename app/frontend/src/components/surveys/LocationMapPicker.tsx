@@ -8,6 +8,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import LayersIcon from '@mui/icons-material/Layers';
 import 'leaflet/dist/leaflet.css';
+import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
 import FieldBoundaryOverlay from './FieldBoundaryOverlay';
@@ -61,7 +62,7 @@ function BoundaryFitter({ boundary }: { boundary?: LocationWithBoundary | null }
       const bounds = L.latLngBounds(positions);
       map.fitBounds(bounds, { padding: [20, 20] });
     }
-    return () => { map.stop(); };
+    return () => { stopMapAnimation(map); };
   }, [boundary, map]);
 
   return null;
