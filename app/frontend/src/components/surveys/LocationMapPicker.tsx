@@ -61,6 +61,7 @@ function BoundaryFitter({ boundary }: { boundary?: LocationWithBoundary | null }
       const bounds = L.latLngBounds(positions);
       map.fitBounds(bounds, { padding: [20, 20] });
     }
+    return () => { map.stop(); };
   }, [boundary, map]);
 
   return null;
