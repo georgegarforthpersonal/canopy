@@ -196,9 +196,9 @@ export function DeviceTrackerMap() {
 
   const fitPoints = useMemo<[number, number][]>(() => {
     if (viewMode === 'historical' && allTracks.size > 0) {
-      return Array.from(allTracks.values()).flatMap((fixes) => fixes.map((f) => [f.latitude, f.longitude]));
+      return Array.from(allTracks.values()).flatMap((fixes) => fixes.map((f) => [f.latitude, f.longitude] as [number, number]));
     }
-    return groups.map((g) => [g.latitude, g.longitude]);
+    return groups.map((g) => [g.latitude, g.longitude] as [number, number]);
   }, [viewMode, allTracks, groups]);
 
   if (loading) {
