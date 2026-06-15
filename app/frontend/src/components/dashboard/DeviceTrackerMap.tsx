@@ -27,8 +27,16 @@ import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
 import { brandColors } from '../../theme';
 
-// Group tags within ~100m (3 dp) into one marker, like co-located sightings.
-const COLOCATION_DECIMALS = 3;
+// Cluster radius in screen pixels — pins closer than this at the current zoom
+// are merged into a single group marker.
+const CLUSTER_PIXEL_RADIUS = 40;
+
+// Convert pixel radius → decimal places for the grid-snapping approach so
+// that the threshold scales smoothly as the user zooms in or out.
+function colocationDecimals(zoom: number): number {
+  const thresholdDeg = (CLUSTER_PIXEL_RADIUS * 360) / (Math.pow(2, zoom) * 256);
+  return Math.max(1, Math.round(-Math.log10(thresholdDeg)));
+}
 
 function tagName(device: EcotopiaDevice): string {
   return device.uuid ? device.uuid.slice(-4).toUpperCase() : device.id;
@@ -50,11 +58,12 @@ interface DeviceGroup {
   devices: EcotopiaDevice[];
 }
 
-function groupByLocation(devices: EcotopiaDevice[]): DeviceGroup[] {
+function groupByLocation(devices: EcotopiaDevice[], zoom: number): DeviceGroup[] {
+  const dp = colocationDecimals(zoom);
   const groups = new Map<string, DeviceGroup>();
   for (const d of devices) {
     if (d.latitude == null || d.longitude == null) continue;
-    const key = `${d.latitude.toFixed(COLOCATION_DECIMALS)},${d.longitude.toFixed(COLOCATION_DECIMALS)}`;
+    const key = `${d.latitude.toFixed(dp)},${d.longitude.toFixed(dp)}`;
     const existing = groups.get(key);
     if (existing) existing.devices.push(d);
     else groups.set(key, { key, latitude: d.latitude, longitude: d.longitude, devices: [d] });
@@ -100,6 +109,20 @@ function FitBounds({ points }: { points: [number, number][] }) {
   return null;
 }
 
+// Notifies the parent whenever the map zoom level changes so grouping can
+// recalculate — pins that overlap at low zoom split apart as the user zooms in.
+function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    const handler = () => onZoom(map.getZoom());
+    map.on('zoomend', handler);
+    return () => {
+      map.off('zoomend', handler);
+    };
+  }, [map, onZoom]);
+  return null;
+}
+
 function DeviceSummary({ device }: { device: EcotopiaDevice }) {
   const bird = birdLabel(device);
   return (
@@ -134,6 +157,8 @@ export function DeviceTrackerMap() {
   const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
   const [viewMode, setViewMode] = useState<'current' | 'historical'>('current');
   const [trackDays, setTrackDays] = useState(7);
+
+  const [zoom, setZoom] = useState<number>(DEFAULT_MAP_ZOOM);
 
   const [devices, setDevices] = useState<EcotopiaDevice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,7 +205,7 @@ export function DeviceTrackerMap() {
     };
   }, [viewMode, trackDays, devices]);
 
-  const groups = useMemo(() => groupByLocation(devices), [devices]);
+  const groups = useMemo(() => groupByLocation(devices, zoom), [devices, zoom]);
   const locatedCount = useMemo(() => devices.filter((d) => d.latitude != null && d.longitude != null).length, [devices]);
 
   // Each tracker's colour is defined server-side on the bird mapping, so it stays
@@ -297,7 +322,17 @@ export function DeviceTrackerMap() {
             {viewMode === 'historical' &&
               Array.from(allTracks.entries()).map(([deviceId, fixes]) => {
                 const color = deviceColors.get(deviceId) ?? brandColors.main;
-                const points: [number, number][] = fixes.map((f) => [f.latitude, f.longitude]);
+                const device = devices.find((d) => d.id === deviceId);
+                let points: [number, number][] = fixes.map((f) => [f.latitude, f.longitude]);
+                // The paginated GPS history endpoint can lag behind the device's
+                // status_gps.  Extend the polyline to the device's current reported
+                // position so the track visually terminates at the badge pin.
+                if (device?.latitude != null && device?.longitude != null) {
+                  const last = points[points.length - 1];
+                  if (!last || Math.abs(last[0] - device.latitude) > 1e-5 || Math.abs(last[1] - device.longitude) > 1e-5) {
+                    points = [...points, [device.latitude, device.longitude]];
+                  }
+                }
                 if (points.length === 0) return null;
                 const lastPoint = points[points.length - 1];
                 return (
@@ -339,6 +374,7 @@ export function DeviceTrackerMap() {
               );
             })}
 
+            <ZoomWatcher onZoom={setZoom} />
             <FitBounds points={fitPoints} />
             <MapResizeHandler isFullscreen={isFullscreen} />
           </MapContainer>
