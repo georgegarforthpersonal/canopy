@@ -27,9 +27,9 @@ import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
 import { brandColors } from '../../theme';
 
-// Cluster radius in screen pixels — pins closer than this at the current zoom
-// are merged into a single group marker.
-const CLUSTER_PIXEL_RADIUS = 40;
+// Cluster radius in screen pixels (~50 m at zoom 16) — pins closer than this
+// at the current zoom are merged into a single group marker.
+const CLUSTER_PIXEL_RADIUS = 20;
 
 // Convert pixel radius → decimal places for the grid-snapping approach so
 // that the threshold scales smoothly as the user zooms in or out.
@@ -219,8 +219,12 @@ export function DeviceTrackerMap() {
     if (viewMode === 'historical' && allTracks.size > 0) {
       return Array.from(allTracks.values()).flatMap((fixes) => fixes.map((f) => [f.latitude, f.longitude] as [number, number]));
     }
-    return groups.map((g) => [g.latitude, g.longitude] as [number, number]);
-  }, [viewMode, allTracks, groups]);
+    // Use raw device positions, not groups: groups depends on zoom, so using it
+    // here would cause FitBounds to re-fire on every zoom change and fight the user.
+    return devices
+      .filter((d) => d.latitude != null && d.longitude != null)
+      .map((d) => [d.latitude!, d.longitude!] as [number, number]);
+  }, [viewMode, allTracks, devices]);
 
   if (loading) {
     return (
