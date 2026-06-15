@@ -355,10 +355,9 @@ export function DeviceTrackerMap() {
 
             {groups.map((group) => {
               const single = group.devices.length === 1;
-              const pinColor =
-                single && viewMode === 'historical'
-                  ? (deviceColors.get(group.devices[0].id) ?? brandColors.main)
-                  : brandColors.main;
+              const pinColor = single
+                ? (deviceColors.get(group.devices[0].id) ?? brandColors.main)
+                : brandColors.main;
               const icon = single ? badgeIcon(tagName(group.devices[0]), pinColor, 11) : clusterIcon(group.devices.length);
               return (
                 <Marker key={group.key} position={[group.latitude, group.longitude]} icon={icon}>
