@@ -393,17 +393,15 @@ export function SightingsEditor({
     return (
       <>
         <Box sx={{ mb: 2 }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-            <Stack direction="row" alignItems="center" spacing={1.5}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Sightings ({validSightings.length})
-              </Typography>
-              {viewModeToggle}
-            </Stack>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: viewModeToggle ? 1 : 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Sightings
+            </Typography>
             <Button
               variant="contained"
               startIcon={<Add />}
               onClick={handleAddClick}
+              size="small"
               sx={{
                 textTransform: 'none',
                 fontWeight: 600,
@@ -411,9 +409,14 @@ export function SightingsEditor({
                 '&:hover': { boxShadow: 'none' }
               }}
             >
-              Add Sighting
+              Add
             </Button>
           </Stack>
+          {viewModeToggle && (
+            <Box sx={{ mb: 2 }}>
+              {viewModeToggle}
+            </Box>
+          )}
 
           {validationError && (
             <Alert severity="error" sx={{ mb: 2 }}>
