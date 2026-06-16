@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { Box, Typography, Paper, Stack, Button, Chip, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
@@ -17,6 +17,7 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { getSurveyorName, formatDate } from '../utils/formatters';
 import { ImageViewerModal, type ImageViewerItem } from '../components/ImageViewerModal';
 import { SPACING } from '../config/responsive';
+import { useResponsive } from '../hooks/useResponsive';
 
 /**
  * Small thumbnail component that lazily loads a presigned URL for a camera trap image
@@ -143,6 +144,8 @@ export function SurveyDetailPage() {
     );
     return devices.filter((d) => d.is_active || referencedIds.has(d.id));
   }, [surveyType?.allow_sighting_device_selection, devices, sightings]);
+
+  const { isMobile } = useResponsive();
 
   // ============================================================================
   // Data Fetching
@@ -1042,12 +1045,129 @@ export function SurveyDetailPage() {
                   return d ? d.name : '-';
                 };
 
-                return sightings.length > 0 ? (
+                if (sightings.length === 0) {
+                  return (
+                    <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+                      No sightings recorded yet.
+                    </Typography>
+                  );
+                }
+
+                // Group sightings by species type (shared between mobile and desktop views)
+                const grouped = sightings.reduce((acc, sighting) => {
+                  const speciesItem = species.find(s => s.id === sighting.species_id);
+                  const type = speciesItem?.type || 'unknown';
+                  if (!acc[type]) acc[type] = [];
+                  acc[type].push(sighting);
+                  return acc;
+                }, {} as Record<string, typeof sightings>);
+                const sortedGroups = Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+                const formatTypeName = (type: string) => type.charAt(0).toUpperCase() + type.slice(1);
+
+                if (isMobile) {
+                  // Mobile: card-based layout so all fields (including notes) are fully readable
+                  return (
+                    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                      {sortedGroups.map(([type, groupSightings], groupIndex) => {
+                        const GroupIcon = getSpeciesIcon(type);
+                        return (
+                          <Box key={type}>
+                            <Box sx={{ borderTop: groupIndex > 0 ? '1px solid' : 'none', borderColor: 'divider', bgcolor: 'grey.50', px: 1.5, py: 1, mt: groupIndex > 0 ? 2 : 0 }}>
+                              <Stack direction="row" alignItems="center" spacing={0.75}>
+                                <GroupIcon sx={{ fontSize: '16px', color: 'text.secondary' }} />
+                                <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                                  {formatTypeName(type)} · {groupSightings.length}
+                                </Typography>
+                              </Stack>
+                            </Box>
+                            {groupSightings.map((sighting: any) => {
+                              const individualsWithLocation = sighting.individuals?.filter(
+                                (ind: any) => ind.latitude != null && ind.longitude != null
+                              ) || [];
+                              const hasIndividualLocations = individualsWithLocation.length > 0;
+                              const imageIds: number[] = sighting.image_ids?.length
+                                ? sighting.image_ids
+                                : (sighting.individuals || [])
+                                    .map((ind: any) => ind.camera_trap_image_id)
+                                    .filter((id: number | null | undefined): id is number => id != null);
+
+                              return (
+                                <Box key={sighting.id} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
+                                  <Box sx={{ p: 1.5 }}>
+                                    <Stack direction="row" alignItems="flex-start" spacing={1.5}>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 1, bgcolor: 'grey.100', flexShrink: 0, mt: 0.25 }}>
+                                        <GroupIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                      </Box>
+                                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.875rem' }}>
+                                          {sighting.species_name ? (
+                                            <>
+                                              {sighting.species_name}
+                                              {sighting.species_scientific_name && (
+                                                <i style={{ color: '#666', marginLeft: '0.25rem' }}> {sighting.species_scientific_name}</i>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <i style={{ color: '#666' }}>{sighting.species_scientific_name || getSpeciesName(sighting.species_id)}</i>
+                                          )}
+                                        </Typography>
+                                        <Stack direction="row" sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
+                                          <Chip
+                                            label={sighting.count}
+                                            size="small"
+                                            sx={{ height: 22, fontSize: '0.75rem', bgcolor: 'primary.main', color: 'white', fontWeight: 600 }}
+                                          />
+                                          {gridConfig.showDevice && sighting.device_id && (
+                                            <Chip label={getDeviceLabel(sighting.device_id)} size="small" sx={{ height: 22, fontSize: '0.75rem', bgcolor: 'grey.200', color: 'text.primary' }} />
+                                          )}
+                                          {gridConfig.showLocation && sighting.location_name && (
+                                            <Chip label={sighting.location_name} size="small" sx={{ height: 22, fontSize: '0.75rem', bgcolor: 'grey.200', color: 'text.primary' }} />
+                                          )}
+                                          {gridConfig.showGps && hasIndividualLocations && (
+                                            <Chip icon={<LocationOn sx={{ fontSize: '14px !important' }} />} label="GPS" size="small" sx={{ height: 22, fontSize: '0.75rem', bgcolor: 'grey.200', color: 'text.primary' }} />
+                                          )}
+                                        </Stack>
+                                        {showNotesColumn && sighting.notes && (
+                                          <Typography variant="body2" sx={{ mt: 0.75, color: 'text.secondary', fontSize: '0.8rem' }}>
+                                            {sighting.notes}
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Stack>
+                                    {imageIds.length > 0 && (
+                                      <Box sx={{ display: 'flex', gap: 0.5, mt: 1, flexWrap: 'wrap' }}>
+                                        {imageIds.map((imgId: number, imgIdx: number) => (
+                                          <Box key={imgId} onClick={() => openSightingImageViewer(imageIds, imgIdx)} sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}>
+                                            <SightingImageThumbnail imageId={imgId} />
+                                          </Box>
+                                        ))}
+                                      </Box>
+                                    )}
+                                    {sighting.audio_clips && sighting.audio_clips.length > 0 && (
+                                      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                        {sighting.audio_clips.map((clip: SightingAudioClip, clipIdx: number) => (
+                                          <AudioClipPlayer key={clipIdx} audioRecordingId={clip.audio_recording_id} startTime={clip.start_time} endTime={clip.end_time} confidence={clip.confidence} timestamp={clip.detection_timestamp} />
+                                        ))}
+                                      </Stack>
+                                    )}
+                                  </Box>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  );
+                }
+
+                // Desktop: grid table
+                return (
                 <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
                   {/* Table Header */}
                   <Box
                     sx={{
-                      display: { xs: 'none', sm: 'grid' },
+                      display: 'grid',
                       gridTemplateColumns: gridColumns,
                       gap: 2,
                       p: 1.5,
@@ -1088,195 +1208,173 @@ export function SurveyDetailPage() {
                   </Box>
 
                   {/* Table Rows - Grouped by Species Type */}
-                  {(() => {
-                    // Group sightings by species type
-                    const grouped = sightings.reduce((acc, sighting) => {
-                      const speciesItem = species.find(s => s.id === sighting.species_id);
-                      const type = speciesItem?.type || 'unknown';
-                      if (!acc[type]) acc[type] = [];
-                      acc[type].push(sighting);
-                      return acc;
-                    }, {} as Record<string, typeof sightings>);
+                  {sortedGroups.map(([type, groupSightings], groupIndex) => {
+                    const SpeciesIcon = getSpeciesIcon(type);
 
-                    // Sort groups alphabetically by type name
-                    const sortedGroups = Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+                    return (
+                      <Box key={type}>
+                        {/* Group Divider and Label */}
+                        <Box
+                          sx={{
+                            borderTop: groupIndex > 0 ? '1px solid' : 'none',
+                            borderColor: 'divider',
+                            bgcolor: 'grey.50',
+                            px: 1.5,
+                            py: 1,
+                            mt: groupIndex > 0 ? 2 : 0
+                          }}
+                        >
+                          <Stack direction="row" alignItems="center" spacing={0.75}>
+                            <SpeciesIcon sx={{ fontSize: '16px', color: 'text.secondary' }} />
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              fontWeight={600}
+                              sx={{ fontSize: '0.75rem', letterSpacing: '0.05em' }}
+                            >
+                              {formatTypeName(type)} · {groupSightings.length}
+                            </Typography>
+                          </Stack>
+                        </Box>
 
-                    // Format type name for display
-                    const formatTypeName = (type: string) =>
-                      type.charAt(0).toUpperCase() + type.slice(1);
+                      {/* Group Rows */}
+                      {groupSightings.map((sighting: any) => {
+                        // Check for individual locations (GPS points)
+                        const individualsWithLocation = sighting.individuals?.filter(
+                          (ind: any) => ind.latitude !== null && ind.latitude !== undefined &&
+                                        ind.longitude !== null && ind.longitude !== undefined
+                        ) || [];
+                        const hasIndividualLocations = individualsWithLocation.length > 0;
+                        const individualCount = individualsWithLocation.reduce((sum: number, ind: any) => sum + (ind.count || 1), 0);
+                        const locationCount = individualsWithLocation.length;
 
-                    return sortedGroups.map(([type, groupSightings], groupIndex) => {
-                      const SpeciesIcon = getSpeciesIcon(type);
+                        const locationTooltip = hasIndividualLocations
+                          ? `${individualCount} of ${sighting.count} individual${sighting.count > 1 ? 's' : ''} across ${locationCount} location${locationCount > 1 ? 's' : ''}`
+                          : 'No location recorded';
 
-                      return (
-                        <Box key={type}>
-                          {/* Group Divider and Label */}
+                        // Collect camera trap image IDs (prefer junction table, fall back to individuals)
+                        const imageIds: number[] = sighting.image_ids?.length
+                          ? sighting.image_ids
+                          : (sighting.individuals || [])
+                              .map((ind: { camera_trap_image_id?: number | null }) => ind.camera_trap_image_id)
+                              .filter((id: number | null | undefined): id is number => id != null);
+
+                        return (
+                          <Box key={sighting.id} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
                           <Box
                             sx={{
-                              borderTop: groupIndex > 0 ? '1px solid' : 'none',
-                              borderColor: 'divider',
-                              bgcolor: 'grey.50',
-                              px: 1.5,
-                              py: 1,
-                              mt: groupIndex > 0 ? 2 : 0
+                              display: 'grid',
+                              gridTemplateColumns: gridColumns,
+                              gap: 2,
+                              p: 1.5,
+                              alignItems: 'center',
+                              '&:hover': { bgcolor: 'grey.50' }
                             }}
                           >
-                            <Stack direction="row" alignItems="center" spacing={0.75}>
-                              <SpeciesIcon sx={{ fontSize: '16px', color: 'text.secondary' }} />
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                fontWeight={600}
-                                sx={{ fontSize: '0.75rem', letterSpacing: '0.05em' }}
-                              >
-                                {formatTypeName(type)} · {groupSightings.length}
-                              </Typography>
-                            </Stack>
-                          </Box>
-
-                        {/* Group Rows */}
-                        {groupSightings.map((sighting: any) => {
-                          // Check for individual locations (GPS points)
-                          const individualsWithLocation = sighting.individuals?.filter(
-                            (ind: any) => ind.latitude !== null && ind.latitude !== undefined &&
-                                          ind.longitude !== null && ind.longitude !== undefined
-                          ) || [];
-                          const hasIndividualLocations = individualsWithLocation.length > 0;
-                          const individualCount = individualsWithLocation.reduce((sum: number, ind: any) => sum + (ind.count || 1), 0);
-                          const locationCount = individualsWithLocation.length;
-
-                          const locationTooltip = hasIndividualLocations
-                            ? `${individualCount} of ${sighting.count} individual${sighting.count > 1 ? 's' : ''} across ${locationCount} location${locationCount > 1 ? 's' : ''}`
-                            : 'No location recorded';
-
-                          // Collect camera trap image IDs (prefer junction table, fall back to individuals)
-                          const imageIds: number[] = sighting.image_ids?.length
-                            ? sighting.image_ids
-                            : (sighting.individuals || [])
-                                .map((ind: { camera_trap_image_id?: number | null }) => ind.camera_trap_image_id)
-                                .filter((id: number | null | undefined): id is number => id != null);
-
-                          return (
-                            <Box key={sighting.id} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
-                            <Box
-                              sx={{
-                                display: 'grid',
-                                gridTemplateColumns: gridColumns,
-                                gap: 2,
-                                p: 1.5,
-                                alignItems: 'center',
-                                '&:hover': { bgcolor: 'grey.50' }
-                              }}
-                            >
-                              {/* Species Column */}
-                              <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                                {sighting.species_name ? (
-                                  <>
-                                    {sighting.species_name}
-                                    {sighting.species_scientific_name && (
-                                      <i style={{ color: '#666', marginLeft: '0.25rem' }}> {sighting.species_scientific_name}</i>
-                                    )}
-                                  </>
-                                ) : (
-                                  <i style={{ color: '#666' }}>{sighting.species_scientific_name || getSpeciesName(sighting.species_id)}</i>
-                                )}
-                              </Typography>
-
-                              {/* Device Column - when sighting attaches to a device */}
-                              {gridConfig.showDevice && (
-                                <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                                  {getDeviceLabel(sighting.device_id)}
-                                </Typography>
-                              )}
-
-                              {/* Location Column - when location is at sighting level */}
-                              {gridConfig.showLocation && (
-                                <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-                                  {sighting.location_name || '-'}
-                                </Typography>
-                              )}
-
-                              {/* GPS Column - for individual geolocation */}
-                              {gridConfig.showGps && (
-                                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                                  {hasIndividualLocations ? (
-                                    <Tooltip title={locationTooltip} arrow>
-                                      <LocationOn sx={{ fontSize: 24, color: 'primary.main' }} />
-                                    </Tooltip>
-                                  ) : (
-                                    <Typography variant="body2" color="text.disabled">-</Typography>
+                            {/* Species Column */}
+                            <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                              {sighting.species_name ? (
+                                <>
+                                  {sighting.species_name}
+                                  {sighting.species_scientific_name && (
+                                    <i style={{ color: '#666', marginLeft: '0.25rem' }}> {sighting.species_scientific_name}</i>
                                   )}
-                                </Box>
+                                </>
+                              ) : (
+                                <i style={{ color: '#666' }}>{sighting.species_scientific_name || getSpeciesName(sighting.species_id)}</i>
                               )}
-                              {gridConfig.showSpacer && (
-                                <Box /> // Empty spacer
-                              )}
+                            </Typography>
 
-                              {/* Count Column */}
-                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
-                                {sighting.count}
+                            {/* Device Column - when sighting attaches to a device */}
+                            {gridConfig.showDevice && (
+                              <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                                {getDeviceLabel(sighting.device_id)}
                               </Typography>
+                            )}
 
-                              {/* Notes Column — only rendered when at least one sighting has notes */}
-                              {showNotesColumn && (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    fontSize: '0.875rem',
-                                    color: sighting.notes ? 'text.secondary' : 'text.disabled',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {sighting.notes || '-'}
-                                </Typography>
-                              )}
-                            </Box>
+                            {/* Location Column - when location is at sighting level */}
+                            {gridConfig.showLocation && (
+                              <Typography variant="body2" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                                {sighting.location_name || '-'}
+                              </Typography>
+                            )}
 
-                            {/* Camera Trap Image Thumbnails — click to view */}
-                            {imageIds.length > 0 && (
-                              <Box sx={{ display: 'flex', gap: 0.5, px: 1.5, pb: 1.5, flexWrap: 'wrap' }}>
-                                {imageIds.map((imgId: number, imgIdx: number) => (
-                                  <Box
-                                    key={imgId}
-                                    onClick={() => openSightingImageViewer(imageIds, imgIdx)}
-                                    sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
-                                  >
-                                    <SightingImageThumbnail imageId={imgId} />
-                                  </Box>
-                                ))}
+                            {/* GPS Column - for individual geolocation */}
+                            {gridConfig.showGps && (
+                              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                                {hasIndividualLocations ? (
+                                  <Tooltip title={locationTooltip} arrow>
+                                    <LocationOn sx={{ fontSize: 24, color: 'primary.main' }} />
+                                  </Tooltip>
+                                ) : (
+                                  <Typography variant="body2" color="text.disabled">-</Typography>
+                                )}
                               </Box>
                             )}
-
-                            {/* Audio Detection Clips */}
-                            {sighting.audio_clips && sighting.audio_clips.length > 0 && (
-                              <Stack direction="row" spacing={1} sx={{ px: 1.5, pb: 1.5 }}>
-                                {sighting.audio_clips.map((clip: SightingAudioClip, clipIdx: number) => (
-                                  <AudioClipPlayer
-                                    key={clipIdx}
-                                    audioRecordingId={clip.audio_recording_id}
-                                    startTime={clip.start_time}
-                                    endTime={clip.end_time}
-                                    confidence={clip.confidence}
-                                    timestamp={clip.detection_timestamp}
-                                  />
-                                ))}
-                              </Stack>
+                            {gridConfig.showSpacer && (
+                              <Box /> // Empty spacer
                             )}
+
+                            {/* Count Column */}
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                              {sighting.count}
+                            </Typography>
+
+                            {/* Notes Column — only rendered when at least one sighting has notes */}
+                            {showNotesColumn && (
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontSize: '0.875rem',
+                                  color: sighting.notes ? 'text.secondary' : 'text.disabled',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {sighting.notes || '-'}
+                              </Typography>
+                            )}
+                          </Box>
+
+                          {/* Camera Trap Image Thumbnails — click to view */}
+                          {imageIds.length > 0 && (
+                            <Box sx={{ display: 'flex', gap: 0.5, px: 1.5, pb: 1.5, flexWrap: 'wrap' }}>
+                              {imageIds.map((imgId: number, imgIdx: number) => (
+                                <Box
+                                  key={imgId}
+                                  onClick={() => openSightingImageViewer(imageIds, imgIdx)}
+                                  sx={{ cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                                >
+                                  <SightingImageThumbnail imageId={imgId} />
+                                </Box>
+                              ))}
                             </Box>
-                          );
-                        })}
-                        </Box>
-                      );
-                    })
-                  })()}
+                          )}
+
+                          {/* Audio Detection Clips */}
+                          {sighting.audio_clips && sighting.audio_clips.length > 0 && (
+                            <Stack direction="row" spacing={1} sx={{ px: 1.5, pb: 1.5 }}>
+                              {sighting.audio_clips.map((clip: SightingAudioClip, clipIdx: number) => (
+                                <AudioClipPlayer
+                                  key={clipIdx}
+                                  audioRecordingId={clip.audio_recording_id}
+                                  startTime={clip.start_time}
+                                  endTime={clip.end_time}
+                                  confidence={clip.confidence}
+                                  timestamp={clip.detection_timestamp}
+                                />
+                              ))}
+                            </Stack>
+                          )}
+                          </Box>
+                        );
+                      })}
+                      </Box>
+                    );
+                  })}
                 </Box>
-              ) : (
-                <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                  No sightings recorded yet.
-                </Typography>
-              );
+                );
               })())}
             </>
           )}
