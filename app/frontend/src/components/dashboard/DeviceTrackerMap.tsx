@@ -192,13 +192,20 @@ export function DeviceTrackerMap() {
     let cancelled = false;
     setAllTracksLoading(true);
     setAllTracksError(null);
-    Promise.all(
+    Promise.allSettled(
       locatedDevices.map((d) =>
         ecotopiaAPI.getGpsHistory(d.id, trackDays).then((fixes) => [d.id, fixes] as [string, EcotopiaGpsFix[]]),
       ),
     )
-      .then((results) => !cancelled && setAllTracks(new Map(results)))
-      .catch((err) => !cancelled && setAllTracksError(err instanceof Error ? err.message : 'Failed to load tracks'))
+      .then((results) => {
+        if (cancelled) return;
+        const successful = results
+          .filter((r): r is PromiseFulfilledResult<[string, EcotopiaGpsFix[]]> => r.status === 'fulfilled')
+          .map((r) => r.value);
+        setAllTracks(new Map(successful));
+        const failCount = results.filter((r) => r.status === 'rejected').length;
+        if (failCount > 0) setAllTracksError(`Failed to load ${failCount} track${failCount > 1 ? 's' : ''}`);
+      })
       .finally(() => !cancelled && setAllTracksLoading(false));
     return () => {
       cancelled = true;
