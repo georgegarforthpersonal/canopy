@@ -13,6 +13,7 @@ import 'dayjs/locale/en-gb';
 import { theme } from './theme';
 import { Layout } from './components/layout/Layout';
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import { SurveysPage } from './pages/SurveysPage';
 import { SurveyDetailPage } from './pages/SurveyDetailPage';
 import { NewSurveyPage } from './pages/NewSurveyPage';
@@ -40,9 +41,11 @@ const router = createBrowserRouter([
     errorElement: <BubbleRouteError />,
     element: (
       <AuthProvider>
-        <Layout>
-          <Outlet />
-        </Layout>
+        <ToastProvider>
+          <Layout>
+            <Outlet />
+          </Layout>
+        </ToastProvider>
       </AuthProvider>
     ),
     children: [
