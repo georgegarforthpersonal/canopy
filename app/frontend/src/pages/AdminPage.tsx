@@ -35,7 +35,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { SPACING } from '../config/responsive';
 import { useResponsive } from '../hooks/useResponsive';
-import { useRowHighlight } from '../hooks';
+import { useRowHighlight, useDeviceTypes } from '../hooks';
 import {
   surveyorsAPI,
   surveyTypesAPI,
@@ -58,6 +58,7 @@ import {
 import LocationMapPicker from '../components/surveys/LocationMapPicker';
 import DeviceMap from '../components/admin/DeviceMap';
 import LocationsManager from '../components/admin/LocationsManager';
+import DeviceTypesManager from '../components/admin/DeviceTypesManager';
 import { SurveyTypeColorSelector, SurveyTypeChip } from '../components/SurveyTypeColors';
 import { brandColors } from '../theme';
 
@@ -90,6 +91,8 @@ export function AdminPage() {
   const surveyorHighlight = useRowHighlight();
   const surveyTypeHighlight = useRowHighlight();
   const deviceHighlight = useRowHighlight();
+  // Device types drive the device/survey-type selects, map legend and labels.
+  const { deviceTypes, bySlug: deviceTypeBySlug, reload: reloadDeviceTypes } = useDeviceTypes();
   const [tabValue, setTabValue] = useState(0);
 
   // Surveyors state
@@ -615,6 +618,7 @@ export function AdminPage() {
           <Tab label="Surveyors" />
           <Tab label="Survey Types" />
           <Tab label="Devices" />
+          <Tab label="Device Types" />
           <Tab label="Locations" />
           <Tab label="Data" />
         </Tabs>
@@ -883,6 +887,7 @@ export function AdminPage() {
 
         <DeviceMap
           devices={devices}
+          deviceTypes={deviceTypes}
           locationsWithBoundaries={allLocationsWithBoundaries}
           loading={devicesLoading}
           onEditDevice={handleOpenEditDevice}
@@ -945,20 +950,17 @@ export function AdminPage() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={
-                          device.device_type === 'camera_trap' ? 'Camera Trap'
-                          : device.device_type === 'refugia' ? 'Refugia'
-                          : 'Audio Recorder'
-                        }
-                        size="small"
-                        color={
-                          device.device_type === 'camera_trap' ? 'primary'
-                          : device.device_type === 'refugia' ? 'success'
-                          : 'secondary'
-                        }
-                        variant="outlined"
-                      />
+                      {(() => {
+                        const type = deviceTypeBySlug.get(device.device_type);
+                        return (
+                          <Chip
+                            label={type?.display_name ?? device.device_type}
+                            size="small"
+                            variant="outlined"
+                            sx={type ? { borderColor: type.color, color: type.color } : undefined}
+                          />
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body1">
@@ -1027,13 +1029,18 @@ export function AdminPage() {
         </TableContainer>
       </TabPanel>
 
-      {/* Locations Tab */}
+      {/* Device Types Tab */}
       <TabPanel value={tabValue} index={3}>
+        <DeviceTypesManager onChanged={reloadDeviceTypes} />
+      </TabPanel>
+
+      {/* Locations Tab */}
+      <TabPanel value={tabValue} index={4}>
         <LocationsManager />
       </TabPanel>
 
       {/* Data Tab */}
-      <TabPanel value={tabValue} index={4}>
+      <TabPanel value={tabValue} index={5}>
         <Paper sx={{ p: 3, maxWidth: 600 }}>
           <Typography variant="h6" gutterBottom>
             Export Data
@@ -1254,9 +1261,9 @@ export function AdminPage() {
                   onChange={(e) => setFormSightingDeviceType((e.target.value || null) as DeviceType | null)}
                   disabled={savingSurveyType}
                 >
-                  <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
-                  <MenuItem value="camera_trap">Camera Trap</MenuItem>
-                  <MenuItem value="refugia">Refugia</MenuItem>
+                  {deviceTypes.map((dt) => (
+                    <MenuItem key={dt.slug} value={dt.slug}>{dt.display_name}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             )}
@@ -1507,9 +1514,13 @@ export function AdminPage() {
               onChange={(e) => setFormDeviceType(e.target.value as DeviceType)}
               disabled={savingDevice}
             >
-              <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
-              <MenuItem value="camera_trap">Camera Trap</MenuItem>
-              <MenuItem value="refugia">Refugia</MenuItem>
+              {/* Include the current value even if its type is now inactive, so editing renders. */}
+              {!deviceTypes.some((dt) => dt.slug === formDeviceType) && formDeviceType && (
+                <MenuItem value={formDeviceType}>{formDeviceType}</MenuItem>
+              )}
+              {deviceTypes.map((dt) => (
+                <MenuItem key={dt.slug} value={dt.slug}>{dt.display_name}</MenuItem>
+              ))}
             </Select>
           </FormControl>
           <TextField

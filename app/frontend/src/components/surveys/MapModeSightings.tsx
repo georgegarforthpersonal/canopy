@@ -34,6 +34,7 @@ import type { DeviceGroup } from './mapModeUtils';
 import { MarkerPopupContent, GroupedMarkerPopupContent } from './MarkerPopupContent';
 import FieldBoundaryOverlay from './FieldBoundaryOverlay';
 import { getDeviceIcon } from '../../utils/deviceIcon';
+import { useDeviceTypes } from '../../hooks';
 
 interface MapModeSightingsProps {
   sightings: DraftSighting[];
@@ -136,6 +137,7 @@ export function MapModeSightings({
   devices = [],
   allowSightingDeviceSelection = false,
 }: MapModeSightingsProps) {
+  const { bySlug: deviceTypeBySlug } = useDeviceTypes();
   const [mapType, setMapType] = useState<'street' | 'satellite'>('satellite');
   const [mapCenter] = useState<LatLng>(new LatLng(DEFAULT_MAP_CENTER[0], DEFAULT_MAP_CENTER[1]));
   const [addPopupPosition, setAddPopupPosition] = useState<{ lat: number; lng: number } | null>(null);
@@ -286,7 +288,12 @@ export function MapModeSightings({
 
             {/* Device-attach mode: one marker per device, popup lists species observed there */}
             {allowSightingDeviceSelection && deviceGrouping.groups.map((group) => {
-              const icon = getDeviceIcon(group.device);
+              const groupType = deviceTypeBySlug.get(group.device.device_type);
+              const icon = getDeviceIcon({
+                iconKey: groupType?.icon_key ?? 'pin',
+                color: groupType?.color ?? '#9e9e9e',
+                isActive: group.device.is_active,
+              });
               const totalIndividuals = group.entries.reduce((sum, e) => sum + e.count, 0);
               return (
                 <Marker

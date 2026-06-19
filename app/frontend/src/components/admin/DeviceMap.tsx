@@ -31,20 +31,24 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreFromTrashIcon from '@mui/icons-material/RestoreFromTrash';
 import 'leaflet/dist/leaflet.css';
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
-import type { Device, LocationWithBoundary } from '../../services/api';
+import type { Device, DeviceTypeRecord, LocationWithBoundary } from '../../services/api';
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
-import { DEVICE_COLORS, DEVICE_SVG, getDeviceIcon } from '../../utils/deviceIcon';
+import { getDeviceIcon, getIconSvg } from '../../utils/deviceIcon';
 
 interface DeviceMapProps {
   devices: Device[];
+  /** Device types available to the org, used for marker/legend/label rendering. */
+  deviceTypes: DeviceTypeRecord[];
   locationsWithBoundaries: LocationWithBoundary[];
   loading?: boolean;
   onEditDevice: (device: Device) => void;
   onDeactivateDevice: (device: Device) => void;
   onReactivateDevice: (device: Device) => void;
 }
+
+const FALLBACK_TYPE = { display_name: 'Unknown', icon_key: 'pin', color: '#9e9e9e' };
 
 function FitBoundsToDevices({ devices }: { devices: Device[] }) {
   const map = useMap();
@@ -68,14 +72,14 @@ function FitBoundsToDevices({ devices }: { devices: Device[] }) {
   return null;
 }
 
-function DeviceLegendIcon({ type }: { type: Device['device_type'] }) {
+function DeviceLegendIcon({ color, iconKey }: { color: string; iconKey: string }) {
   return (
     <Box
       sx={{
         width: 20,
         height: 20,
         borderRadius: '50%',
-        bgcolor: DEVICE_COLORS[type],
+        bgcolor: color,
         border: '1.5px solid #fff',
         boxShadow: '0 0 0 1px rgba(0,0,0,0.15)',
         display: 'flex',
@@ -83,19 +87,24 @@ function DeviceLegendIcon({ type }: { type: Device['device_type'] }) {
         justifyContent: 'center',
         '& svg': { width: 12, height: 12 },
       }}
-      dangerouslySetInnerHTML={{ __html: DEVICE_SVG[type] }}
+      dangerouslySetInnerHTML={{ __html: getIconSvg(iconKey) }}
     />
   );
 }
 
 export default function DeviceMap({
   devices,
+  deviceTypes,
   locationsWithBoundaries,
   loading,
   onEditDevice,
   onDeactivateDevice,
   onReactivateDevice,
 }: DeviceMapProps) {
+  const typeBySlug = useMemo(
+    () => new Map(deviceTypes.map((dt) => [dt.slug, dt])),
+    [deviceTypes],
+  );
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
   const [mapType, setMapType] = useState<'street' | 'satellite'>('satellite');
   const [showInactive, setShowInactive] = useState(false);
@@ -144,19 +153,13 @@ export default function DeviceMap({
             </Typography>
 
             {/* Legend */}
-            <Stack direction="row" spacing={2}>
-              <Stack direction="row" spacing={0.75} alignItems="center">
-                <DeviceLegendIcon type="camera_trap" />
-                <Typography variant="caption" color="text.secondary">Camera Trap</Typography>
-              </Stack>
-              <Stack direction="row" spacing={0.75} alignItems="center">
-                <DeviceLegendIcon type="audio_recorder" />
-                <Typography variant="caption" color="text.secondary">Audio Recorder</Typography>
-              </Stack>
-              <Stack direction="row" spacing={0.75} alignItems="center">
-                <DeviceLegendIcon type="refugia" />
-                <Typography variant="caption" color="text.secondary">Refugia</Typography>
-              </Stack>
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+              {deviceTypes.map((dt) => (
+                <Stack key={dt.slug} direction="row" spacing={0.75} alignItems="center">
+                  <DeviceLegendIcon color={dt.color} iconKey={dt.icon_key} />
+                  <Typography variant="caption" color="text.secondary">{dt.display_name}</Typography>
+                </Stack>
+              ))}
             </Stack>
           </Stack>
 
@@ -265,11 +268,13 @@ export default function DeviceMap({
             )}
 
             {/* Device markers */}
-            {visibleDevices.map((device) => (
+            {visibleDevices.map((device) => {
+              const type = typeBySlug.get(device.device_type) ?? FALLBACK_TYPE;
+              return (
               <Marker
                 key={device.id}
                 position={[device.latitude!, device.longitude!]}
-                icon={getDeviceIcon(device)}
+                icon={getDeviceIcon({ iconKey: type.icon_key, color: type.color, isActive: device.is_active })}
               >
                 <Popup>
                   <Box sx={{ minWidth: 'min(180px, calc(100vw - 112px))', p: 0.5 }}>
@@ -283,19 +288,10 @@ export default function DeviceMap({
                     )}
                     <Stack direction="row" spacing={0.5} sx={{ mb: 1 }}>
                       <Chip
-                        label={
-                          device.device_type === 'camera_trap' ? 'Camera Trap'
-                          : device.device_type === 'refugia' ? 'Refugia'
-                          : 'Audio Recorder'
-                        }
+                        label={type.display_name}
                         size="small"
-                        color={
-                          device.device_type === 'camera_trap' ? 'primary'
-                          : device.device_type === 'refugia' ? 'success'
-                          : 'secondary'
-                        }
                         variant="outlined"
-                        sx={{ height: 20, fontSize: '0.7rem' }}
+                        sx={{ height: 20, fontSize: '0.7rem', borderColor: type.color, color: type.color }}
                       />
                       <Chip
                         label={device.is_active ? 'Active' : 'Inactive'}
@@ -346,7 +342,8 @@ export default function DeviceMap({
                   </Box>
                 </Popup>
               </Marker>
-            ))}
+              );
+            })}
 
             <FitBoundsToDevices devices={devices} />
             <MapResizeHandler isFullscreen={isFullscreen} />
