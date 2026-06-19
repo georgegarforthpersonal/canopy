@@ -303,9 +303,6 @@ export interface LocationWithBoundary extends Location {
   geometry: GeoJsonGeometry | null;
   // Polygon outer ring as [lng, lat] pairs — kept for backward-compatible overlays; null for non-areas.
   boundary_geometry: [number, number][] | null;
-  boundary_fill_color: string | null;
-  boundary_stroke_color: string | null;
-  boundary_fill_opacity: number | null;
 }
 
 /**
@@ -317,9 +314,6 @@ export interface LocationInput {
   name: string;
   location_type: LocationType;
   geometry?: GeoJsonGeometry | null;
-  boundary_fill_color?: string;
-  boundary_stroke_color?: string;
-  boundary_fill_opacity?: number;
 }
 
 /**

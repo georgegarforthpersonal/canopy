@@ -20,7 +20,7 @@ import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
-import { DEFAULT_MAP_CENTER } from '../../config';
+import { DEFAULT_MAP_CENTER, LOCATION_TYPE_STYLE } from '../../config';
 import {
   geometryAreaSqm,
   geometryLengthM,
@@ -111,7 +111,19 @@ function GeomanController({ locationType, value, onChange }: GeomanControllerPro
   );
 
   useEffect(() => {
-    map.pm.setGlobalOptions({ snappable: true, snapDistance: 20, allowSelfIntersection: false });
+    const style = LOCATION_TYPE_STYLE[locationType];
+    const pathOptions = {
+      color: style.stroke,
+      fillColor: style.fill,
+      fillOpacity: style.fillOpacity,
+      weight: style.weight,
+    };
+    map.pm.setGlobalOptions({
+      snappable: true,
+      snapDistance: 20,
+      allowSelfIntersection: false,
+      pathOptions,
+    });
 
     const handleCreate = (event: PmCreateEvent) => {
       // Single-shape model: discard any previous geometry.
@@ -130,6 +142,8 @@ function GeomanController({ locationType, value, onChange }: GeomanControllerPro
 
     if (value) {
       const layer = geometryToLayer(value);
+      const styled = layer as L.Path & { setStyle?: (o: object) => void };
+      if (styled.setStyle) styled.setStyle(pathOptions);
       layer.addTo(map);
       layerRef.current = layer;
       const pm = (layer as L.Layer & { pm?: { enable: (o?: object) => void } }).pm;

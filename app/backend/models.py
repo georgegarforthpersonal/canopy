@@ -382,9 +382,6 @@ class Location(LocationBase, table=True):  # type: ignore[call-arg]
             nullable=True
         )
     )
-    boundary_fill_color: Optional[str] = Field(default="#3388ff", max_length=7)
-    boundary_stroke_color: Optional[str] = Field(default="#3388ff", max_length=7)
-    boundary_fill_opacity: Optional[float] = Field(default=0.2, ge=0, le=1)
 
     # Relationships
     organisation: Optional["Organisation"] = Relationship(back_populates="locations")
@@ -403,9 +400,6 @@ class LocationCreate(LocationBase):
         default=None,
         description="GeoJSON geometry (Polygon/LineString/Point) matching location_type",
     )
-    boundary_fill_color: Optional[str] = Field(default="#3388ff", max_length=7)
-    boundary_stroke_color: Optional[str] = Field(default="#3388ff", max_length=7)
-    boundary_fill_opacity: Optional[float] = Field(default=0.2, ge=0, le=1)
 
 
 class LocationUpdate(SQLModel):
@@ -417,9 +411,6 @@ class LocationUpdate(SQLModel):
     name: Optional[str] = Field(None, max_length=255)
     location_type: Optional[LocationType] = None
     geometry: Optional[Dict[str, Any]] = None
-    boundary_fill_color: Optional[str] = Field(None, max_length=7)
-    boundary_stroke_color: Optional[str] = Field(None, max_length=7)
-    boundary_fill_opacity: Optional[float] = Field(None, ge=0, le=1)
 
 
 class LocationRead(LocationBase):
@@ -437,9 +428,6 @@ class LocationWithBoundary(LocationRead):
     boundary_geometry: Optional[List[List[float]]] = Field(
         None, description="Array of [lng, lat] coordinate pairs forming the boundary polygon"
     )
-    boundary_fill_color: Optional[str] = Field(default="#3388ff")
-    boundary_stroke_color: Optional[str] = Field(default="#3388ff")
-    boundary_fill_opacity: Optional[float] = Field(default=0.2)
 
 
 # ============================================================================

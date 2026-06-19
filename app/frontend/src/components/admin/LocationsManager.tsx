@@ -51,9 +51,6 @@ const TYPE_COLORS: Record<LocationType, 'success' | 'info' | 'warning' | 'defaul
 const DEFAULTS = {
   geometry: null,
   boundary_geometry: null,
-  boundary_fill_color: '#3388ff',
-  boundary_stroke_color: '#3388ff',
-  boundary_fill_opacity: 0.2,
 };
 
 export default function LocationsManager() {

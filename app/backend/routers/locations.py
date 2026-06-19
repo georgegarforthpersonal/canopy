@@ -170,10 +170,7 @@ async def get_locations_with_boundaries(
             CASE
                 WHEN GeometryType(boundary_geometry) = 'POLYGON'
                 THEN ST_AsGeoJSON(boundary_geometry)::json->'coordinates'->0
-            END AS boundary_ring,
-            boundary_fill_color,
-            boundary_stroke_color,
-            boundary_fill_opacity
+            END AS boundary_ring
         FROM location
         WHERE boundary_geometry IS NOT NULL
           AND organisation_id = :org_id
@@ -186,9 +183,6 @@ async def get_locations_with_boundaries(
         "location_type": row[2],
         "geometry": row[3],
         "boundary_geometry": row[4],
-        "boundary_fill_color": row[5],
-        "boundary_stroke_color": row[6],
-        "boundary_fill_opacity": row[7],
     } for row in result]
 
 
@@ -227,9 +221,6 @@ async def create_location(
         name=location.name,
         location_type=location.location_type,
         organisation_id=org.id,
-        boundary_fill_color=location.boundary_fill_color,
-        boundary_stroke_color=location.boundary_stroke_color,
-        boundary_fill_opacity=location.boundary_fill_opacity,
     )
     db.add(db_location)
     db.flush()  # assign id before writing geometry
@@ -276,12 +267,6 @@ async def update_location(
         db_location.name = location.name
     if "location_type" in fields_set and location.location_type is not None:
         db_location.location_type = location.location_type
-    if "boundary_fill_color" in fields_set:
-        db_location.boundary_fill_color = location.boundary_fill_color
-    if "boundary_stroke_color" in fields_set:
-        db_location.boundary_stroke_color = location.boundary_stroke_color
-    if "boundary_fill_opacity" in fields_set:
-        db_location.boundary_fill_opacity = location.boundary_fill_opacity
 
     # Determine the effective type for geometry validation.
     effective_type = db_location.location_type

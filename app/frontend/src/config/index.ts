@@ -7,3 +7,4 @@
 export * from './map';
 export * from './responsive';
 export * from './speciesTypes';
+export * from './locationStyles';

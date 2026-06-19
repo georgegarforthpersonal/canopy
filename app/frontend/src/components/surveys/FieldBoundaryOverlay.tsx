@@ -10,6 +10,7 @@ import { Polygon, Polyline, CircleMarker, Tooltip } from 'react-leaflet';
 import type { LatLngExpression } from 'leaflet';
 import type { LocationWithBoundary } from '../../services/api';
 import type { GeoJsonGeometry, Position } from '../../utils/geometry';
+import { LOCATION_TYPE_STYLE } from '../../config';
 
 interface FieldBoundaryOverlayProps {
   locations: LocationWithBoundary[];
@@ -52,11 +53,8 @@ export default function FieldBoundaryOverlay({
   return (
     <>
       {renderable.map(({ loc, geometry }) => {
-        const stroke = loc.boundary_stroke_color || '#3388ff';
-        const fill = loc.boundary_fill_color || '#3388ff';
-        const fillOpacity = loc.boundary_fill_opacity ?? 0.2;
-
         if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
+          const style = LOCATION_TYPE_STYLE.area;
           const rings: Position[][] =
             geometry.type === 'Polygon'
               ? (geometry.coordinates as Position[][])
@@ -66,7 +64,7 @@ export default function FieldBoundaryOverlay({
             <Polygon
               key={loc.id}
               positions={positions as LatLngExpression[][]}
-              pathOptions={{ fillColor: fill, fillOpacity, color: stroke, weight: 2 }}
+              pathOptions={{ fillColor: style.fill, fillOpacity: style.fillOpacity, color: style.stroke, weight: style.weight }}
               interactive={interactive}
             >
               {geometryLabel(loc.name)}
@@ -75,6 +73,7 @@ export default function FieldBoundaryOverlay({
         }
 
         if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') {
+          const style = LOCATION_TYPE_STYLE.route;
           const lines: Position[][] =
             geometry.type === 'LineString'
               ? [geometry.coordinates as Position[]]
@@ -84,7 +83,7 @@ export default function FieldBoundaryOverlay({
             <Polyline
               key={loc.id}
               positions={positions as LatLngExpression[][]}
-              pathOptions={{ color: stroke, weight: 3 }}
+              pathOptions={{ color: style.stroke, weight: style.weight }}
               interactive={interactive}
             >
               {geometryLabel(loc.name)}
@@ -93,13 +92,14 @@ export default function FieldBoundaryOverlay({
         }
 
         if (geometry.type === 'Point') {
+          const style = LOCATION_TYPE_STYLE.point;
           const position = toLatLng(geometry.coordinates as Position);
           return (
             <CircleMarker
               key={loc.id}
               center={position}
               radius={7}
-              pathOptions={{ color: stroke, fillColor: fill, fillOpacity: 0.8, weight: 2 }}
+              pathOptions={{ color: style.stroke, fillColor: style.fill, fillOpacity: style.fillOpacity, weight: style.weight }}
               interactive={interactive}
             >
               {geometryLabel(loc.name)}
