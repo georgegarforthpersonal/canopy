@@ -266,6 +266,11 @@ async def update_location(
         raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
 
     fields_set = location.model_fields_set
+    type_changed = (
+        "location_type" in fields_set
+        and location.location_type is not None
+        and location.location_type != db_location.location_type
+    )
 
     if location.name is not None:
         db_location.name = location.name
@@ -289,6 +294,11 @@ async def update_location(
         _validate_geometry(effective_type, location.geometry)
         db.flush()
         _write_geometry(db, location_id, location.geometry)
+    elif type_changed:
+        # Type changed to a different shape without new geometry: the old
+        # shape can't match the new type, so drop it.
+        db.flush()
+        _write_geometry(db, location_id, None)
 
     db.commit()
     db.refresh(db_location)

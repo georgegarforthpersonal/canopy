@@ -278,6 +278,27 @@ class TestLocationGeometry:
         boundaries = client.get("/api/locations/with-boundaries", headers=auth_headers).json()
         assert all(r["id"] != created["id"] for r in boundaries)
 
+    def test_changing_type_without_geometry_clears_stale_shape(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """Switching to a different shape type without new geometry drops the old shape."""
+        created = client.post(
+            "/api/locations",
+            json={"name": "Reserve", "location_type": "area", "geometry": POLYGON_GEOMETRY},
+            headers=auth_headers,
+        ).json()
+
+        response = client.put(
+            f"/api/locations/{created['id']}",
+            json={"location_type": "route"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["location_type"] == "route"
+
+        boundaries = client.get("/api/locations/with-boundaries", headers=auth_headers).json()
+        assert all(r["id"] != created["id"] for r in boundaries)
+
     def test_update_name_only_preserves_geometry(self, client: TestClient, auth_headers: dict):
         """Omitting geometry on update leaves the existing shape intact."""
         created = client.post(
