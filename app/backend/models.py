@@ -11,7 +11,7 @@ Replaces:
 """
 
 from datetime import date as date_type, time as time_type, datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from decimal import Decimal
 from enum import Enum as PyEnum
 from sqlmodel import Field, SQLModel, Relationship
@@ -329,9 +329,34 @@ class SpeciesTypeRead(SpeciesTypeBase):
 # Location Models
 # ============================================================================
 
+class LocationType(str, PyEnum):
+    """Spatial representation of a location.
+
+    Stored as a plain string column (like ``DeviceType``); the enum is enforced
+    at the Python layer.
+    """
+    area = "area"      # polygon boundary
+    route = "route"    # line / transect route
+    point = "point"    # single point
+    none = "none"      # no GPS geometry
+
+
+# GeoJSON geometry types accepted for each location type
+GEOMETRY_TYPES_BY_LOCATION_TYPE: Dict[LocationType, set[str]] = {
+    LocationType.area: {"Polygon", "MultiPolygon"},
+    LocationType.route: {"LineString", "MultiLineString"},
+    LocationType.point: {"Point", "MultiPoint"},
+    LocationType.none: set(),
+}
+
+
 class LocationBase(SQLModel):
     """Base location fields"""
     name: str = Field(max_length=255, description="Location name")
+    location_type: LocationType = Field(
+        default=LocationType.none,
+        description="Spatial representation of this location (area / route / point / none)",
+    )
 
 
 class Location(LocationBase, table=True):  # type: ignore[call-arg]
@@ -346,7 +371,9 @@ class Location(LocationBase, table=True):  # type: ignore[call-arg]
         sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
     )
 
-    # Boundary fields (optional polygon for map display)
+    # Geometry (optional). PostGIS column is geometry(Geometry, 4326) so it can
+    # hold a Polygon (area), LineString (route) or Point depending on location_type.
+    # Mapped as Text here; reads/writes go through ST_* functions in the router.
     boundary_geometry: Optional[str] = Field(
         default=None,
         sa_column=sa.Column(
@@ -371,13 +398,28 @@ class Location(LocationBase, table=True):  # type: ignore[call-arg]
 
 
 class LocationCreate(LocationBase):
-    """Model for creating a new location"""
-    pass
+    """Model for creating a new location, optionally with geometry."""
+    geometry: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="GeoJSON geometry (Polygon/LineString/Point) matching location_type",
+    )
+    boundary_fill_color: Optional[str] = Field(default="#3388ff", max_length=7)
+    boundary_stroke_color: Optional[str] = Field(default="#3388ff", max_length=7)
+    boundary_fill_opacity: Optional[float] = Field(default=0.2, ge=0, le=1)
 
 
 class LocationUpdate(SQLModel):
-    """Model for updating a location (all fields optional)"""
+    """Model for updating a location (all fields optional).
+
+    Geometry handling uses ``model_fields_set`` in the router to distinguish an
+    omitted ``geometry`` (leave unchanged) from an explicit ``null`` (clear it).
+    """
     name: Optional[str] = Field(None, max_length=255)
+    location_type: Optional[LocationType] = None
+    geometry: Optional[Dict[str, Any]] = None
+    boundary_fill_color: Optional[str] = Field(None, max_length=7)
+    boundary_stroke_color: Optional[str] = Field(None, max_length=7)
+    boundary_fill_opacity: Optional[float] = Field(None, ge=0, le=1)
 
 
 class LocationRead(LocationBase):
@@ -386,7 +428,12 @@ class LocationRead(LocationBase):
 
 
 class LocationWithBoundary(LocationRead):
-    """Location with optional boundary geometry for map display"""
+    """Location with optional geometry for map display."""
+    geometry: Optional[Dict[str, Any]] = Field(
+        None, description="GeoJSON geometry (Polygon/LineString/Point)"
+    )
+    # Polygon outer ring as [lng, lat] pairs — kept for backward compatibility
+    # with existing boundary overlays; null for non-area locations.
     boundary_geometry: Optional[List[List[float]]] = Field(
         None, description="Array of [lng, lat] coordinate pairs forming the boundary polygon"
     )
