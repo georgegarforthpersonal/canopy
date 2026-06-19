@@ -41,7 +41,10 @@ export type FilterOverride = 'include' | 'exclude';
 export const WIZARD_STEPS = ['Setup', 'Upload', 'Filter', 'Classify', 'Review', 'Save'] as const;
 
 const UPLOAD_BATCH_SIZE = 10;
-const FILTER_BATCH_SIZE = 5;
+// Number of filter requests kept in flight at once. One request per image so
+// each runs as its own Modal call; the pool gives Modal several to fan out
+// across containers concurrently (mirrors PROCESS_CONCURRENCY in useAudioWizard).
+const FILTER_CONCURRENCY = 6;
 
 // ============================================================================
 // Derived filter state — single-pass computation
@@ -380,25 +383,41 @@ export function useCameraTrapWizard() {
     setFilterProgress({ processed: 0, total: imageFiles.length });
 
     try {
+      // One request per image so each is its own Modal call; a small worker
+      // pool keeps several in flight at once (the server just waits on
+      // inference per request), mirroring the audio wizard's runProcessing.
       const results = new Map<number, ImageFilterResult>();
+      let completed = 0;
+      let nextIndex = 0;
+      let failed = false;
 
-      for (let i = 0; i < imageFiles.length; i += FILTER_BATCH_SIZE) {
-        const batch = imageFiles.slice(i, i + FILTER_BATCH_SIZE);
-        const batchFiles = batch.map((img) => img.file);
+      const worker = async () => {
+        while (!failed && nextIndex < imageFiles.length) {
+          const i = nextIndex++;
+          try {
+            const response = await imagesAPI.filterImages([imageFiles[i].file]);
+            if (filterRunRef.current !== runId) return; // cancelled (skipped)
+            const result = response.results[0];
+            if (result) results.set(i, result);
+          } catch (err) {
+            failed = true;
+            throw err;
+          }
+          completed++;
+          setFilterProgress({ processed: completed, total: imageFiles.length });
+          // Update results progressively so the UI fills in as images finish.
+          setFilterResults(new Map(results));
+        }
+      };
 
-        const response = await imagesAPI.filterImages(batchFiles);
-        if (filterRunRef.current !== runId) return; // cancelled (skipped)
+      await Promise.all(
+        Array.from(
+          { length: Math.min(FILTER_CONCURRENCY, imageFiles.length) },
+          () => worker(),
+        ),
+      );
+      if (filterRunRef.current !== runId) return; // cancelled (skipped)
 
-        response.results.forEach((result: ImageFilterResult, batchIdx: number) => {
-          results.set(i + batchIdx, result);
-        });
-
-        setFilterProgress({
-          processed: Math.min(i + FILTER_BATCH_SIZE, imageFiles.length),
-          total: imageFiles.length,
-        });
-        setFilterResults(new Map(results));
-      }
       setFilteredImageSet(imageFiles);
     } catch (err: unknown) {
       if (filterRunRef.current === runId) {
