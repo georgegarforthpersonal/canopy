@@ -824,7 +824,10 @@ export const surveyorsAPI = {
 // Device Types (Audio Recorder & Camera Trap Devices)
 // ============================================================================
 
-export type DeviceType = 'audio_recorder' | 'camera_trap' | 'refugia';
+// A device type slug. The built-in types (audio_recorder / camera_trap / refugia)
+// have processing behaviour wired to their slug in code; organisations may also add
+// custom (passive) types via the device type registry, so this is an open string.
+export type DeviceType = string;
 
 export interface Device {
   id: number;
@@ -932,6 +935,74 @@ export const devicesAPI = {
     return fetchAPI(`/devices/${id}/reactivate`, {
       method: 'POST',
     });
+  },
+};
+
+// ============================================================================
+// Device Types (registry)
+// ============================================================================
+
+/** A device type registry entry (built-in system type or org custom type). */
+export interface DeviceTypeRecord {
+  id: number;
+  organisation_id: number | null;
+  slug: string;
+  display_name: string;
+  icon_key: string;
+  color: string;
+  is_system: boolean;
+  is_active: boolean;
+}
+
+export interface DeviceTypeCreateInput {
+  display_name: string;
+  icon_key: string;
+  color: string;
+}
+
+export interface DeviceTypeUpdateInput {
+  display_name?: string;
+  icon_key?: string;
+  color?: string;
+  is_active?: boolean;
+}
+
+export const deviceTypesAPI = {
+  /** List the device types available to the current org (system + custom). */
+  getAll: (includeInactive: boolean = false): Promise<DeviceTypeRecord[]> => {
+    const query = includeInactive ? '?include_inactive=true' : '';
+    return fetchAPI(`/device-types${query}`);
+  },
+
+  /** Create a custom device type (slug is derived server-side). */
+  create: (deviceType: DeviceTypeCreateInput): Promise<DeviceTypeRecord> => {
+    return fetchAPI('/device-types', {
+      method: 'POST',
+      body: JSON.stringify(deviceType),
+    });
+  },
+
+  /** Update a custom device type. */
+  update: (id: number, deviceType: DeviceTypeUpdateInput): Promise<DeviceTypeRecord> => {
+    return fetchAPI(`/device-types/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(deviceType),
+    });
+  },
+
+  /** Deactivate a custom device type (soft delete). */
+  deactivate: (id: number): Promise<DeviceTypeRecord> => {
+    return fetchAPI(`/device-types/${id}/deactivate`, { method: 'POST' });
+  },
+
+  /** Reactivate a custom device type. */
+  reactivate: (id: number): Promise<DeviceTypeRecord> => {
+    return fetchAPI(`/device-types/${id}/reactivate`, { method: 'POST' });
+  },
+
+  /** Delete an unused custom device type. */
+  delete: (id: number): Promise<void> => {
+    return fetchAPI(`/device-types/${id}`, { method: 'DELETE' });
   },
 };
 
