@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from auth import require_admin
 from dependencies import get_current_organisation
+from routers.device_types import validate_device_type_slug
 from models import (
     SurveyType, SurveyTypeRead, SurveyTypeCreate, SurveyTypeUpdate, SurveyTypeWithDetails,
     SurveyTypeLocationLink, SurveyTypeSpeciesTypeLink,
@@ -179,6 +180,8 @@ async def create_survey_type(
             raise HTTPException(status_code=400, detail=f"Invalid species type IDs: {invalid_ids}")
 
     _validate_sighting_device_selection(survey_type)
+    if survey_type.sighting_device_type:
+        validate_device_type_slug(db, org.id, survey_type.sighting_device_type)
 
     # Create survey type
     db_survey_type = SurveyType(
@@ -248,6 +251,8 @@ async def update_survey_type(
         setattr(db_survey_type, field, value)
 
     _validate_sighting_device_selection(db_survey_type)
+    if db_survey_type.sighting_device_type:
+        validate_device_type_slug(db, org.id, db_survey_type.sighting_device_type)
 
     # Update location links if provided
     if survey_type.location_ids is not None:

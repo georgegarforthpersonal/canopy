@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 
 from config import settings
 from exceptions import AppException
-from routers import surveys, species, locations, surveyors, dashboard, survey_types, auth, audio, devices, images, export, ecotopia
+from routers import surveys, species, locations, surveyors, dashboard, survey_types, auth, audio, devices, device_types, images, export, ecotopia
 from services.job_queue import start_dispatcher, stop_dispatcher
 
 logger = logging.getLogger(__name__)
@@ -125,6 +125,7 @@ app.include_router(surveyors.router, prefix="/api/surveyors", tags=["Surveyors"]
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(survey_types.router, prefix="/api/survey-types", tags=["Survey Types"])
 app.include_router(devices.router, prefix="/api/devices", tags=["Devices"])
+app.include_router(device_types.router, prefix="/api/device-types", tags=["Device Types"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
 app.include_router(ecotopia.router, prefix="/api/ecotopia", tags=["Ecotopia"])
 

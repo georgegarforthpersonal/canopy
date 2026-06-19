@@ -20,6 +20,7 @@ from database.connection import get_db
 from models import Device, DeviceRead, DeviceCreate, DeviceUpdate, Organisation, Location
 from auth import require_admin
 from dependencies import get_current_organisation
+from routers.device_types import validate_device_type_slug
 
 router = APIRouter()
 
@@ -210,6 +211,9 @@ async def create_device(
         if not location:
             raise HTTPException(status_code=400, detail=f"Location {device.location_id} not found")
 
+    # Validate the device type slug against the registry (system + this org's types).
+    validate_device_type_slug(db, org.id, device.device_type)
+
     # Create the device with coordinates set atomically (point_geometry is NOT NULL).
     db_device = Device(
         device_id=device.device_id,
@@ -257,6 +261,11 @@ async def update_device(
         ).first()
         if not location:
             raise HTTPException(status_code=400, detail=f"Location {update_data['location_id']} not found")
+
+    # Validate the device type slug if it is being changed.
+    if 'device_type' in update_data and update_data['device_type'] is not None:
+        assert org.id is not None
+        validate_device_type_slug(db, org.id, update_data['device_type'])
 
     # Handle coordinate updates
     lat = update_data.pop('latitude', None)
