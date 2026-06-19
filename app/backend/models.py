@@ -23,10 +23,30 @@ import sqlalchemy as sa
 # ============================================================================
 
 class DeviceType(str, PyEnum):
-    """Type of recording device"""
+    """Built-in device type slugs.
+
+    These three types have processing behaviour wired to their slug in code
+    (audio inference, image detection). They are seeded into the ``device_type``
+    registry as global *system* types. Admins may add further *custom* types via
+    the registry; those are passive (map marker + sighting target only).
+
+    Kept as an enum purely to name the built-in slugs for seeding/fixtures —
+    ``device.device_type`` is a plain string column validated against the registry.
+    """
     audio_recorder = "audio_recorder"
     camera_trap = "camera_trap"
     refugia = "refugia"
+
+
+# Canonical definition of the built-in (system) device types. Seeded into the
+# ``device_type`` table by the migration and, for tests, by ``seed_system_device_types``.
+# Colours match ``notionColors.{orange,blue,green}.text`` in the frontend theme so the
+# map looks identical to the previous hardcoded rendering.
+SYSTEM_DEVICE_TYPES: List[Dict[str, str]] = [
+    {"slug": "audio_recorder", "display_name": "Audio Recorder", "icon_key": "microphone", "color": "#D9730D"},
+    {"slug": "camera_trap", "display_name": "Camera Trap", "icon_key": "camera", "color": "#2B5F86"},
+    {"slug": "refugia", "display_name": "Refugia", "icon_key": "house", "color": "#4D6461"},
+]
 
 
 # ============================================================================
@@ -74,7 +94,11 @@ class DeviceBase(SQLModel):
     """Base device fields"""
     device_id: str = Field(max_length=50, description="Device serial number from audio filenames")
     name: str = Field(max_length=255, description="Friendly name for the device (shown to end users)")
-    device_type: DeviceType = Field(default=DeviceType.audio_recorder, description="Type of device")
+    device_type: str = Field(
+        default=DeviceType.audio_recorder.value,
+        max_length=50,
+        description="Device type slug (validated against the device_type registry)",
+    )
 
 
 class Device(DeviceBase, table=True):  # type: ignore[call-arg]
@@ -126,7 +150,7 @@ class DeviceUpdate(SQLModel):
     """Model for updating a device (all fields optional)"""
     device_id: Optional[str] = Field(None, max_length=50)
     name: Optional[str] = Field(None, max_length=255)
-    device_type: Optional[DeviceType] = None
+    device_type: Optional[str] = Field(None, max_length=50)
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     location_id: Optional[int] = None
@@ -141,6 +165,111 @@ class DeviceRead(DeviceBase):
     location_id: Optional[int] = None
     location_name: Optional[str] = None
     is_active: bool
+
+
+# ============================================================================
+# Device Type Registry (admin-configurable device types)
+# ============================================================================
+
+class DeviceTypeBase(SQLModel):
+    """Base fields for a device type registry entry."""
+    slug: str = Field(max_length=50, description="Machine-readable code stored on device.device_type")
+    display_name: str = Field(max_length=100, description="Human-readable type name")
+    icon_key: str = Field(max_length=50, description="Key into the frontend curated icon registry")
+    color: str = Field(max_length=7, description="Marker colour as hex, e.g. #2B5F86")
+
+
+class DeviceTypeRegistry(DeviceTypeBase, table=True):  # type: ignore[call-arg]
+    """Device type registry.
+
+    Holds the built-in *system* types (``organisation_id`` NULL, ``is_system`` True)
+    shared by every organisation, plus per-organisation *custom* types. The
+    ``device.device_type`` column stores the ``slug`` as a plain string, validated
+    against this table at the API layer.
+    """
+    __tablename__ = "device_type"
+    __table_args__ = (
+        sa.UniqueConstraint('organisation_id', 'slug', name='uq_device_type_org_slug'),
+        # System slugs (organisation_id IS NULL) are globally unique.
+        sa.Index(
+            'uq_device_type_system_slug', 'slug',
+            unique=True,
+            postgresql_where=sa.text('organisation_id IS NULL'),
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organisation_id: Optional[int] = Field(
+        default=None,
+        foreign_key="organisation.id",
+        index=True,
+        description="Owning organisation; NULL for global system types",
+    )
+    is_system: bool = Field(default=False, description="System types are global and cannot be modified or deleted")
+    is_active: bool = Field(default=True, description="Whether the type is selectable")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
+    )
+
+
+class DeviceTypeCreate(SQLModel):
+    """Model for creating a custom device type (slug is derived server-side)."""
+    display_name: str = Field(max_length=100, description="Human-readable type name")
+    icon_key: str = Field(max_length=50, description="Key into the frontend curated icon registry")
+    color: str = Field(max_length=7, description="Marker colour as hex, e.g. #2B5F86")
+
+
+class DeviceTypeUpdate(SQLModel):
+    """Model for updating a custom device type (slug is immutable)."""
+    display_name: Optional[str] = Field(None, max_length=100)
+    icon_key: Optional[str] = Field(None, max_length=50)
+    color: Optional[str] = Field(None, max_length=7)
+    is_active: Optional[bool] = None
+
+
+class DeviceTypeRead(DeviceTypeBase):
+    """Model for reading a device type."""
+    id: int
+    organisation_id: Optional[int] = None
+    is_system: bool
+    is_active: bool
+
+
+def seed_system_device_types(session: Any) -> None:
+    """Insert the built-in system device types if they are not already present.
+
+    Used by tests (which build the schema via ``create_all`` rather than running
+    migrations). The migration seeds the same rows for real databases.
+    """
+    for t in SYSTEM_DEVICE_TYPES:
+        exists = (
+            session.query(DeviceTypeRegistry)
+            .filter(
+                DeviceTypeRegistry.organisation_id.is_(None),
+                DeviceTypeRegistry.slug == t["slug"],
+            )
+            .first()
+        )
+        if not exists:
+            session.add(
+                DeviceTypeRegistry(
+                    slug=t["slug"],
+                    display_name=t["display_name"],
+                    icon_key=t["icon_key"],
+                    color=t["color"],
+                    organisation_id=None,
+                    is_system=True,
+                    is_active=True,
+                )
+            )
+    session.commit()
 
 
 # ============================================================================
@@ -449,10 +578,10 @@ class SurveyTypeBase(SQLModel):
     allow_temperature: bool = Field(default=False, description="Whether temperature field is shown for this survey type")
     allow_show_description: bool = Field(default=False, description="Whether survey type description is displayed to surveyors")
     allow_sighting_device_selection: bool = Field(default=False, description="If true, each sighting is attached to a device and inherits its location")
-    sighting_device_type: Optional[DeviceType] = Field(
+    sighting_device_type: Optional[str] = Field(
         default=None,
-        sa_column=sa.Column("sighting_device_type", sa.String(20), nullable=True),
-        description="Device type used for sighting device selection (required when allow_sighting_device_selection is true)"
+        sa_column=sa.Column("sighting_device_type", sa.String(50), nullable=True),
+        description="Device type slug used for sighting device selection (required when allow_sighting_device_selection is true)"
     )
     icon: Optional[str] = Field(None, max_length=50, description="Lucide icon identifier (deprecated)")
     color: Optional[str] = Field(None, max_length=20, description="Notion-style color key (e.g., 'blue', 'purple')")
@@ -505,7 +634,7 @@ class SurveyTypeUpdate(SQLModel):
     allow_temperature: Optional[bool] = None
     allow_show_description: Optional[bool] = None
     allow_sighting_device_selection: Optional[bool] = None
-    sighting_device_type: Optional[DeviceType] = None
+    sighting_device_type: Optional[str] = Field(None, max_length=50)
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None

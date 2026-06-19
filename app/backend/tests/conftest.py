@@ -27,7 +27,8 @@ from dependencies import get_current_organisation
 from auth import create_session_token
 from models import (
     Organisation, Surveyor, Location, Species, SpeciesType,
-    SurveyType, Survey, SurveySurveyor, Device, DeviceType
+    SurveyType, Survey, SurveySurveyor, Device, DeviceType,
+    DeviceTypeRegistry, seed_system_device_types
 )
 
 
@@ -76,6 +77,12 @@ def db_session(test_engine) -> Generator[Session, None, None]:
         bind=connection,
     )
     session = TestSessionLocal()
+
+    # Seed the built-in system device types so device-type validation passes.
+    # Migrations seed these in real databases; tests build the schema via
+    # create_all, so any test using the DB needs them inserted here. Rolled back
+    # with the test transaction like all other fixture data.
+    seed_system_device_types(session)
 
     try:
         yield session
@@ -330,3 +337,32 @@ def create_device(db_session: Session, test_org: Organisation):
         return device
 
     return _create_device
+
+
+@pytest.fixture
+def create_device_type(db_session: Session, test_org: Organisation):
+    """Factory fixture to create custom (org-scoped) device types."""
+    def _create_device_type(
+        slug: str = "bat_detector",
+        display_name: str = "Bat Detector",
+        icon_key: str = "sensor",
+        color: str = "#6940A5",
+        is_active: bool = True,
+        organisation_id: int = None,  # type: ignore[assignment]
+        is_system: bool = False,
+    ) -> DeviceTypeRegistry:
+        device_type = DeviceTypeRegistry(
+            slug=slug,
+            display_name=display_name,
+            icon_key=icon_key,
+            color=color,
+            is_active=is_active,
+            is_system=is_system,
+            organisation_id=test_org.id if organisation_id is None and not is_system else organisation_id,
+        )
+        db_session.add(device_type)
+        db_session.commit()
+        db_session.refresh(device_type)
+        return device_type
+
+    return _create_device_type
