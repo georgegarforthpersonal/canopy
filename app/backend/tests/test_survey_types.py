@@ -136,6 +136,50 @@ class TestCreateSurveyType:
         )
         assert response.status_code == 401
 
+    def _device_selection_payload(self, name: str, slug: str) -> dict:
+        return {
+            "name": name,
+            "location_ids": [],
+            "species_type_ids": [],
+            "allow_sighting_device_selection": True,
+            "sighting_device_type": slug,
+            "allow_geolocation": False,
+            "location_at_sighting_level": False,
+        }
+
+    def test_create_with_system_device_type(self, client: TestClient, auth_headers: dict):
+        """sighting_device_type accepts a built-in system slug."""
+        response = client.post(
+            "/api/survey-types",
+            json=self._device_selection_payload("Audio ST", "audio_recorder"),
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["sighting_device_type"] == "audio_recorder"
+
+    def test_create_with_custom_device_type(
+        self, client: TestClient, auth_headers: dict, create_device_type
+    ):
+        """sighting_device_type accepts an org custom slug."""
+        create_device_type(slug="bat_detector", display_name="Bat Detector")
+        response = client.post(
+            "/api/survey-types",
+            json=self._device_selection_payload("Bat ST", "bat_detector"),
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+    def test_create_with_unknown_device_type_rejected(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """sighting_device_type rejects an unknown slug."""
+        response = client.post(
+            "/api/survey-types",
+            json=self._device_selection_payload("Bad ST", "nope"),
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+
 
 class TestDeleteSurveyType:
     """Tests for DELETE /api/survey-types/{id} (soft delete)"""

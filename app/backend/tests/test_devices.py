@@ -5,6 +5,7 @@ Tests CRUD operations for the /api/devices endpoints.
 """
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 
 class TestGetDevices:
@@ -186,6 +187,73 @@ class TestCreateDevice:
             },
         )
         assert response.status_code == 401
+
+    def test_create_device_with_custom_type(
+        self, client: TestClient, auth_headers: dict, create_device_type
+    ):
+        """Should accept a valid custom device type slug."""
+        create_device_type(slug="bat_detector", display_name="Bat Detector")
+        response = client.post(
+            "/api/devices",
+            json={
+                "device_id": "BAT001",
+                "name": "Bat Box",
+                "device_type": "bat_detector",
+                "latitude": 51.5,
+                "longitude": -0.12,
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["device_type"] == "bat_detector"
+
+    def test_create_device_unknown_type_rejected(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """Should return 400 for an unknown device type slug."""
+        response = client.post(
+            "/api/devices",
+            json={
+                "device_id": "UNKNOWN",
+                "name": "Mystery",
+                "device_type": "does_not_exist",
+                "latitude": 51.5,
+                "longitude": -0.12,
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+
+    def test_create_device_foreign_custom_type_rejected(
+        self, client: TestClient, auth_headers: dict, db_session: Session
+    ):
+        """Should return 400 when using another org's custom device type."""
+        from models import Organisation, DeviceTypeRegistry
+
+        other = Organisation(name="Other", slug="other", admin_password="pw", is_active=True)
+        db_session.add(other)
+        db_session.commit()
+        db_session.refresh(other)
+        db_session.add(
+            DeviceTypeRegistry(
+                slug="foreign_type", display_name="Foreign", icon_key="sensor",
+                color="#000000", organisation_id=other.id, is_system=False,
+            )
+        )
+        db_session.commit()
+
+        response = client.post(
+            "/api/devices",
+            json={
+                "device_id": "FOREIGN",
+                "name": "Foreign",
+                "device_type": "foreign_type",
+                "latitude": 51.5,
+                "longitude": -0.12,
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
 
 
 class TestDeleteDevice:
