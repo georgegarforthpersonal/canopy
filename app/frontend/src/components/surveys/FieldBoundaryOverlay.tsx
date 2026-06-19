@@ -29,21 +29,12 @@ function geometryLabel(name: string) {
   );
 }
 
-/** Resolve the geometry to render, falling back to the legacy polygon ring. */
-function resolveGeometry(location: LocationWithBoundary): GeoJsonGeometry | null {
-  if (location.geometry) return location.geometry;
-  if (location.boundary_geometry && location.boundary_geometry.length > 0) {
-    return { type: 'Polygon', coordinates: [location.boundary_geometry as Position[]] };
-  }
-  return null;
-}
-
 export default function FieldBoundaryOverlay({
   locations,
   interactive = false,
 }: FieldBoundaryOverlayProps) {
   const renderable = locations
-    .map((loc) => ({ loc, geometry: resolveGeometry(loc) }))
+    .map((loc) => ({ loc, geometry: loc.geometry }))
     .filter((entry): entry is { loc: LocationWithBoundary; geometry: GeoJsonGeometry } => entry.geometry !== null);
 
   if (renderable.length === 0) {

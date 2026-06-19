@@ -6,7 +6,6 @@ interface ToastContextType {
   success: (message: string) => void;
   /** Used for destructive/removed actions (red), matching the surveys pattern. */
   error: (message: string) => void;
-  info: (message: string) => void;
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
@@ -24,10 +23,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const success = useCallback((msg: string) => show(msg, 'success'), [show]);
   const error = useCallback((msg: string) => show(msg, 'error'), [show]);
-  const info = useCallback((msg: string) => show(msg, 'info'), [show]);
 
   return (
-    <ToastContext.Provider value={{ success, error, info }}>
+    <ToastContext.Provider value={{ success, error }}>
       {children}
       <Snackbar
         open={open}
