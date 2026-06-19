@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Typography, TextField, Autocomplete, IconButton, Alert, Stack, Card, CardContent, Button, Chip, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
-import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, ViewList, Map as MapIcon, PhotoCamera, Close } from '@mui/icons-material';
+import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, ViewList, Map as MapIcon, PhotoCamera, Close, AudioFile } from '@mui/icons-material';
 import type { Species, BreedingStatusCode, LocationWithBoundary, Location, Device } from '../../services/api';
 import { imagesAPI } from '../../services/api';
 import { AddSightingModal } from './AddSightingModal';
@@ -12,9 +12,15 @@ import { getSpeciesIcon } from '../../config';
 import { useResponsive } from '../../hooks/useResponsive';
 import type { DraftIndividualLocation } from './MultiLocationMapPicker';
 
-/** Small thumbnail that lazily loads a presigned URL for an existing image */
+const AUDIO_THUMBNAIL_SX = {
+  width: 48, height: 36, bgcolor: 'grey.100', borderRadius: 0.5, flexShrink: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+} as const;
+
+/** Small thumbnail that lazily loads a presigned URL for an existing image or shows an audio icon */
 function ExistingPhotoThumbnail({ imageId }: { imageId: number }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [isAudio, setIsAudio] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -26,11 +32,20 @@ function ExistingPhotoThumbnail({ imageId }: { imageId: number }) {
 
   if (!url) return <Box sx={{ width: 48, height: 36, bgcolor: 'grey.200', borderRadius: 0.5, flexShrink: 0 }} />;
 
+  if (isAudio) {
+    return (
+      <Box sx={AUDIO_THUMBNAIL_SX}>
+        <AudioFile sx={{ fontSize: 20, color: 'text.secondary' }} />
+      </Box>
+    );
+  }
+
   return (
     <Box
       component="img"
       src={url}
       alt=""
+      onError={() => setIsAudio(true)}
       sx={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
     />
   );
@@ -38,8 +53,9 @@ function ExistingPhotoThumbnail({ imageId }: { imageId: number }) {
 
 /** Thumbnail for a pending (not yet uploaded) file, with proper URL lifecycle */
 function PendingPhotoThumbnail({ file }: { file: File }) {
+  const isAudio = file.type.startsWith('audio/');
   const urlRef = useRef<string | null>(null);
-  if (!urlRef.current) {
+  if (!isAudio && !urlRef.current) {
     urlRef.current = URL.createObjectURL(file);
   }
 
@@ -49,10 +65,18 @@ function PendingPhotoThumbnail({ file }: { file: File }) {
     };
   }, []);
 
+  if (isAudio) {
+    return (
+      <Box sx={AUDIO_THUMBNAIL_SX}>
+        <AudioFile sx={{ fontSize: 20, color: 'text.secondary' }} />
+      </Box>
+    );
+  }
+
   return (
     <Box
       component="img"
-      src={urlRef.current}
+      src={urlRef.current!}
       alt={file.name}
       sx={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
     />
@@ -291,7 +315,7 @@ export function SightingsEditor({
   const handlePhotoSelect = (tempId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-    const validExtensions = ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp'];
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac'];
     const validFiles = Array.from(files).filter((f) => {
       const ext = f.name.toLowerCase().substring(f.name.lastIndexOf('.'));
       return validExtensions.includes(ext);
@@ -535,7 +559,7 @@ export function SightingsEditor({
                             {allowSightingPhotoUpload && getPhotoCount(sighting) > 0 && (
                               <Chip
                                 icon={<PhotoCamera sx={{ fontSize: 14 }} />}
-                                label={`${getPhotoCount(sighting)} photo${getPhotoCount(sighting) > 1 ? 's' : ''}`}
+                                label={`${getPhotoCount(sighting)} file${getPhotoCount(sighting) > 1 ? 's' : ''}`}
                                 size="small"
                                 sx={{
                                   height: 24,
@@ -698,7 +722,7 @@ export function SightingsEditor({
             )}
             {allowSightingPhotoUpload && (
               <Typography variant="body2" fontWeight={600} color="text.secondary" textAlign="center">
-                PHOTOS
+                MEDIA
               </Typography>
             )}
             <Box /> {/* Actions column - no header needed */}
@@ -985,7 +1009,7 @@ export function SightingsEditor({
                         type="file"
                         hidden
                         multiple
-                        accept=".jpg,.jpeg,.png,.tiff,.tif,.bmp"
+                        accept=".jpg,.jpeg,.png,.tiff,.tif,.bmp,.mp3,.wav,.m4a,.ogg,.aac,.flac"
                         onChange={(e) => handlePhotoSelect(sighting.tempId, e)}
                       />
                     </IconButton>
