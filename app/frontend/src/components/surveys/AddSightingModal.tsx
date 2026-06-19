@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Autocomplete, Stack, Box, Typography, IconButton } from '@mui/material';
-import { Close, PhotoCamera, CloudUpload } from '@mui/icons-material';
+import { Close, PhotoCamera, CloudUpload, AudioFile } from '@mui/icons-material';
 import type { Species, BreedingStatusCode, LocationWithBoundary, Location, Device } from '../../services/api';
 import { imagesAPI } from '../../services/api';
 import { getSpeciesIcon } from '../../config';
@@ -80,6 +80,7 @@ export function AddSightingModal({
   const [existingImageIds, setExistingImageIds] = useState<number[]>(initialData?.existingImageIds || []);
   const [removedImageIds, setRemovedImageIds] = useState<number[]>(initialData?.removedImageIds || []);
   const [existingImageUrls, setExistingImageUrls] = useState<Map<number, string>>(new Map());
+  const [failedImageIds, setFailedImageIds] = useState<Set<number>>(new Set());
 
   // Load preview URLs for existing images
   useEffect(() => {
@@ -128,6 +129,7 @@ export function AddSightingModal({
       setExistingImageIds([]);
       setRemovedImageIds([]);
     }
+    setFailedImageIds(new Set());
   }, [initialData, open]);
 
   // Sort species by type first, then by name within each type
@@ -189,7 +191,7 @@ export function AddSightingModal({
   const handlePhotoFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-    const validExtensions = ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp'];
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac'];
     const validFiles = Array.from(files).filter((f) => {
       const ext = f.name.toLowerCase().substring(f.name.lastIndexOf('.'));
       return validExtensions.includes(ext);
@@ -465,11 +467,11 @@ export function AddSightingModal({
             />
           )}
 
-          {/* Photo Upload */}
+          {/* Media Upload (photos and audio) */}
           {allowSightingPhotoUpload && (
             <Box>
               <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                <Typography variant="subtitle2">Photos (Optional)</Typography>
+                <Typography variant="subtitle2">Media (Optional)</Typography>
                 <Button
                   component="label"
                   variant="outlined"
@@ -477,12 +479,12 @@ export function AddSightingModal({
                   startIcon={<CloudUpload />}
                   sx={{ textTransform: 'none', fontWeight: 600 }}
                 >
-                  Add Photos
+                  Add Media
                   <input
                     type="file"
                     hidden
                     multiple
-                    accept=".jpg,.jpeg,.png,.tiff,.tif,.bmp"
+                    accept=".jpg,.jpeg,.png,.tiff,.tif,.bmp,.mp3,.wav,.m4a,.ogg,.aac,.flac"
                     onChange={handlePhotoFileSelect}
                   />
                 </Button>
@@ -492,18 +494,25 @@ export function AddSightingModal({
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   {activeExistingIds.map((imgId) => (
                     <Box key={`existing-${imgId}`} sx={{ position: 'relative' }}>
-                      <Box
-                        component="img"
-                        src={existingImageUrls.get(imgId) || ''}
-                        alt=""
-                        sx={{
-                          width: 72,
-                          height: 54,
-                          objectFit: 'cover',
-                          borderRadius: 0.5,
-                          bgcolor: 'grey.200',
-                        }}
-                      />
+                      {failedImageIds.has(imgId) ? (
+                        <Box sx={{ width: 72, height: 54, bgcolor: 'grey.100', borderRadius: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <AudioFile sx={{ fontSize: 24, color: 'text.secondary' }} />
+                        </Box>
+                      ) : (
+                        <Box
+                          component="img"
+                          src={existingImageUrls.get(imgId) || ''}
+                          alt=""
+                          onError={() => setFailedImageIds((prev) => new Set([...prev, imgId]))}
+                          sx={{
+                            width: 72,
+                            height: 54,
+                            objectFit: 'cover',
+                            borderRadius: 0.5,
+                            bgcolor: 'grey.200',
+                          }}
+                        />
+                      )}
                       <IconButton
                         size="small"
                         onClick={() => setRemovedImageIds((prev) => [...prev, imgId])}
@@ -524,17 +533,23 @@ export function AddSightingModal({
                   ))}
                   {pendingPhotos.map((file, idx) => (
                     <Box key={`pending-${idx}`} sx={{ position: 'relative' }}>
-                      <Box
-                        component="img"
-                        src={getPendingPhotoUrl(file)}
-                        alt={file.name}
-                        sx={{
-                          width: 72,
-                          height: 54,
-                          objectFit: 'cover',
-                          borderRadius: 0.5,
-                        }}
-                      />
+                      {file.type.startsWith('audio/') ? (
+                        <Box sx={{ width: 72, height: 54, bgcolor: 'grey.100', borderRadius: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <AudioFile sx={{ fontSize: 24, color: 'text.secondary' }} />
+                        </Box>
+                      ) : (
+                        <Box
+                          component="img"
+                          src={getPendingPhotoUrl(file)}
+                          alt={file.name}
+                          sx={{
+                            width: 72,
+                            height: 54,
+                            objectFit: 'cover',
+                            borderRadius: 0.5,
+                          }}
+                        />
+                      )}
                       <IconButton
                         size="small"
                         onClick={() => setPendingPhotos((prev) => prev.filter((_, i) => i !== idx))}
@@ -558,7 +573,7 @@ export function AddSightingModal({
                 <Box sx={{ textAlign: 'center', py: 2, border: '1px dashed', borderColor: 'divider', borderRadius: 1 }}>
                   <PhotoCamera sx={{ fontSize: 32, color: 'text.disabled', mb: 0.5 }} />
                   <Typography variant="body2" color="text.secondary">
-                    No photos added yet
+                    No media added yet
                   </Typography>
                 </Box>
               )}

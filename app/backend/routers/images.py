@@ -65,8 +65,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 filter_router = APIRouter()
 
-# Accepted image extensions
+# Accepted image extensions (used for MegaDetector filter endpoint)
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp"}
+
+# Accepted audio extensions (for sighting media uploads)
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".aac", ".flac"}
+
+# All accepted extensions for the general upload endpoint
+ALLOWED_EXTENSIONS = IMAGE_EXTENSIONS | AUDIO_EXTENSIONS
 
 # Content type mapping
 CONTENT_TYPE_MAP = {
@@ -76,6 +82,12 @@ CONTENT_TYPE_MAP = {
     ".tiff": "image/tiff",
     ".tif": "image/tiff",
     ".bmp": "image/bmp",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".aac": "audio/aac",
+    ".flac": "audio/flac",
 }
 
 
@@ -292,10 +304,10 @@ async def upload_images(
     for file in files:
         # Validate file extension
         ext = Path(file.filename).suffix.lower()
-        if ext not in IMAGE_EXTENSIONS:
+        if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid file type: {file.filename}. Accepted: {', '.join(IMAGE_EXTENSIONS)}",
+                detail=f"Invalid file type: {file.filename}. Accepted: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
             )
 
         # Check for duplicate
