@@ -30,6 +30,8 @@ import { Add, Edit, Delete } from '@mui/icons-material';
 import { locationsAPI } from '../../services/api';
 import type { Location, LocationType, LocationWithBoundary } from '../../services/api';
 import { brandColors } from '../../theme';
+import { useToast } from '../../context/ToastContext';
+import { useRowHighlight } from '../../hooks';
 import LocationEditorDialog from './LocationEditorDialog';
 
 const TYPE_LABELS: Record<LocationType, string> = {
@@ -66,6 +68,9 @@ export default function LocationsManager() {
 
   const [deleteTarget, setDeleteTarget] = useState<Location | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const toast = useToast();
+  const { highlight, rowRef, rowSx } = useRowHighlight();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,6 +116,12 @@ export default function LocationsManager() {
     setEditorOpen(true);
   };
 
+  const handleSaved = async (saved: Location, created: boolean) => {
+    toast.success(`Location ${created ? 'created' : 'updated'} successfully`);
+    await load();
+    highlight(saved.id);
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -118,6 +129,7 @@ export default function LocationsManager() {
       await locationsAPI.delete(deleteTarget.id);
       setDeleteTarget(null);
       await load();
+      toast.error('Location deleted successfully');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete location');
     } finally {
@@ -170,7 +182,11 @@ export default function LocationsManager() {
               locations.map((location) => {
                 const type = location.location_type ?? 'none';
                 return (
-                  <TableRow key={location.id} sx={{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }}>
+                  <TableRow
+                    key={location.id}
+                    ref={rowRef(location.id)}
+                    sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, rowSx(location.id)]}
+                  >
                     <TableCell>
                       <Typography variant="body1">{location.name}</Typography>
                     </TableCell>
@@ -208,7 +224,7 @@ export default function LocationsManager() {
         location={editTarget}
         referenceLocations={allBoundaries}
         onClose={() => setEditorOpen(false)}
-        onSaved={load}
+        onSaved={handleSaved}
       />
 
       <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)}>

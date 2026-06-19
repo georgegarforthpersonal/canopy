@@ -1,8 +1,10 @@
-import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Stack, Button, Avatar, AvatarGroup, Tooltip, CircularProgress, Alert, Snackbar, Pagination, FormControl, Select, MenuItem } from '@mui/material';
+import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Stack, Button, Avatar, AvatarGroup, Tooltip, CircularProgress, Alert, Pagination, FormControl, Select, MenuItem } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import { CalendarToday, Person, Visibility, Category, FilterList } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { useRowHighlight } from '../hooks';
 import { getSpeciesIcon, formatSpeciesCount } from '../config';
 import { SurveyTypeChip } from '../components/SurveyTypeColors';
 import { notionColors, tableSizing } from '../theme';
@@ -52,11 +54,9 @@ export function SurveysPage() {
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showToast, setShowToast] = useState(false);
-  const [toastAction, setToastAction] = useState<'created' | 'edited' | 'deleted' | null>(null);
-  const [highlightedSurveyId, setHighlightedSurveyId] = useState<number | null>(null);
-  const highlightedRowRef = useRef<HTMLTableRowElement>(null);
   const hasProcessedAction = useRef(false);
+  const toast = useToast();
+  const { highlight, rowRef, rowSx } = useRowHighlight();
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -152,26 +152,11 @@ export function SurveysPage() {
       // Mark as processed to prevent re-running
       hasProcessedAction.current = true;
 
-      // Set state for toast
-      setToastAction(action);
-      setShowToast(true);
-
-      // For created/edited, highlight the row
-      if (action === 'created' || action === 'edited') {
-        setHighlightedSurveyId(surveyId);
-
-        // Scroll to the highlighted row
-        setTimeout(() => {
-          highlightedRowRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-          });
-        }, 100);
-
-        // Clear highlighting after 3 seconds
-        setTimeout(() => {
-          setHighlightedSurveyId(null);
-        }, 3000);
+      if (action === 'deleted') {
+        toast.error('Survey deleted successfully');
+      } else {
+        toast.success(action === 'created' ? 'Survey created successfully' : 'Survey updated successfully');
+        highlight(surveyId);
       }
 
       // Clear URL parameter immediately to prevent re-trigger on refresh
@@ -182,7 +167,7 @@ export function SurveysPage() {
         hasProcessedAction.current = false;
       }, 3000);
     }
-  }, [searchParams, surveys, setSearchParams]);
+  }, [searchParams, surveys, setSearchParams, toast, highlight]);
 
   // ============================================================================
   // Event Handlers
@@ -367,21 +352,21 @@ export function SurveysPage() {
           <TableBody>
             {surveys.map((survey) => {
               const surveyorNames = survey.surveyor_ids.map(id => getSurveyorName(id, surveyors));
-              const isHighlighted = survey.id === highlightedSurveyId;
 
               return (
                 <TableRow
                   key={survey.id}
-                  ref={isHighlighted ? highlightedRowRef : null}
+                  ref={rowRef(survey.id)}
                   onClick={() => handleRowClick(survey.id)}
-                  sx={{
-                    bgcolor: isHighlighted ? 'rgba(219, 237, 219, 0.7)' : 'transparent',
-                    transition: 'background-color 0.5s ease-out',
-                    '&:hover': { bgcolor: isHighlighted ? 'rgba(219, 237, 219, 0.85)' : 'grey.50' },
-                    cursor: 'pointer',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider'
-                  }}
+                  sx={[
+                    {
+                      cursor: 'pointer',
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:hover': { bgcolor: 'grey.50' },
+                    },
+                    rowSx(survey.id),
+                  ]}
                 >
                   {/* Date Column - always visible */}
                   <TableCell sx={{ py: tableSizing.row.py, px: tableSizing.row.px, fontSize: tableSizing.row.fontSize }}>
@@ -510,25 +495,6 @@ export function SurveysPage() {
           />
         </Box>
       )}
-
-      {/* Toast Notification */}
-      <Snackbar
-        open={showToast}
-        autoHideDuration={4000}
-        onClose={() => setShowToast(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setShowToast(false)}
-          severity={toastAction === 'deleted' ? 'error' : 'success'}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {toastAction === 'created' && 'Survey created successfully'}
-          {toastAction === 'edited' && 'Survey updated successfully'}
-          {toastAction === 'deleted' && 'Survey deleted successfully'}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 }

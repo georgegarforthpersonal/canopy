@@ -32,8 +32,10 @@ import {
 import { Add, Delete, RestoreFromTrash, Edit, Lock, Download } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { SPACING } from '../config/responsive';
 import { useResponsive } from '../hooks/useResponsive';
+import { useRowHighlight } from '../hooks';
 import {
   surveyorsAPI,
   surveyTypesAPI,
@@ -84,6 +86,10 @@ function TabPanel(props: TabPanelProps) {
 export function AdminPage() {
   const { isAuthenticated, isLoading: authLoading, requireAuth } = useAuth();
   const { isMobile } = useResponsive();
+  const toast = useToast();
+  const surveyorHighlight = useRowHighlight();
+  const surveyTypeHighlight = useRowHighlight();
+  const deviceHighlight = useRowHighlight();
   const [tabValue, setTabValue] = useState(0);
 
   // Surveyors state
@@ -269,13 +275,19 @@ export function AdminPage() {
         first_name: newFirstName.trim(),
         last_name: newLastName.trim() || null
       };
+      let savedId: number | null = null;
       if (surveyorDialogMode === 'add') {
-        await surveyorsAPI.create(data);
+        savedId = (await surveyorsAPI.create(data)).id;
       } else if (editingSurveyor) {
         await surveyorsAPI.update(editingSurveyor.id, data);
+        savedId = editingSurveyor.id;
       }
       setSurveyorDialogOpen(false);
       await loadSurveyors();
+      if (savedId !== null) {
+        toast.success(`Surveyor ${surveyorDialogMode === 'add' ? 'created' : 'updated'} successfully`);
+        surveyorHighlight.highlight(savedId);
+      }
     } catch (err) {
       setSurveyorFormError(err instanceof Error ? err.message : 'Failed to save surveyor');
     } finally {
@@ -291,6 +303,7 @@ export function AdminPage() {
       setDeactivateSurveyorDialogOpen(false);
       setSurveyorToDeactivate(null);
       await loadSurveyors();
+      toast.error('Surveyor deactivated');
     } catch (err) {
       setSurveyorsError(err instanceof Error ? err.message : 'Failed to deactivate surveyor');
     } finally {
@@ -303,6 +316,8 @@ export function AdminPage() {
       setSurveyorsError(null);
       await surveyorsAPI.reactivate(surveyor.id);
       await loadSurveyors();
+      toast.success('Surveyor reactivated');
+      surveyorHighlight.highlight(surveyor.id);
     } catch (err) {
       setSurveyorsError(err instanceof Error ? err.message : 'Failed to reactivate surveyor');
     }
@@ -405,15 +420,21 @@ export function AdminPage() {
         species_type_ids: formSelectedSpeciesTypes.map((st) => st.id),
       };
 
+      let savedId: number | null = null;
       if (surveyTypeDialogMode === 'add') {
-        await surveyTypesAPI.create(data as SurveyTypeCreate);
+        savedId = (await surveyTypesAPI.create(data as SurveyTypeCreate)).id;
       } else if (editingSurveyType) {
         await surveyTypesAPI.update(editingSurveyType.id, data as SurveyTypeUpdate);
+        savedId = editingSurveyType.id;
       }
 
       setSurveyTypeDialogOpen(false);
       resetSurveyTypeForm();
       await loadSurveyTypes();
+      if (savedId !== null) {
+        toast.success(`Survey type ${surveyTypeDialogMode === 'add' ? 'created' : 'updated'} successfully`);
+        surveyTypeHighlight.highlight(savedId);
+      }
     } catch (err) {
       setSurveyTypeFormError(err instanceof Error ? err.message : 'Failed to save survey type');
     } finally {
@@ -429,6 +450,7 @@ export function AdminPage() {
       setDeactivateSurveyTypeDialogOpen(false);
       setSurveyTypeToDeactivate(null);
       await loadSurveyTypes();
+      toast.error('Survey type deactivated');
     } catch (err) {
       setSurveyTypesError(err instanceof Error ? err.message : 'Failed to deactivate survey type');
     } finally {
@@ -441,6 +463,8 @@ export function AdminPage() {
       setSurveyTypesError(null);
       await surveyTypesAPI.reactivate(surveyType.id);
       await loadSurveyTypes();
+      toast.success('Survey type reactivated');
+      surveyTypeHighlight.highlight(surveyType.id);
     } catch (err) {
       setSurveyTypesError(err instanceof Error ? err.message : 'Failed to reactivate survey type');
     }
@@ -489,6 +513,7 @@ export function AdminPage() {
     try {
       setSavingDevice(true);
       setDeviceFormError(null);
+      let savedId: number | null = null;
       if (deviceDialogMode === 'add') {
         const data: DeviceCreate = {
           device_id: formDeviceId.trim(),
@@ -498,7 +523,7 @@ export function AdminPage() {
           longitude: formDeviceLongitude!,
           location_id: formDeviceLocationId ?? undefined,
         };
-        await devicesAPI.create(data);
+        savedId = (await devicesAPI.create(data)).id;
       } else if (editingDevice) {
         const data: DeviceUpdate = {
           device_id: formDeviceId.trim(),
@@ -509,9 +534,14 @@ export function AdminPage() {
           location_id: formDeviceLocationId ?? undefined,
         };
         await devicesAPI.update(editingDevice.id, data);
+        savedId = editingDevice.id;
       }
       setDeviceDialogOpen(false);
       await loadDevices();
+      if (savedId !== null) {
+        toast.success(`Device ${deviceDialogMode === 'add' ? 'created' : 'updated'} successfully`);
+        deviceHighlight.highlight(savedId);
+      }
     } catch (err) {
       setDeviceFormError(err instanceof Error ? err.message : 'Failed to save device');
     } finally {
@@ -527,6 +557,7 @@ export function AdminPage() {
       setDeactivateDeviceDialogOpen(false);
       setDeviceToDeactivate(null);
       await loadDevices();
+      toast.error('Device deactivated');
     } catch (err) {
       setDevicesError(err instanceof Error ? err.message : 'Failed to deactivate device');
     } finally {
@@ -539,6 +570,8 @@ export function AdminPage() {
       setDevicesError(null);
       await devicesAPI.reactivate(device.id);
       await loadDevices();
+      toast.success('Device reactivated');
+      deviceHighlight.highlight(device.id);
     } catch (err) {
       setDevicesError(err instanceof Error ? err.message : 'Failed to reactivate device');
     }
@@ -630,7 +663,11 @@ export function AdminPage() {
                 </TableRow>
               ) : (
                 surveyors.map((surveyor) => (
-                  <TableRow key={surveyor.id} sx={{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }}>
+                  <TableRow
+                    key={surveyor.id}
+                    ref={surveyorHighlight.rowRef(surveyor.id)}
+                    sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, surveyorHighlight.rowSx(surveyor.id)]}
+                  >
                     <TableCell>
                       <Typography variant="body1">
                         {surveyor.first_name}{surveyor.last_name ? ` ${surveyor.last_name}` : ''}
@@ -734,7 +771,11 @@ export function AdminPage() {
                 </TableRow>
               ) : (
                 surveyTypes.map((surveyType) => (
-                  <TableRow key={surveyType.id} sx={{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }}>
+                  <TableRow
+                    key={surveyType.id}
+                    ref={surveyTypeHighlight.rowRef(surveyType.id)}
+                    sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, surveyTypeHighlight.rowSx(surveyType.id)]}
+                  >
                     <TableCell>
                       <Stack direction="row" alignItems="center" spacing={1.5}>
                         <SurveyTypeChip name={surveyType.name} color={surveyType.color} />
@@ -893,7 +934,11 @@ export function AdminPage() {
                 </TableRow>
               ) : (
                 devices.map((device) => (
-                  <TableRow key={device.id} sx={{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }}>
+                  <TableRow
+                    key={device.id}
+                    ref={deviceHighlight.rowRef(device.id)}
+                    sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, deviceHighlight.rowSx(device.id)]}
+                  >
                     <TableCell>
                       <Typography variant="body1" sx={{ fontFamily: 'monospace' }}>
                         {device.device_id}

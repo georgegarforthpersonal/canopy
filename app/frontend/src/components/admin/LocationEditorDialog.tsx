@@ -26,7 +26,7 @@ import PlaceIcon from '@mui/icons-material/Place';
 import BlockIcon from '@mui/icons-material/Block';
 
 import { locationsAPI } from '../../services/api';
-import type { LocationType, LocationWithBoundary, LocationInput } from '../../services/api';
+import type { Location, LocationType, LocationWithBoundary, LocationInput } from '../../services/api';
 import type { GeoJsonGeometry } from '../../utils/geometry';
 import { brandColors } from '../../theme';
 import LocationDrawMap, { type DrawableLocationType } from './LocationDrawMap';
@@ -49,7 +49,7 @@ interface LocationEditorDialogProps {
   /** Other locations, shown faintly on the map for context. */
   referenceLocations: LocationWithBoundary[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (saved: Location, created: boolean) => void;
 }
 
 /** A labelled native colour swatch. */
@@ -157,12 +157,10 @@ export default function LocationEditorDialog({
     };
 
     try {
-      if (location) {
-        await locationsAPI.update(location.id, payload);
-      } else {
-        await locationsAPI.create(payload);
-      }
-      onSaved();
+      const saved = location
+        ? await locationsAPI.update(location.id, payload)
+        : await locationsAPI.create(payload);
+      onSaved(saved, !location);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save location');
