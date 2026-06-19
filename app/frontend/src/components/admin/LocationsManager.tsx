@@ -36,7 +36,7 @@ const TYPE_LABELS: Record<LocationType, string> = {
   area: 'Area',
   route: 'Route',
   point: 'Point',
-  none: 'No location',
+  none: 'No coordinates',
 };
 
 const TYPE_COLORS: Record<LocationType, 'success' | 'info' | 'warning' | 'default'> = {

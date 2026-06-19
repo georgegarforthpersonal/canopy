@@ -39,7 +39,7 @@ const TYPE_OPTIONS: { value: LocationType; label: string; icon: React.ReactNode 
   { value: 'area', label: 'Area', icon: <CropFreeIcon fontSize="small" /> },
   { value: 'route', label: 'Route', icon: <TimelineIcon fontSize="small" /> },
   { value: 'point', label: 'Point', icon: <PlaceIcon fontSize="small" /> },
-  { value: 'none', label: 'No location', icon: <BlockIcon fontSize="small" /> },
+  { value: 'none', label: 'No coordinates', icon: <BlockIcon fontSize="small" /> },
 ];
 
 interface LocationEditorDialogProps {
@@ -215,7 +215,7 @@ export default function LocationEditorDialog({
 
           {locationType === 'none' ? (
             <Typography variant="body2" color="text.secondary">
-              This location has no GPS geometry. It can still be selected for surveys and sightings.
+              This location has no coordinates set. It can still be selected for surveys and sightings.
             </Typography>
           ) : (
             <Box>
