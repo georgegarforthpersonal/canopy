@@ -9,6 +9,7 @@
  */
 
 import { reportApiError } from './sentry';
+import type { GeoJsonGeometry } from '../utils/geometry';
 
 /**
  * Error thrown for non-OK API responses. Carries the HTTP status so error
@@ -284,19 +285,41 @@ export interface Species {
   species_code: string | null;
 }
 
+/** Spatial representation of a location. */
+export type LocationType = 'area' | 'route' | 'point' | 'none';
+
 export interface Location {
   id: number;
   name: string;
+  // Optional because some legacy responses (e.g. survey-type details) may omit it.
+  location_type?: LocationType;
 }
 
 /**
- * Location with optional boundary geometry for map display
+ * Location with optional geometry for map display.
  */
 export interface LocationWithBoundary extends Location {
-  boundary_geometry: [number, number][] | null; // Array of [lng, lat] coordinate pairs
+  // Full GeoJSON geometry (Polygon for areas, LineString for routes, Point for points).
+  geometry: GeoJsonGeometry | null;
+  // Polygon outer ring as [lng, lat] pairs — kept for backward-compatible overlays; null for non-areas.
+  boundary_geometry: [number, number][] | null;
   boundary_fill_color: string | null;
   boundary_stroke_color: string | null;
   boundary_fill_opacity: number | null;
+}
+
+/**
+ * Payload for creating/updating a location with optional geometry.
+ * `geometry` is GeoJSON ([lng, lat]); omit it on update to leave the shape
+ * unchanged, or send `null` to clear it.
+ */
+export interface LocationInput {
+  name: string;
+  location_type: LocationType;
+  geometry?: GeoJsonGeometry | null;
+  boundary_fill_color?: string;
+  boundary_stroke_color?: string;
+  boundary_fill_opacity?: number;
 }
 
 /**
@@ -1050,9 +1073,9 @@ export const locationsAPI = {
   },
 
   /**
-   * Create a new location
+   * Create a new location, optionally with geometry (area / route / point).
    */
-  create: (location: Partial<Location>): Promise<Location> => {
+  create: (location: LocationInput): Promise<Location> => {
     return fetchAPI('/locations', {
       method: 'POST',
       body: JSON.stringify(location),
@@ -1060,9 +1083,10 @@ export const locationsAPI = {
   },
 
   /**
-   * Update an existing location
+   * Update an existing location. Omit `geometry` to leave the shape unchanged,
+   * or pass `null` to clear it.
    */
-  update: (id: number, location: Partial<Location>): Promise<Location> => {
+  update: (id: number, location: Partial<LocationInput>): Promise<Location> => {
     return fetchAPI(`/locations/${id}`, {
       method: 'PUT',
       body: JSON.stringify(location),
