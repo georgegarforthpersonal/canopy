@@ -55,6 +55,7 @@ import {
 } from '../services/api';
 import LocationMapPicker from '../components/surveys/LocationMapPicker';
 import DeviceMap from '../components/admin/DeviceMap';
+import LocationsManager from '../components/admin/LocationsManager';
 import { SurveyTypeColorSelector, SurveyTypeChip } from '../components/SurveyTypeColors';
 import { brandColors } from '../theme';
 
@@ -581,6 +582,7 @@ export function AdminPage() {
           <Tab label="Surveyors" />
           <Tab label="Survey Types" />
           <Tab label="Devices" />
+          <Tab label="Locations" />
           <Tab label="Data" />
         </Tabs>
       </Box>
@@ -980,8 +982,13 @@ export function AdminPage() {
         </TableContainer>
       </TabPanel>
 
-      {/* Data Tab */}
+      {/* Locations Tab */}
       <TabPanel value={tabValue} index={3}>
+        <LocationsManager />
+      </TabPanel>
+
+      {/* Data Tab */}
+      <TabPanel value={tabValue} index={4}>
         <Paper sx={{ p: 3, maxWidth: 600 }}>
           <Typography variant="h6" gutterBottom>
             Export Data
