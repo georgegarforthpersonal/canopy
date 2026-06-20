@@ -1134,6 +1134,7 @@ export function AdminPage() {
             multiple
             options={allSpeciesTypes}
             getOptionLabel={(option) => option.display_name}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
             value={formSelectedSpeciesTypes}
             onChange={(_, newValue) => setFormSelectedSpeciesTypes(newValue)}
             disabled={savingSurveyType}
