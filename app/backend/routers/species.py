@@ -14,7 +14,7 @@ Refactored to use SQLModel ORM instead of raw SQL.
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 from sqlalchemy import func
 from database.connection import get_db
 from models import (
@@ -88,6 +88,8 @@ async def get_species_by_survey_type(
     """
     species = db.query(Species).join(
         Species.species_type
+    ).options(
+        contains_eager(Species.species_type)
     ).join(
         SurveyTypeSpeciesTypeLink,
         SurveyTypeSpeciesTypeLink.species_type_id == Species.species_type_id
