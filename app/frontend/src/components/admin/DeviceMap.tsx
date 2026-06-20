@@ -157,6 +157,10 @@ export default function DeviceMap({
                 <DeviceLegendIcon type="refugia" />
                 <Typography variant="caption" color="text.secondary">Refugia</Typography>
               </Stack>
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <DeviceLegendIcon type="moth_light_trap" />
+                <Typography variant="caption" color="text.secondary">Moth Light Trap</Typography>
+              </Stack>
             </Stack>
           </Stack>
 
@@ -286,12 +290,14 @@ export default function DeviceMap({
                         label={
                           device.device_type === 'camera_trap' ? 'Camera Trap'
                           : device.device_type === 'refugia' ? 'Refugia'
+                          : device.device_type === 'moth_light_trap' ? 'Moth Light Trap'
                           : 'Audio Recorder'
                         }
                         size="small"
                         color={
                           device.device_type === 'camera_trap' ? 'primary'
                           : device.device_type === 'refugia' ? 'success'
+                          : device.device_type === 'moth_light_trap' ? 'warning'
                           : 'secondary'
                         }
                         variant="outlined"

@@ -1205,6 +1205,7 @@ export function AdminPage() {
                   <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
                   <MenuItem value="camera_trap">Camera Trap</MenuItem>
                   <MenuItem value="refugia">Refugia</MenuItem>
+                  <MenuItem value="moth_light_trap">Moth Light Trap</MenuItem>
                 </Select>
               </FormControl>
             )}
@@ -1458,6 +1459,7 @@ export function AdminPage() {
               <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
               <MenuItem value="camera_trap">Camera Trap</MenuItem>
               <MenuItem value="refugia">Refugia</MenuItem>
+              <MenuItem value="moth_light_trap">Moth Light Trap</MenuItem>
             </Select>
           </FormControl>
           <TextField
