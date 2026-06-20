@@ -10,8 +10,10 @@ Security model:
 """
 
 from fastapi import Request, HTTPException
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
 from database.connection import get_session_factory
-from models import Organisation
+from models import Organisation, DeviceTypeRegistry
 from auth import get_session_org_slug
 
 
@@ -78,3 +80,28 @@ async def get_current_organisation(request: Request) -> Organisation:
         )
 
     return org  # type: ignore[no-any-return]
+
+
+def validate_device_type_slug(db: Session, org_id: int, slug: str) -> None:
+    """Ensure ``slug`` is an active device type available to this organisation.
+
+    Valid when it is an active system type (organisation_id NULL) or an active
+    type owned by this organisation. Raises HTTP 400 otherwise.
+
+    Lives here (rather than in a router) so devices and survey_types can share it
+    without importing each other.
+    """
+    exists = (
+        db.query(DeviceTypeRegistry.id)
+        .filter(
+            DeviceTypeRegistry.slug == slug,
+            DeviceTypeRegistry.is_active == True,  # noqa: E712
+            or_(
+                DeviceTypeRegistry.organisation_id.is_(None),
+                DeviceTypeRegistry.organisation_id == org_id,
+            ),
+        )
+        .first()
+    )
+    if not exists:
+        raise HTTPException(status_code=400, detail=f"Unknown or inactive device type '{slug}'")

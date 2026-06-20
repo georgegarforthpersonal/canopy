@@ -19,8 +19,7 @@ from sqlalchemy import text
 from database.connection import get_db
 from models import Device, DeviceRead, DeviceCreate, DeviceUpdate, Organisation, Location
 from auth import require_admin
-from dependencies import get_current_organisation
-from routers.device_types import validate_device_type_slug
+from dependencies import get_current_organisation, validate_device_type_slug
 
 router = APIRouter()
 

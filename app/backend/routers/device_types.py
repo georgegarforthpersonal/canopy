@@ -19,7 +19,7 @@ Endpoints:
 
 import re
 from fastapi import APIRouter, HTTPException, status, Depends, Query
-from typing import List, Optional
+from typing import List
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -38,31 +38,6 @@ def slugify(value: str) -> str:
     """Convert a display name to a machine-readable slug (a-z0-9_, max 50 chars)."""
     slug = re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
     return slug[:50]
-
-
-def validate_device_type_slug(db: Session, org_id: int, slug: str) -> None:
-    """Ensure ``slug`` is an active device type available to this organisation.
-
-    Valid when it is an active system type (organisation_id NULL) or an active
-    type owned by this organisation. Raises HTTP 400 otherwise.
-
-    Importable by other routers (devices, survey_types) so device type references
-    stay consistent across the API.
-    """
-    exists = (
-        db.query(DeviceTypeRegistry.id)
-        .filter(
-            DeviceTypeRegistry.slug == slug,
-            DeviceTypeRegistry.is_active == True,  # noqa: E712
-            or_(
-                DeviceTypeRegistry.organisation_id.is_(None),
-                DeviceTypeRegistry.organisation_id == org_id,
-            ),
-        )
-        .first()
-    )
-    if not exists:
-        raise HTTPException(status_code=400, detail=f"Unknown or inactive device type '{slug}'")
 
 
 def _get_owned_type(db: Session, id: int, org_id: int) -> DeviceTypeRegistry:

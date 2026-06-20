@@ -15,8 +15,7 @@ from typing import List, Union
 from sqlalchemy.orm import Session
 from database.connection import get_db
 from auth import require_admin
-from dependencies import get_current_organisation
-from routers.device_types import validate_device_type_slug
+from dependencies import get_current_organisation, validate_device_type_slug
 from models import (
     SurveyType, SurveyTypeRead, SurveyTypeCreate, SurveyTypeUpdate, SurveyTypeWithDetails,
     SurveyTypeLocationLink, SurveyTypeSpeciesTypeLink,
