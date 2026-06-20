@@ -949,12 +949,14 @@ export function AdminPage() {
                         label={
                           device.device_type === 'camera_trap' ? 'Camera Trap'
                           : device.device_type === 'refugia' ? 'Refugia'
+                          : device.device_type === 'moth_light_trap' ? 'Moth Light Trap'
                           : 'Audio Recorder'
                         }
                         size="small"
                         color={
                           device.device_type === 'camera_trap' ? 'primary'
                           : device.device_type === 'refugia' ? 'success'
+                          : device.device_type === 'moth_light_trap' ? 'warning'
                           : 'secondary'
                         }
                         variant="outlined"
