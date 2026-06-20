@@ -72,12 +72,6 @@ CONTENT_TYPE_MAP = {
 }
 
 
-def extract_image_info(filename: str) -> dict:
-    """Extract the image timestamp from the filename."""
-    info = extract_media_info(filename)
-    return {"image_timestamp": info.timestamp}
-
-
 def _build_image_response(image: CameraTrapImage, detection_count: int) -> dict:
     """Build response dict for a camera trap image."""
     return {
@@ -304,9 +298,8 @@ async def upload_images(
                 status_code=400, detail=f"File already exists: {file.filename}"
             )
 
-        # Extract metadata from filename (fallback) or use provided timestamps
-        info = extract_image_info(file.filename)
-        image_timestamp = info["image_timestamp"]
+        # Extract timestamp from filename (fallback) or use provided timestamps
+        image_timestamp = extract_media_info(file.filename).timestamp
         if file.filename in timestamps_map:
             try:
                 image_timestamp = datetime.fromisoformat(timestamps_map[file.filename])

@@ -63,12 +63,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def extract_recording_info(filename: str) -> dict:
-    """Extract the recording timestamp from the filename."""
-    info = extract_media_info(filename)
-    return {"recording_timestamp": info.timestamp}
-
-
 @router.post(
     "/process-audio",
     response_model=AudioProcessingResponse,
@@ -337,9 +331,6 @@ async def upload_audio_files(
                 status_code=400, detail=f"File already exists: {file.filename}"
             )
 
-        # Extract metadata from filename
-        info = extract_recording_info(file.filename)
-
         # Get file size before upload (upload may close the stream)
         file.file.seek(0, 2)  # Seek to end
         file_size = file.file.tell()
@@ -354,7 +345,7 @@ async def upload_audio_files(
             filename=file.filename,
             r2_key=r2_key,
             file_size_bytes=file_size,
-            recording_timestamp=info["recording_timestamp"],
+            recording_timestamp=extract_media_info(file.filename).timestamp,
             processing_status=ProcessingStatus.completed if skip_processing else ProcessingStatus.pending,
         )
         db.add(recording)
