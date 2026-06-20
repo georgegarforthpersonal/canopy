@@ -4,7 +4,6 @@ Devices Router - API endpoints for audio recorder device management
 Endpoints:
   GET    /api/devices                        - List all devices
   GET    /api/devices/{id}                   - Get specific device
-  GET    /api/devices/by-device-id/{device_id} - Lookup by serial number
   POST   /api/devices                        - Create new device
   PUT    /api/devices/{id}                   - Update device
   DELETE /api/devices/{id}                   - Delete device
@@ -12,6 +11,7 @@ Endpoints:
   POST   /api/devices/{id}/reactivate        - Reactivate device
 """
 
+import uuid
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional, Any
 from sqlalchemy.orm import Session
@@ -119,44 +119,6 @@ async def get_devices(
     return [_device_to_read(row) for row in rows]
 
 
-@router.get("/by-device-id/{device_id}", response_model=DeviceRead)
-async def get_device_by_device_id(
-    device_id: str,
-    org: Organisation = Depends(get_current_organisation),
-    db: Session = Depends(get_db)
-) -> DeviceRead:
-    """
-    Look up a device by its serial number (device_id field).
-
-    This is used when processing audio/image files to find the device
-    based on the serial number extracted from the filename.
-    """
-    query = text("""
-        SELECT
-            d.id,
-            d.device_id,
-            d.name,
-            d.device_type,
-            d.location_id,
-            d.is_active,
-            ST_Y(d.point_geometry) as latitude,
-            ST_X(d.point_geometry) as longitude,
-            l.name as location_name
-        FROM device d
-        LEFT JOIN location l ON d.location_id = l.id
-        WHERE d.organisation_id = :org_id
-        AND d.device_id = :device_id
-    """)
-
-    result = db.execute(query, {"org_id": org.id, "device_id": device_id})
-    row = result.fetchone()
-
-    if not row:
-        raise HTTPException(status_code=404, detail=f"Device with ID '{device_id}' not found")
-
-    return _device_to_read(row)
-
-
 @router.get("/{id}", response_model=DeviceRead)
 async def get_device(
     id: int,
@@ -197,9 +159,13 @@ async def create_device(
     db: Session = Depends(get_db)
 ) -> DeviceRead:
     """Create a new device"""
-    # Check for duplicate device_id within this organisation
     assert org.id is not None  # guaranteed by get_current_organisation
-    _check_device_duplicate(db, device.device_id, org.id)
+
+    # device_id is an internal identifier: auto-generate when not supplied, and
+    # only guard against duplicates when a caller explicitly provides one.
+    device_id = device.device_id or f"DEV-{uuid.uuid4().hex[:10].upper()}"
+    if device.device_id:
+        _check_device_duplicate(db, device.device_id, org.id)
 
     # Validate location_id belongs to this organisation
     if device.location_id is not None:
@@ -212,7 +178,7 @@ async def create_device(
 
     # Create the device with coordinates set atomically (point_geometry is NOT NULL).
     db_device = Device(
-        device_id=device.device_id,
+        device_id=device_id,
         name=device.name,
         device_type=device.device_type,
         location_id=device.location_id,

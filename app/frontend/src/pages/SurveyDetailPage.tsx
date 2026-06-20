@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, ViewList, Map as MapIcon, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
+import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useAuth } from '../context/AuthContext';
 import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI, devicesAPI, ApiError } from '../services/api';
@@ -16,6 +16,7 @@ import { getSpeciesIcon } from '../config';
 import { PageHeader } from '../components/layout/PageHeader';
 import { getSurveyorName, formatDate } from '../utils/formatters';
 import { ImageViewerModal, type ImageViewerItem } from '../components/ImageViewerModal';
+import ViewModeToggle from '../components/ViewModeToggle';
 import { SPACING } from '../config/responsive';
 
 /**
@@ -974,24 +975,7 @@ export function SurveyDetailPage() {
                   Sightings ({sightings.length})
                 </Typography>
                 {canShowSightingsMap && (
-                  <ToggleButtonGroup
-                    value={viewMode}
-                    exclusive
-                    onChange={(_, newValue) => newValue && setViewMode(newValue)}
-                    size="small"
-                    sx={{ height: 32 }}
-                  >
-                    <ToggleButton value="list" aria-label="list mode">
-                      <Tooltip title="List Mode">
-                        <ViewList fontSize="small" />
-                      </Tooltip>
-                    </ToggleButton>
-                    <ToggleButton value="map" aria-label="map mode">
-                      <Tooltip title="Map Mode">
-                        <MapIcon fontSize="small" />
-                      </Tooltip>
-                    </ToggleButton>
-                  </ToggleButtonGroup>
+                  <ViewModeToggle value={viewMode} onChange={setViewMode} />
                 )}
               </Stack>
 

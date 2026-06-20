@@ -8,7 +8,6 @@ Endpoints:
   DELETE /api/surveys/{survey_id}/images/{id}         - Delete image
   POST   /api/surveys/{survey_id}/images/{id}/process - Trigger processing (manual)
   GET    /api/surveys/{survey_id}/images/{id}/detections - Get detections for image
-  GET    /api/surveys/{survey_id}/image-detections/summary - Aggregated by species
   POST   /api/surveys/filter-images                   - Run MegaDetector false positive filter
   GET    /api/images/{id}/download                    - Get presigned download URL
   GET    /api/images/{id}/preview                     - Get presigned preview URL
@@ -33,7 +32,6 @@ from fastapi import (
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
-from sqlmodel import col
 
 from auth import require_admin
 from database.connection import get_db
@@ -43,15 +41,10 @@ from models import (
     CameraTrapImageRead,
     CameraTrapDetection,
     CameraTrapDetectionRead,
-    Device,
-    ImageDetectionOption,
-    ImageWithDetections,
-    Location,
     Organisation,
     ProcessingStatus,
     ProcessingSummary,
     Survey,
-    SurveyImageDetectionsResponse,
 )
 from services.r2_storage import (
     delete_image_file,
@@ -79,12 +72,6 @@ CONTENT_TYPE_MAP = {
 }
 
 
-def extract_image_info(filename: str) -> dict:
-    """Extract device serial and timestamp from filename."""
-    info = extract_media_info(filename)
-    return {"device_serial": info.device_serial, "image_timestamp": info.timestamp}
-
-
 def _build_image_response(image: CameraTrapImage, detection_count: int) -> dict:
     """Build response dict for a camera trap image."""
     return {
@@ -94,7 +81,6 @@ def _build_image_response(image: CameraTrapImage, detection_count: int) -> dict:
         "r2_key": image.r2_key,
         "file_size_bytes": image.file_size_bytes,
         "image_timestamp": image.image_timestamp,
-        "device_serial": image.device_serial,
         "processing_status": image.processing_status.value
         if hasattr(image.processing_status, "value")
         else image.processing_status,
@@ -312,9 +298,8 @@ async def upload_images(
                 status_code=400, detail=f"File already exists: {file.filename}"
             )
 
-        # Extract metadata from filename (fallback) or use provided timestamps
-        info = extract_image_info(file.filename)
-        image_timestamp = info["image_timestamp"]
+        # Extract timestamp from filename (fallback) or use provided timestamps
+        image_timestamp = extract_media_info(file.filename).timestamp
         if file.filename in timestamps_map:
             try:
                 image_timestamp = datetime.fromisoformat(timestamps_map[file.filename])
@@ -338,7 +323,6 @@ async def upload_images(
             filename=file.filename,
             r2_key=r2_key,
             file_size_bytes=file_size,
-            device_serial=info["device_serial"],
             image_timestamp=image_timestamp,
             processing_status=initial_status,
         )
@@ -473,111 +457,6 @@ async def get_image_detections(
         }
         for d in detections
     ]
-
-
-@router.get(
-    "/{survey_id}/image-detections/summary",
-    response_model=SurveyImageDetectionsResponse,
-)
-async def get_image_detections_summary(
-    survey_id: int,
-    org: Organisation = Depends(get_current_organisation),
-    db: Session = Depends(get_db),
-) -> SurveyImageDetectionsResponse:
-    """
-    Get image detections for a survey - one row per image with top 3 species.
-    Images are grouped by device for frontend device tabs.
-    """
-    # Verify survey belongs to org
-    survey = (
-        db.query(Survey)
-        .filter(Survey.id == survey_id, Survey.organisation_id == org.id)
-        .first()
-    )
-    if not survey:
-        raise HTTPException(status_code=404, detail="Survey not found")
-
-    # Get all completed images for this survey
-    images = (
-        db.query(CameraTrapImage)
-        .filter(
-            CameraTrapImage.survey_id == survey_id,
-            CameraTrapImage.processing_status == ProcessingStatus.completed,
-        )
-        .order_by(CameraTrapImage.image_timestamp.desc())  # type: ignore[union-attr]
-        .all()
-    )
-
-    if not images:
-        return SurveyImageDetectionsResponse(images=[])
-
-    # Build mapping from device_serial to device info
-    device_serials = set(img.device_serial for img in images if img.device_serial)
-    device_map = {}
-    if device_serials:
-        devices = (
-            db.query(
-                Device,
-                col(Location.name).label("location_name"),
-                func.ST_Y(Device.point_geometry).label("lat"),
-                func.ST_X(Device.point_geometry).label("lng"),
-            )
-            .outerjoin(Location, Device.location_id == Location.id)
-            .filter(
-                col(Device.device_id).in_(device_serials),
-                Device.organisation_id == org.id,
-            )
-            .all()
-        )
-        for device, loc_name, lat, lng in devices:
-            device_map[device.device_id] = {
-                "device_id": device.device_id,
-                "device_name": device.name,
-                "device_latitude": lat,
-                "device_longitude": lng,
-                "location_id": device.location_id,
-                "location_name": loc_name,
-            }
-
-    result = []
-    for img in images:
-        # Get top 3 detections for this image (by confidence)
-        detections = (
-            db.query(CameraTrapDetection)
-            .filter(CameraTrapDetection.camera_trap_image_id == img.id)
-            .order_by(desc(CameraTrapDetection.confidence))
-            .limit(3)
-            .all()
-        )
-
-        if not detections:
-            continue  # Skip images with no detections
-
-        device_info = device_map.get(img.device_serial, {})
-
-        result.append(
-            ImageWithDetections(
-                image_id=img.id,
-                filename=img.filename,
-                device_id=img.device_serial,
-                device_name=device_info.get("device_name"),
-                device_latitude=device_info.get("device_latitude"),
-                device_longitude=device_info.get("device_longitude"),
-                location_id=device_info.get("location_id"),
-                location_name=device_info.get("location_name"),
-                detections=[
-                    ImageDetectionOption(
-                        species_id=det.species_id,
-                        species_name=det.species_name,
-                        scientific_name=det.scientific_name,
-                        confidence=det.confidence,
-                    )
-                    for det in detections
-                ],
-            )
-        )
-
-    return SurveyImageDetectionsResponse(images=result)
 
 
 @router.delete(

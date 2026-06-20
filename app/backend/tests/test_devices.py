@@ -78,31 +78,6 @@ class TestGetDeviceById:
         assert response.status_code == 404
 
 
-class TestGetDeviceByDeviceId:
-    """Tests for GET /api/devices/by-device-id/{device_id}"""
-
-    def test_get_device_by_serial(
-        self, client: TestClient, auth_headers: dict, create_device
-    ):
-        """Should find device by serial number."""
-        create_device(device_id="SERIAL123", name="My Device")
-
-        response = client.get(
-            "/api/devices/by-device-id/SERIAL123", headers=auth_headers
-        )
-        assert response.status_code == 200
-        assert response.json()["name"] == "My Device"
-
-    def test_get_device_by_serial_not_found(
-        self, client: TestClient, auth_headers: dict
-    ):
-        """Should return 404 for non-existent serial."""
-        response = client.get(
-            "/api/devices/by-device-id/NOTEXIST", headers=auth_headers
-        )
-        assert response.status_code == 404
-
-
 class TestCreateDevice:
     """Tests for POST /api/devices"""
 
@@ -145,6 +120,25 @@ class TestCreateDevice:
             headers=auth_headers,
         )
         assert response.status_code == 409
+
+    def test_create_device_auto_generates_device_id(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """device_id is auto-generated when the caller omits it."""
+        response = client.post(
+            "/api/devices",
+            json={
+                "name": "Auto ID Device",
+                "device_type": "camera_trap",
+                "latitude": 51.5,
+                "longitude": -0.12,
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == "Auto ID Device"
+        assert data["device_id"]  # a non-empty identifier was generated
 
     def test_create_device_requires_coordinates(
         self, client: TestClient, auth_headers: dict

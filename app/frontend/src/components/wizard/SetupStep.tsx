@@ -66,9 +66,7 @@ export function SetupStep({ wizard, noDevicesText = 'No devices found. Add one i
           <Stack spacing={3}>
             <Autocomplete
               options={devices}
-              getOptionLabel={(option) =>
-                option.name ? `${option.name} (${option.device_id})` : option.device_id
-              }
+              getOptionLabel={(option) => option.name}
               value={selectedDevice}
               onChange={(_, value) => setSelectedDevice(value)}
               renderInput={(params) => (

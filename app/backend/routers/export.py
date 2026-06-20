@@ -11,22 +11,35 @@ rules, and geometry transforms need manual maintenance.
 
 import io
 import os
+import re
 import sqlite3
 import logging
 import tempfile
 from datetime import datetime, date, time
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import text
+from openpyxl import Workbook
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import text, func
+from sqlmodel import col
 
 from database.connection import get_db
 from dependencies import get_current_organisation
 from auth import require_admin
-from models import Organisation
+from models import (
+    Organisation,
+    Sighting,
+    Survey,
+    Species,
+    Location,
+    SurveyType,
+    SurveyTypeRead,
+    SpeciesType,
+    SpeciesTypeRead,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -256,3 +269,201 @@ async def export_sqlite(
         media_type="application/x-sqlite3",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Records export (Excel) - flat sighting records by survey type or species type
+#
+# Produces a spreadsheet a county recorder can submit directly, with one row
+# per sighting and a deliberately small set of columns.
+# ---------------------------------------------------------------------------
+
+XLSX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+RECORD_HEADERS = ["common_name", "species_name", "count", "date", "location"]
+
+
+def _safe_filename_part(name: str) -> str:
+    """Sanitise a name for use in a download filename."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_") or "export"
+
+
+def _records_query(db: Session, org_id: Optional[int]) -> Any:
+    """Base query yielding (common_name, species_name, count, date, location).
+
+    Location prefers the sighting's own location, falling back to the survey's.
+    Scoped to a single organisation via the parent survey.
+    """
+    sighting_location = aliased(Location)
+    survey_location = aliased(Location)
+    return (
+        db.query(
+            Species.name,
+            Species.scientific_name,
+            Sighting.count,
+            Survey.date,
+            func.coalesce(sighting_location.name, survey_location.name),
+        )
+        .join(Survey, Sighting.survey_id == Survey.id)
+        .join(Species, Sighting.species_id == Species.id)
+        .outerjoin(sighting_location, Sighting.location_id == sighting_location.id)
+        .outerjoin(survey_location, Survey.location_id == survey_location.id)
+        .filter(Survey.organisation_id == org_id)
+    )
+
+
+def _records_to_xlsx(rows: list[Any]) -> bytes:
+    """Build an .xlsx workbook from record rows and return its bytes."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Records"
+    ws.append(RECORD_HEADERS)
+    for common_name, species_name, count, survey_date, location_name in rows:
+        ws.append([
+            common_name or "",
+            species_name or "",
+            count,
+            survey_date,  # openpyxl renders date objects with a date format
+            location_name or "",
+        ])
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+def _records_response(rows: list[Any], prefix: str, label: str) -> StreamingResponse:
+    """Wrap record rows in a downloadable .xlsx StreamingResponse.
+
+    Filename is "{prefix}_{label}_{datetime}.xlsx", e.g. "survey_birders_20260620_103011.xlsx"
+    or "species_bat_20260620_103011.xlsx".
+    """
+    xlsx_bytes = _records_to_xlsx(rows)
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    filename = f"{prefix}_{_safe_filename_part(label).lower()}_{timestamp}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/records/survey-types", response_model=List[SurveyTypeRead])
+async def list_survey_types_with_records(
+    db: Session = Depends(get_db),
+    org: Organisation = Depends(get_current_organisation),
+    _admin: None = Depends(require_admin),
+) -> List[SurveyType]:
+    """List survey types that have at least one sighting record (non-empty export)."""
+    type_ids: list[int] = [
+        r[0]
+        for r in (
+            db.query(Survey.survey_type_id)
+            .join(Sighting, Sighting.survey_id == Survey.id)
+            .filter(
+                Survey.organisation_id == org.id,
+                col(Survey.survey_type_id).isnot(None),
+            )
+            .distinct()
+            .all()
+        )
+    ]
+    if not type_ids:
+        return []
+    return (  # type: ignore[no-any-return]
+        db.query(SurveyType)
+        .filter(
+            col(SurveyType.id).in_(type_ids),
+            SurveyType.organisation_id == org.id,
+            SurveyType.is_active == True,  # noqa: E712
+        )
+        .order_by(SurveyType.name)
+        .all()
+    )
+
+
+@router.get("/records/species-types", response_model=List[SpeciesTypeRead])
+async def list_species_types_with_records(
+    db: Session = Depends(get_db),
+    org: Organisation = Depends(get_current_organisation),
+    _admin: None = Depends(require_admin),
+) -> List[SpeciesType]:
+    """List species types that have at least one sighting record (non-empty export)."""
+    type_ids: list[int] = [
+        r[0]
+        for r in (
+            db.query(Species.species_type_id)
+            .join(Sighting, Sighting.species_id == Species.id)
+            .join(Survey, Sighting.survey_id == Survey.id)
+            .filter(Survey.organisation_id == org.id)
+            .distinct()
+            .all()
+        )
+    ]
+    if not type_ids:
+        return []
+    return (  # type: ignore[no-any-return]
+        db.query(SpeciesType)
+        .filter(col(SpeciesType.id).in_(type_ids))
+        .order_by(SpeciesType.display_name)
+        .all()
+    )
+
+
+@router.get("/records/by-survey-type/{survey_type_id}")
+async def export_records_by_survey_type(
+    survey_type_id: int,
+    db: Session = Depends(get_db),
+    org: Organisation = Depends(get_current_organisation),
+    _admin: None = Depends(require_admin),
+) -> StreamingResponse:
+    """Export all sighting records from surveys of a given survey type as .xlsx."""
+    survey_type = (
+        db.query(SurveyType)
+        .filter(SurveyType.id == survey_type_id, SurveyType.organisation_id == org.id)
+        .first()
+    )
+    if not survey_type:
+        raise HTTPException(status_code=404, detail="Survey type not found")
+
+    rows = (
+        _records_query(db, org.id)
+        .filter(Survey.survey_type_id == survey_type_id)
+        .order_by(Survey.date, Species.name)
+        .all()
+    )
+    logger.info(
+        f"Records export (survey type '{survey_type.name}', {len(rows)} rows) "
+        f"requested for organisation: {org.slug}"
+    )
+    return _records_response(rows, "survey", survey_type.name)
+
+
+@router.get("/records/by-species-type/{species_type_id}")
+async def export_records_by_species_type(
+    species_type_id: int,
+    db: Session = Depends(get_db),
+    org: Organisation = Depends(get_current_organisation),
+    _admin: None = Depends(require_admin),
+) -> StreamingResponse:
+    """Export all sighting records of a given species (taxonomic) type as .xlsx.
+
+    Includes sightings from every survey type, including ad-hoc records.
+    """
+    species_type = (
+        db.query(SpeciesType).filter(SpeciesType.id == species_type_id).first()
+    )
+    if not species_type:
+        raise HTTPException(status_code=404, detail="Species type not found")
+
+    rows = (
+        _records_query(db, org.id)
+        .filter(Species.species_type_id == species_type_id)
+        .order_by(Survey.date, Species.name)
+        .all()
+    )
+    logger.info(
+        f"Records export (species type '{species_type.display_name}', {len(rows)} rows) "
+        f"requested for organisation: {org.slug}"
+    )
+    return _records_response(rows, "species", species_type.display_name)

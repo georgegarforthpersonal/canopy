@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Box, Typography, TextField, Autocomplete, IconButton, Alert, Stack, Card, CardContent, Button, Chip, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
-import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, ViewList, Map as MapIcon, PhotoCamera, Close } from '@mui/icons-material';
+import { Box, Typography, TextField, Autocomplete, IconButton, Alert, Stack, Card, CardContent, Button, Chip, Tooltip } from '@mui/material';
+import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, PhotoCamera, Close } from '@mui/icons-material';
 import type { Species, BreedingStatusCode, LocationWithBoundary, Location, Device } from '../../services/api';
 import { imagesAPI } from '../../services/api';
 import { AddSightingModal } from './AddSightingModal';
 import type { SightingData } from './AddSightingModal';
 import { LocationModal } from './LocationModal';
 import { MapModeSightings } from './MapModeSightings';
+import ViewModeToggle from '../ViewModeToggle';
 import { getSightingsGridConfig } from './sightingsGridConfig';
 import { getSpeciesIcon } from '../../config';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -337,24 +338,7 @@ export function SightingsEditor({
   const canShowMap = allowGeolocation || allowSightingDeviceSelection;
 
   const viewModeToggle = canShowMap ? (
-    <ToggleButtonGroup
-      value={viewMode}
-      exclusive
-      onChange={(_, newValue) => newValue && setViewMode(newValue)}
-      size="small"
-      sx={{ height: 32 }}
-    >
-      <ToggleButton value="list" aria-label="list mode">
-        <Tooltip title="List Mode">
-          <ViewList fontSize="small" />
-        </Tooltip>
-      </ToggleButton>
-      <ToggleButton value="map" aria-label="map mode">
-        <Tooltip title="Map Mode">
-          <MapIcon fontSize="small" />
-        </Tooltip>
-      </ToggleButton>
-    </ToggleButtonGroup>
+    <ViewModeToggle value={viewMode} onChange={setViewMode} />
   ) : null;
 
   // Map mode UI (shared between mobile and desktop)

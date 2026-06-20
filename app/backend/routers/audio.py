@@ -40,20 +40,15 @@ from models import (
     AudioRecordingRead,
     AudioDetection,
     AudioDetectionRead,
-    DetectionClip,
-    Device,
     FileProcessingResult,
-    Location,
     Organisation,
     ProcessingStatus,
     ProcessingSummary,
     Species,
-    SpeciesDetectionSummary,
     SpeciesType,
     Survey,
     SurveyDetectionsSaveRequest,
     SurveyDetectionsSaveResponse,
-    SurveyDetectionsSummaryResponse,
 )
 from services.processing import DEFAULT_LAT, DEFAULT_LON
 from services.r2_storage import (
@@ -66,12 +61,6 @@ from utils.filename_parser import extract_media_info
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def extract_recording_info(filename: str) -> dict:
-    """Extract device serial and timestamp from filename."""
-    info = extract_media_info(filename)
-    return {"device_serial": info.device_serial, "recording_timestamp": info.timestamp}
 
 
 @router.post(
@@ -216,7 +205,6 @@ def _build_recording_response(recording: AudioRecording, detection_count: int) -
         "file_size_bytes": recording.file_size_bytes,
         "duration_seconds": recording.duration_seconds,
         "recording_timestamp": recording.recording_timestamp,
-        "device_serial": recording.device_serial,
         "processing_status": recording.processing_status.value
         if hasattr(recording.processing_status, "value")
         else recording.processing_status,
@@ -343,9 +331,6 @@ async def upload_audio_files(
                 status_code=400, detail=f"File already exists: {file.filename}"
             )
 
-        # Extract metadata from filename
-        info = extract_recording_info(file.filename)
-
         # Get file size before upload (upload may close the stream)
         file.file.seek(0, 2)  # Seek to end
         file_size = file.file.tell()
@@ -360,8 +345,7 @@ async def upload_audio_files(
             filename=file.filename,
             r2_key=r2_key,
             file_size_bytes=file_size,
-            device_serial=info["device_serial"],
-            recording_timestamp=info["recording_timestamp"],
+            recording_timestamp=extract_media_info(file.filename).timestamp,
             processing_status=ProcessingStatus.completed if skip_processing else ProcessingStatus.pending,
         )
         db.add(recording)
@@ -493,157 +477,6 @@ async def get_audio_detections(
         }
         for d in detections
     ]
-
-
-@router.get(
-    "/{survey_id}/detections/summary",
-    response_model=SurveyDetectionsSummaryResponse,
-)
-async def get_detections_summary(
-    survey_id: int,
-    org: Organisation = Depends(get_current_organisation),
-    db: Session = Depends(get_db),
-) -> SurveyDetectionsSummaryResponse:
-    """
-    Get aggregated detection summary for a survey, grouped by species.
-    Returns top 3 detections per species sorted by confidence.
-    """
-    # Verify survey belongs to org
-    survey = (
-        db.query(Survey)
-        .filter(Survey.id == survey_id, Survey.organisation_id == org.id)
-        .first()
-    )
-    if not survey:
-        raise HTTPException(status_code=404, detail="Survey not found")
-
-    # Get all audio recordings for this survey with device_serial
-    recordings = (
-        db.query(AudioRecording.id, AudioRecording.device_serial)
-        .filter(AudioRecording.survey_id == survey_id)
-        .all()
-    )
-    recording_ids = [r[0] for r in recordings]
-
-    if not recording_ids:
-        return SurveyDetectionsSummaryResponse(species_summaries=[])
-
-    # Build mapping from device_serial to device info
-    device_serials = set(r.device_serial for r in recordings if r.device_serial)
-    device_map = {}
-    if device_serials:
-        # Query devices with coordinates extracted from PostGIS point_geometry
-        devices = (
-            db.query(
-                Device,
-                col(Location.name).label("location_name"),
-                func.ST_Y(Device.point_geometry).label("lat"),
-                func.ST_X(Device.point_geometry).label("lng"),
-            )
-            .outerjoin(Location, Device.location_id == Location.id)
-            .filter(
-                col(Device.device_id).in_(device_serials),
-                Device.organisation_id == org.id,
-            )
-            .all()
-        )
-        for device, loc_name, lat, lng in devices:
-            device_map[device.device_id] = {
-                "device_id": device.device_id,
-                "device_name": device.name,
-                "device_latitude": lat,
-                "device_longitude": lng,
-                "location_id": device.location_id,
-                "location_name": loc_name,
-            }
-
-    # Build mapping from audio_recording_id to device info
-    recording_device_map = {}
-    for rec in recordings:
-        if rec.device_serial and rec.device_serial in device_map:
-            recording_device_map[rec.id] = device_map[rec.device_serial]
-
-    # Get all detections grouped by (species, device) with counts
-    # This ensures each device's detections are counted separately
-    from sqlalchemy import desc
-
-    # Build reverse mapping: recording_id -> device_serial
-    recording_to_device = {r.id: r.device_serial for r in recordings}
-
-    # Get unique (species, device) combinations with their detection counts
-    # We need to join through AudioRecording to get device_serial
-    species_device_counts = (
-        db.query(
-            AudioDetection.species_id,
-            Species.name.label("species_name"),  # type: ignore[union-attr]
-            Species.scientific_name.label("species_scientific_name"),  # type: ignore[union-attr]
-            AudioRecording.device_serial,
-            func.count(AudioDetection.id).label("detection_count"),
-            func.max(AudioDetection.confidence).label("max_confidence"),
-        )
-        .join(Species, AudioDetection.species_id == Species.id)
-        .join(AudioRecording, AudioDetection.audio_recording_id == AudioRecording.id)
-        .filter(col(AudioDetection.audio_recording_id).in_(recording_ids))
-        .group_by(
-            AudioDetection.species_id,
-            Species.name,
-            Species.scientific_name,
-            AudioRecording.device_serial,
-        )
-        .order_by(desc("max_confidence"))
-        .all()
-    )
-
-    summaries = []
-    for row in species_device_counts:
-        device_serial = row.device_serial
-        device_info = device_map.get(device_serial, {})
-
-        # Get recording IDs for this specific device
-        device_recording_ids = [
-            r.id for r in recordings if r.device_serial == device_serial
-        ]
-
-        # Get top 3 detections for this species FROM THIS DEVICE ONLY
-        top_detections = (
-            db.query(AudioDetection)
-            .filter(
-                col(AudioDetection.audio_recording_id).in_(device_recording_ids),
-                AudioDetection.species_id == row.species_id,
-            )
-            .order_by(desc(AudioDetection.confidence))
-            .limit(3)
-            .all()
-        )
-
-        clips = []
-        for det in top_detections:
-            clips.append(
-                DetectionClip(
-                    confidence=det.confidence,
-                    audio_recording_id=det.audio_recording_id,
-                    start_time=det.start_time,
-                    end_time=det.end_time,
-                    device_id=device_info.get("device_id"),
-                    device_name=device_info.get("device_name"),
-                    device_latitude=device_info.get("device_latitude"),
-                    device_longitude=device_info.get("device_longitude"),
-                    location_id=device_info.get("location_id"),
-                    location_name=device_info.get("location_name"),
-                )
-            )
-
-        summaries.append(
-            SpeciesDetectionSummary(
-                species_id=row.species_id,
-                species_name=row.species_name,
-                species_scientific_name=row.species_scientific_name,
-                detection_count=row.detection_count,
-                top_detections=clips,
-            )
-        )
-
-    return SurveyDetectionsSummaryResponse(species_summaries=summaries)
 
 
 @router.delete(
