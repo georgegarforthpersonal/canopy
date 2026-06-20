@@ -40,7 +40,6 @@ import {
   surveyorsAPI,
   surveyTypesAPI,
   locationsAPI,
-  devicesAPI,
   exportAPI,
   type Surveyor,
   type SurveyType,
@@ -49,15 +48,10 @@ import {
   type SurveyTypeUpdate,
   type SpeciesTypeRef,
   type Location,
-  type LocationWithBoundary,
-  type Device,
-  type DeviceCreate,
-  type DeviceUpdate,
   type DeviceType,
 } from '../services/api';
-import LocationMapPicker from '../components/surveys/LocationMapPicker';
-import DeviceMap from '../components/admin/DeviceMap';
-import LocationsManager from '../components/admin/LocationsManager';
+import LocationsDevicesManager from '../components/admin/LocationsDevicesManager';
+import RecordsExportPanel from '../components/admin/RecordsExportPanel';
 import { SurveyTypeColorSelector, SurveyTypeChip } from '../components/SurveyTypeColors';
 import { brandColors } from '../theme';
 
@@ -89,8 +83,8 @@ export function AdminPage() {
   const toast = useToast();
   const surveyorHighlight = useRowHighlight();
   const surveyTypeHighlight = useRowHighlight();
-  const deviceHighlight = useRowHighlight();
   const [tabValue, setTabValue] = useState(0);
+  const [dataTabValue, setDataTabValue] = useState(0);
 
   // Surveyors state
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
@@ -112,7 +106,6 @@ export function AdminPage() {
   const [surveyTypesLoading, setSurveyTypesLoading] = useState(true);
   const [surveyTypesError, setSurveyTypesError] = useState<string | null>(null);
   const [allLocations, setAllLocations] = useState<Location[]>([]);
-  const [allLocationsWithBoundaries, setAllLocationsWithBoundaries] = useState<LocationWithBoundary[]>([]);
   const [allSpeciesTypes, setAllSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
   const [surveyTypeDialogOpen, setSurveyTypeDialogOpen] = useState(false);
   const [surveyTypeDialogMode, setSurveyTypeDialogMode] = useState<'add' | 'edit'>('add');
@@ -142,27 +135,6 @@ export function AdminPage() {
   const [formSelectedLocations, setFormSelectedLocations] = useState<Location[]>([]);
   const [formSelectedSpeciesTypes, setFormSelectedSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
 
-  // Devices state
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [devicesLoading, setDevicesLoading] = useState(true);
-  const [devicesError, setDevicesError] = useState<string | null>(null);
-  const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
-  const [deviceDialogMode, setDeviceDialogMode] = useState<'add' | 'edit'>('add');
-  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
-  const [deviceFormError, setDeviceFormError] = useState<string | null>(null);
-  const [savingDevice, setSavingDevice] = useState(false);
-  const [deactivateDeviceDialogOpen, setDeactivateDeviceDialogOpen] = useState(false);
-  const [deviceToDeactivate, setDeviceToDeactivate] = useState<Device | null>(null);
-  const [deactivatingDevice, setDeactivatingDevice] = useState(false);
-
-  // Device form state
-  const [formDeviceId, setFormDeviceId] = useState('');
-  const [formDeviceName, setFormDeviceName] = useState('');
-  const [formDeviceType, setFormDeviceType] = useState<DeviceType>('audio_recorder');
-  const [formDeviceLatitude, setFormDeviceLatitude] = useState<number | undefined>(undefined);
-  const [formDeviceLongitude, setFormDeviceLongitude] = useState<number | undefined>(undefined);
-  const [formDeviceLocationId, setFormDeviceLocationId] = useState<number | null>(null);
-
   // Export state
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -172,7 +144,6 @@ export function AdminPage() {
   useEffect(() => {
     loadSurveyors();
     loadSurveyTypes();
-    loadDevices();
     loadReferenceData();
   }, []);
 
@@ -204,13 +175,11 @@ export function AdminPage() {
 
   const loadReferenceData = async () => {
     try {
-      const [locations, locationsWithBoundaries, speciesTypes] = await Promise.all([
+      const [locations, speciesTypes] = await Promise.all([
         locationsAPI.getAll(),
-        locationsAPI.getAllWithBoundaries(),
         surveyTypesAPI.getSpeciesTypes(),
       ]);
       setAllLocations(locations);
-      setAllLocationsWithBoundaries(locationsWithBoundaries);
       setAllSpeciesTypes(speciesTypes);
     } catch (err) {
       console.error('Failed to load reference data:', err);
@@ -228,19 +197,6 @@ export function AdminPage() {
       setExportError(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setExporting(false);
-    }
-  };
-
-  const loadDevices = async () => {
-    try {
-      setDevicesLoading(true);
-      setDevicesError(null);
-      const data = await devicesAPI.getAll(true);
-      setDevices(data);
-    } catch (err) {
-      setDevicesError(err instanceof Error ? err.message : 'Failed to load devices');
-    } finally {
-      setDevicesLoading(false);
     }
   };
 
@@ -325,6 +281,9 @@ export function AdminPage() {
 
   // Survey Type handlers
   const handleOpenAddSurveyType = () => {
+    // Refresh locations/species so newly added ones (created in other tabs)
+    // are immediately selectable without a full-page reload.
+    loadReferenceData();
     setSurveyTypeDialogMode('add');
     setEditingSurveyType(null);
     resetSurveyTypeForm();
@@ -333,6 +292,8 @@ export function AdminPage() {
 
   const handleOpenEditSurveyType = async (surveyType: SurveyType) => {
     try {
+      // Refresh reference data so the dropdowns reflect items added elsewhere.
+      loadReferenceData();
       const details = await surveyTypesAPI.getById(surveyType.id);
       setSurveyTypeDialogMode('edit');
       setEditingSurveyType(details);
@@ -470,113 +431,6 @@ export function AdminPage() {
     }
   };
 
-  // Device handlers
-  const handleOpenAddDevice = () => {
-    setDeviceDialogMode('add');
-    setEditingDevice(null);
-    setFormDeviceId('');
-    setFormDeviceName('');
-    setFormDeviceType('audio_recorder');
-    setFormDeviceLatitude(undefined);
-    setFormDeviceLongitude(undefined);
-    setFormDeviceLocationId(null);
-    setDeviceFormError(null);
-    setDeviceDialogOpen(true);
-  };
-
-  const handleOpenEditDevice = (device: Device) => {
-    setDeviceDialogMode('edit');
-    setEditingDevice(device);
-    setFormDeviceId(device.device_id);
-    setFormDeviceName(device.name || '');
-    setFormDeviceType(device.device_type);
-    setFormDeviceLatitude(device.latitude ?? undefined);
-    setFormDeviceLongitude(device.longitude ?? undefined);
-    setFormDeviceLocationId(device.location_id);
-    setDeviceFormError(null);
-    setDeviceDialogOpen(true);
-  };
-
-  const handleSaveDevice = async () => {
-    if (!formDeviceId.trim()) {
-      setDeviceFormError('Device ID is required');
-      return;
-    }
-    if (!formDeviceName.trim()) {
-      setDeviceFormError('Device name is required');
-      return;
-    }
-    if (deviceDialogMode === 'add' && (formDeviceLatitude === undefined || formDeviceLongitude === undefined)) {
-      setDeviceFormError('Latitude and longitude are required');
-      return;
-    }
-    try {
-      setSavingDevice(true);
-      setDeviceFormError(null);
-      let savedId: number | null = null;
-      if (deviceDialogMode === 'add') {
-        const data: DeviceCreate = {
-          device_id: formDeviceId.trim(),
-          name: formDeviceName.trim(),
-          device_type: formDeviceType,
-          latitude: formDeviceLatitude!,
-          longitude: formDeviceLongitude!,
-          location_id: formDeviceLocationId ?? undefined,
-        };
-        savedId = (await devicesAPI.create(data)).id;
-      } else if (editingDevice) {
-        const data: DeviceUpdate = {
-          device_id: formDeviceId.trim(),
-          name: formDeviceName.trim(),
-          device_type: formDeviceType,
-          latitude: formDeviceLatitude,
-          longitude: formDeviceLongitude,
-          location_id: formDeviceLocationId ?? undefined,
-        };
-        await devicesAPI.update(editingDevice.id, data);
-        savedId = editingDevice.id;
-      }
-      setDeviceDialogOpen(false);
-      await loadDevices();
-      if (savedId !== null) {
-        toast.success(`Device ${deviceDialogMode === 'add' ? 'created' : 'updated'} successfully`);
-        deviceHighlight.highlight(savedId);
-      }
-    } catch (err) {
-      setDeviceFormError(err instanceof Error ? err.message : 'Failed to save device');
-    } finally {
-      setSavingDevice(false);
-    }
-  };
-
-  const handleDeactivateDevice = async () => {
-    if (!deviceToDeactivate) return;
-    try {
-      setDeactivatingDevice(true);
-      await devicesAPI.deactivate(deviceToDeactivate.id);
-      setDeactivateDeviceDialogOpen(false);
-      setDeviceToDeactivate(null);
-      await loadDevices();
-      toast.error('Device deactivated');
-    } catch (err) {
-      setDevicesError(err instanceof Error ? err.message : 'Failed to deactivate device');
-    } finally {
-      setDeactivatingDevice(false);
-    }
-  };
-
-  const handleReactivateDevice = async (device: Device) => {
-    try {
-      setDevicesError(null);
-      await devicesAPI.reactivate(device.id);
-      await loadDevices();
-      toast.success('Device reactivated');
-      deviceHighlight.highlight(device.id);
-    } catch (err) {
-      setDevicesError(err instanceof Error ? err.message : 'Failed to reactivate device');
-    }
-  };
-
   // Show auth gate if not authenticated
   if (authLoading) {
     return (
@@ -614,8 +468,7 @@ export function AdminPage() {
         <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
           <Tab label="Surveyors" />
           <Tab label="Survey Types" />
-          <Tab label="Devices" />
-          <Tab label="Locations" />
+          <Tab label="Locations & Devices" />
           <Tab label="Data" />
         </Tabs>
       </Box>
@@ -873,194 +726,51 @@ export function AdminPage() {
         </TableContainer>
       </TabPanel>
 
-      {/* Devices Tab */}
+      {/* Locations & Devices Tab */}
       <TabPanel value={tabValue} index={2}>
-        {devicesError && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setDevicesError(null)}>
-            {devicesError}
-          </Alert>
-        )}
-
-        <DeviceMap
-          devices={devices}
-          locationsWithBoundaries={allLocationsWithBoundaries}
-          loading={devicesLoading}
-          onEditDevice={handleOpenEditDevice}
-          onDeactivateDevice={(device) => {
-            setDeviceToDeactivate(device);
-            setDeactivateDeviceDialogOpen(true);
-          }}
-          onReactivateDevice={handleReactivateDevice}
-        />
-
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => handleOpenAddDevice()}
-            sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
-          >
-            Add Device
-          </Button>
-        </Box>
-
-        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-          {/* minWidth lets TableContainer scroll horizontally on phones
-              instead of crushing the seven columns to unreadable widths */}
-          <Table sx={{ minWidth: 640 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Device ID</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Location</TableCell>
-                <TableCell>Coordinates</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {devicesLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
-                    <CircularProgress />
-                  </TableCell>
-                </TableRow>
-              ) : devices.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 8, color: 'text.secondary' }}>
-                    No devices found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                devices.map((device) => (
-                  <TableRow
-                    key={device.id}
-                    ref={deviceHighlight.rowRef(device.id)}
-                    sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, deviceHighlight.rowSx(device.id)]}
-                  >
-                    <TableCell>
-                      <Typography variant="body1" sx={{ fontFamily: 'monospace' }}>
-                        {device.device_id}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={
-                          device.device_type === 'camera_trap' ? 'Camera Trap'
-                          : device.device_type === 'refugia' ? 'Refugia'
-                          : 'Audio Recorder'
-                        }
-                        size="small"
-                        color={
-                          device.device_type === 'camera_trap' ? 'primary'
-                          : device.device_type === 'refugia' ? 'success'
-                          : 'secondary'
-                        }
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body1">
-                        {device.name || '-'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {device.location_name || '-'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {device.latitude && device.longitude ? (
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                          {device.latitude.toFixed(5)}, {device.longitude.toFixed(5)}
-                        </Typography>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">-</Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={device.is_active ? 'Active' : 'Inactive'}
-                        size="small"
-                        color={device.is_active ? 'success' : 'default'}
-                        sx={{ minWidth: 70 }}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenEditDevice(device)}
-                        sx={{ color: 'primary.main', mr: 1 }}
-                        title="Edit"
-                      >
-                        <Edit />
-                      </IconButton>
-                      {device.is_active ? (
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setDeviceToDeactivate(device);
-                            setDeactivateDeviceDialogOpen(true);
-                          }}
-                          sx={{ color: 'error.main' }}
-                          title="Deactivate"
-                        >
-                          <Delete />
-                        </IconButton>
-                      ) : (
-                        <IconButton
-                          size="small"
-                          onClick={() => handleReactivateDevice(device)}
-                          sx={{ color: 'success.main' }}
-                          title="Reactivate"
-                        >
-                          <RestoreFromTrash />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </TabPanel>
-
-      {/* Locations Tab */}
-      <TabPanel value={tabValue} index={3}>
-        <LocationsManager />
+        <LocationsDevicesManager />
       </TabPanel>
 
       {/* Data Tab */}
-      <TabPanel value={tabValue} index={4}>
-        <Paper sx={{ p: 3, maxWidth: 600 }}>
-          <Typography variant="h6" gutterBottom>
-            Export Data
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Download a snapshot of all your organisation's data as a SQLite database file.
-          </Typography>
-          {exportError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {exportError}
-            </Alert>
-          )}
-          {exportSuccess && (
-            <Alert severity="success" sx={{ mb: 2 }}>
-              Export downloaded successfully.
-            </Alert>
-          )}
-          <Button
-            variant="contained"
-            startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <Download />}
-            onClick={handleExportSqlite}
-            disabled={exporting}
-            sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
-          >
-            {exporting ? 'Exporting...' : 'Download SQLite Database'}
-          </Button>
-        </Paper>
+      <TabPanel value={tabValue} index={3}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={dataTabValue} onChange={(_, newValue) => setDataTabValue(newValue)}>
+            <Tab label="Export records" />
+            <Tab label="Database" />
+          </Tabs>
+        </Box>
+
+        {dataTabValue === 0 && <RecordsExportPanel />}
+
+        {dataTabValue === 1 && (
+          <Paper sx={{ p: 3, maxWidth: 600 }}>
+            <Typography variant="h6" gutterBottom>
+              Export Data
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Download a snapshot of all your organisation's data as a SQLite database file.
+            </Typography>
+            {exportError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {exportError}
+              </Alert>
+            )}
+            {exportSuccess && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                Export downloaded successfully.
+              </Alert>
+            )}
+            <Button
+              variant="contained"
+              startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <Download />}
+              onClick={handleExportSqlite}
+              disabled={exporting}
+              sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
+            >
+              {exporting ? 'Exporting...' : 'Download SQLite Database'}
+            </Button>
+          </Paper>
+        )}
       </TabPanel>
 
       {/* Add/Edit Surveyor Dialog */}
@@ -1405,6 +1115,7 @@ export function AdminPage() {
               multiple
               options={allLocations}
               getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
               value={formSelectedLocations}
               onChange={(_, newValue) => setFormSelectedLocations(newValue)}
               disabled={savingSurveyType}
@@ -1416,7 +1127,7 @@ export function AdminPage() {
           )}
           {formAllowImageUpload && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Camera trap survey types use devices instead of locations. Devices can be managed in the Devices section below.
+              Camera trap survey types use devices instead of locations. Devices can be managed in the Locations &amp; Devices tab.
             </Typography>
           )}
           <Autocomplete
@@ -1473,137 +1184,6 @@ export function AdminPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Add/Edit Device Dialog */}
-      <Dialog
-        open={deviceDialogOpen}
-        onClose={() => !savingDevice && setDeviceDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-        fullScreen={isMobile}
-      >
-        <DialogTitle>{deviceDialogMode === 'add' ? 'Add New Device' : 'Edit Device'}</DialogTitle>
-        <DialogContent>
-          {deviceFormError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {deviceFormError}
-            </Alert>
-          )}
-          <TextField
-            autoFocus
-            margin="normal"
-            label="Device ID"
-            fullWidth
-            required
-            value={formDeviceId}
-            onChange={(e) => setFormDeviceId(e.target.value)}
-            disabled={savingDevice}
-            helperText="Serial number from filenames (e.g., 2MM24020)"
-            sx={{ fontFamily: 'monospace' }}
-          />
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Device Type</InputLabel>
-            <Select
-              value={formDeviceType}
-              label="Device Type"
-              onChange={(e) => setFormDeviceType(e.target.value as DeviceType)}
-              disabled={savingDevice}
-            >
-              <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
-              <MenuItem value="camera_trap">Camera Trap</MenuItem>
-              <MenuItem value="refugia">Refugia</MenuItem>
-              <MenuItem value="moth_light_trap">Moth Light Trap</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField
-            margin="normal"
-            label="Name"
-            required
-            fullWidth
-            value={formDeviceName}
-            onChange={(e) => setFormDeviceName(e.target.value)}
-            disabled={savingDevice}
-            helperText="Friendly name (e.g., North Field Recorder)"
-          />
-          <Autocomplete
-            options={allLocations}
-            getOptionLabel={(option) => option.name}
-            value={allLocations.find((l) => l.id === formDeviceLocationId) || null}
-            onChange={(_, newValue) => setFormDeviceLocationId(newValue?.id || null)}
-            disabled={savingDevice}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                margin="normal"
-                label="Associated Location (optional)"
-                helperText="Link this device to a location area"
-              />
-            )}
-            sx={{ mt: 1 }}
-          />
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Device Position
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-              Click on the map to set the device's GPS position
-            </Typography>
-            <LocationMapPicker
-              latitude={formDeviceLatitude}
-              longitude={formDeviceLongitude}
-              onChange={(lat, lng) => {
-                setFormDeviceLatitude(lat ?? undefined);
-                setFormDeviceLongitude(lng ?? undefined);
-              }}
-              locationBoundaries={allLocationsWithBoundaries}
-              locationBoundary={
-                formDeviceLocationId
-                  ? allLocationsWithBoundaries.find((l) => l.id === formDeviceLocationId) ?? null
-                  : null
-              }
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeviceDialogOpen(false)} disabled={savingDevice}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSaveDevice}
-            variant="contained"
-            disabled={savingDevice}
-            sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
-          >
-            {savingDevice ? 'Saving...' : deviceDialogMode === 'add' ? 'Add' : 'Save'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Deactivate Device Dialog */}
-      <Dialog
-        open={deactivateDeviceDialogOpen}
-        onClose={() => !deactivatingDevice && setDeactivateDeviceDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Deactivate Device?</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to deactivate device <strong>{deviceToDeactivate?.device_id}</strong>
-            {deviceToDeactivate?.name && ` (${deviceToDeactivate.name})`}?
-          </Typography>
-          <Typography sx={{ mt: 2, color: 'text.secondary' }}>
-            The device will no longer appear in active lists, but historical data will be preserved.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeactivateDeviceDialogOpen(false)} disabled={deactivatingDevice}>
-            Cancel
-          </Button>
-          <Button onClick={handleDeactivateDevice} variant="contained" color="error" disabled={deactivatingDevice}>
-            {deactivatingDevice ? 'Deactivating...' : 'Deactivate'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

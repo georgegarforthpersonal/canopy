@@ -828,7 +828,6 @@ export type DeviceType = 'audio_recorder' | 'camera_trap' | 'refugia' | 'moth_li
 
 export interface Device {
   id: number;
-  device_id: string;
   name: string;
   device_type: DeviceType;
   latitude: number;
@@ -839,21 +838,17 @@ export interface Device {
 }
 
 export interface DeviceCreate {
-  device_id: string;
   name: string;
   device_type?: DeviceType;
   latitude: number;
   longitude: number;
-  location_id?: number;
 }
 
 export interface DeviceUpdate {
-  device_id?: string;
   name?: string;
   device_type?: DeviceType;
   latitude?: number;
   longitude?: number;
-  location_id?: number;
   is_active?: boolean;
 }
 
@@ -878,13 +873,6 @@ export const devicesAPI = {
    */
   getById: (id: number): Promise<Device> => {
     return fetchAPI(`/devices/${id}`);
-  },
-
-  /**
-   * Get a device by its serial number (device_id field)
-   */
-  getByDeviceId: (deviceId: string): Promise<Device> => {
-    return fetchAPI(`/devices/by-device-id/${encodeURIComponent(deviceId)}`);
   },
 
   /**
@@ -1260,61 +1248,102 @@ export interface AuthStatus {
 // API Methods - Export
 // ============================================================================
 
+/**
+ * Fetch a binary file from an export endpoint and trigger a browser download.
+ * The filename is taken from the Content-Disposition header when present.
+ */
+const downloadExportFile = async (endpoint: string, fallbackFilename: string): Promise<void> => {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'X-Org-Slug': ORG_SLUG,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      credentials: 'include',
+      headers,
+    });
+  } catch (error) {
+    reportApiError(error, { endpoint, method: 'GET' });
+    throw error;
+  }
+
+  if (!response.ok) {
+    let errorMessage = `Export failed: ${response.status}`;
+    try {
+      const error = await response.json();
+      if (error.detail) {
+        errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    const apiError = new ApiError(errorMessage, response.status);
+    reportApiError(apiError, { endpoint, method: 'GET', status: response.status });
+    throw apiError;
+  }
+
+  // Extract filename from Content-Disposition header
+  const disposition = response.headers.get('Content-Disposition');
+  const filenameMatch = disposition?.match(/filename="(.+)"/);
+  const filename = filenameMatch ? filenameMatch[1] : fallbackFilename;
+
+  // Download the blob
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 export const exportAPI = {
   /**
    * Download organisation data as a SQLite database file.
-   * Returns a Blob that can be saved as a .sqlite file.
    */
-  downloadSqlite: async (): Promise<void> => {
-    const token = getAuthToken();
-    const headers: Record<string, string> = {
-      'X-Org-Slug': ORG_SLUG,
-    };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+  downloadSqlite: (): Promise<void> => {
+    return downloadExportFile('/export/sqlite', `export_${Date.now()}.sqlite`);
+  },
 
-    let response: Response;
-    try {
-      response = await fetch(`${API_BASE_URL}/export/sqlite`, {
-        credentials: 'include',
-        headers,
-      });
-    } catch (error) {
-      reportApiError(error, { endpoint: '/export/sqlite', method: 'GET' });
-      throw error;
-    }
+  /**
+   * List survey types that have at least one sighting record (non-empty export).
+   */
+  getSurveyTypesWithRecords: (): Promise<SurveyType[]> => {
+    return fetchAPI('/export/records/survey-types');
+  },
 
-    if (!response.ok) {
-      let errorMessage = `Export failed: ${response.status}`;
-      try {
-        const error = await response.json();
-        if (error.detail) {
-          errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
-        }
-      } catch {
-        // Ignore parse errors
-      }
-      const apiError = new ApiError(errorMessage, response.status);
-      reportApiError(apiError, { endpoint: '/export/sqlite', method: 'GET', status: response.status });
-      throw apiError;
-    }
+  /**
+   * List species types that have at least one sighting record (non-empty export).
+   */
+  getSpeciesTypesWithRecords: (): Promise<SpeciesTypeRef[]> => {
+    return fetchAPI('/export/records/species-types');
+  },
 
-    // Extract filename from Content-Disposition header
-    const disposition = response.headers.get('Content-Disposition');
-    const filenameMatch = disposition?.match(/filename="(.+)"/);
-    const filename = filenameMatch ? filenameMatch[1] : `export_${Date.now()}.sqlite`;
+  /**
+   * Download sighting records for a survey type as an Excel (.xlsx) file.
+   */
+  downloadRecordsBySurveyType: (surveyTypeId: number): Promise<void> => {
+    return downloadExportFile(
+      `/export/records/by-survey-type/${surveyTypeId}`,
+      `survey_${surveyTypeId}_${Date.now()}.xlsx`,
+    );
+  },
 
-    // Download the blob
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  /**
+   * Download sighting records for a species (taxonomic) type as an Excel (.xlsx) file.
+   */
+  downloadRecordsBySpeciesType: (speciesTypeId: number): Promise<void> => {
+    return downloadExportFile(
+      `/export/records/by-species-type/${speciesTypeId}`,
+      `species_${speciesTypeId}_${Date.now()}.xlsx`,
+    );
   },
 };
 
@@ -1359,7 +1388,6 @@ export interface AudioRecording {
   file_size_bytes: number | null;
   duration_seconds: number | null;
   recording_timestamp: string | null;
-  device_serial: string | null;
   processing_status: ProcessingStatus;
   processing_error: string | null;
   uploaded_at: string;
@@ -1376,32 +1404,6 @@ export interface AudioDetection {
   detection_timestamp: string;
   species_id: number | null;
   species_common_name: string | null;
-}
-
-export interface DetectionClip {
-  confidence: number;
-  audio_recording_id: number;
-  start_time: string;
-  end_time: string;
-  // Device info for location attribution
-  device_id: string | null;
-  device_name: string | null;
-  device_latitude: number | null;
-  device_longitude: number | null;
-  location_id: number | null;
-  location_name: string | null;
-}
-
-export interface SpeciesDetectionSummary {
-  species_id: number;
-  species_name: string | null;
-  species_scientific_name: string | null;
-  detection_count: number;
-  top_detections: DetectionClip[];
-}
-
-export interface SurveyDetectionsSummaryResponse {
-  species_summaries: SpeciesDetectionSummary[];
 }
 
 // ============================================================================
@@ -1517,13 +1519,6 @@ export const audioAPI = {
   },
 
   /**
-   * Get aggregated detections summary for a survey, grouped by species
-   */
-  getDetectionsSummary: (surveyId: number): Promise<SurveyDetectionsSummaryResponse> => {
-    return fetchAPI(`/surveys/${surveyId}/detections/summary`);
-  },
-
-  /**
    * Persist BirdNET detections for a survey without storing the source audio.
    */
   saveDetections: (
@@ -1548,7 +1543,6 @@ export interface CameraTrapImage {
   r2_key: string;
   file_size_bytes: number | null;
   image_timestamp: string | null;
-  device_serial: string | null;
   processing_status: ProcessingStatus;
   processing_error: string | null;
   flagged_for_review: boolean;
@@ -1594,29 +1588,6 @@ export interface CameraTrapDetection {
   taxonomic_level: string | null;
   is_primary: boolean;
   species_id: number | null;
-}
-
-export interface ImageDetectionOption {
-  species_id: number | null;
-  species_name: string | null;
-  scientific_name: string;
-  confidence: number;
-}
-
-export interface ImageWithDetections {
-  image_id: number;
-  filename: string;
-  device_id: string | null;
-  device_name: string | null;
-  device_latitude: number | null;
-  device_longitude: number | null;
-  location_id: number | null;
-  location_name: string | null;
-  detections: ImageDetectionOption[];
-}
-
-export interface SurveyImageDetectionsResponse {
-  images: ImageWithDetections[];
 }
 
 // ============================================================================
@@ -1778,12 +1749,5 @@ export const imagesAPI = {
     return fetchAPI(`/surveys/${surveyId}/images/${imageId}`, {
       method: 'DELETE',
     });
-  },
-
-  /**
-   * Get image detections for a survey - one row per image with top 3 species
-   */
-  getDetectionsSummary: (surveyId: number): Promise<SurveyImageDetectionsResponse> => {
-    return fetchAPI(`/surveys/${surveyId}/image-detections/summary`);
   },
 };

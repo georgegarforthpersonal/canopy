@@ -31,16 +31,18 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreFromTrashIcon from '@mui/icons-material/RestoreFromTrash';
 import 'leaflet/dist/leaflet.css';
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
-import type { Device, LocationWithBoundary } from '../../services/api';
+import type { Device, LocationType, LocationWithBoundary } from '../../services/api';
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
-import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
-import { DEVICE_COLORS, DEVICE_SVG, getDeviceIcon } from '../../utils/deviceIcon';
+import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, LOCATION_TYPE_STYLE } from '../../config';
+import { DEVICE_COLORS, DEVICE_SVG, DEVICE_TYPE_LABELS, DEVICE_CHIP_COLORS, getDeviceIcon } from '../../utils/deviceIcon';
 
 interface DeviceMapProps {
   devices: Device[];
   locationsWithBoundaries: LocationWithBoundary[];
   loading?: boolean;
+  /** Height of the map area (not fullscreen). Defaults to a fixed 500px. */
+  height?: number | string;
   onEditDevice: (device: Device) => void;
   onDeactivateDevice: (device: Device) => void;
   onReactivateDevice: (device: Device) => void;
@@ -68,6 +70,19 @@ function FitBoundsToDevices({ devices }: { devices: Device[] }) {
   return null;
 }
 
+const DEVICE_LEGEND: Device['device_type'][] = [
+  'camera_trap',
+  'audio_recorder',
+  'refugia',
+  'moth_light_trap',
+];
+
+const LOCATION_LEGEND: { type: Exclude<LocationType, 'none'>; label: string }[] = [
+  { type: 'area', label: 'Area' },
+  { type: 'route', label: 'Route' },
+  { type: 'point', label: 'Point' },
+];
+
 function DeviceLegendIcon({ type }: { type: Device['device_type'] }) {
   return (
     <Box
@@ -88,10 +103,37 @@ function DeviceLegendIcon({ type }: { type: Device['device_type'] }) {
   );
 }
 
+/** Legend swatch mirroring how each location type is drawn on the map. */
+function LocationLegendIcon({ type }: { type: Exclude<LocationType, 'none'> }) {
+  const style = LOCATION_TYPE_STYLE[type];
+  if (type === 'route') {
+    return (
+      <Box sx={{ width: 18, height: 18, display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ width: '100%', borderTop: `3px solid ${style.stroke}`, borderRadius: 2 }} />
+      </Box>
+    );
+  }
+  return (
+    <Box
+      sx={{
+        width: type === 'point' ? 14 : 16,
+        height: type === 'point' ? 14 : 16,
+        borderRadius: type === 'point' ? '50%' : '3px',
+        border: `2px solid ${style.stroke}`,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <Box sx={{ position: 'absolute', inset: 0, bgcolor: style.fill, opacity: style.fillOpacity }} />
+    </Box>
+  );
+}
+
 export default function DeviceMap({
   devices,
   locationsWithBoundaries,
   loading,
+  height = 500,
   onEditDevice,
   onDeactivateDevice,
   onReactivateDevice,
@@ -138,29 +180,29 @@ export default function DeviceMap({
           flexWrap="wrap"
           gap={1}
         >
-          <Stack direction="row" alignItems="center" gap={2}>
+          <Stack direction="row" alignItems="center" gap={2} flexWrap="wrap" sx={{ rowGap: 0.5 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-              Device Map
+              Map
             </Typography>
 
             {/* Legend */}
-            <Stack direction="row" spacing={2}>
-              <Stack direction="row" spacing={0.75} alignItems="center">
-                <DeviceLegendIcon type="camera_trap" />
-                <Typography variant="caption" color="text.secondary">Camera Trap</Typography>
-              </Stack>
-              <Stack direction="row" spacing={0.75} alignItems="center">
-                <DeviceLegendIcon type="audio_recorder" />
-                <Typography variant="caption" color="text.secondary">Audio Recorder</Typography>
-              </Stack>
-              <Stack direction="row" spacing={0.75} alignItems="center">
-                <DeviceLegendIcon type="refugia" />
-                <Typography variant="caption" color="text.secondary">Refugia</Typography>
-              </Stack>
-              <Stack direction="row" spacing={0.75} alignItems="center">
-                <DeviceLegendIcon type="moth_light_trap" />
-                <Typography variant="caption" color="text.secondary">Moth Light Trap</Typography>
-              </Stack>
+            <Stack direction="row" alignItems="center" gap={2} flexWrap="wrap" sx={{ rowGap: 0.5 }}>
+              {DEVICE_LEGEND.map((type) => (
+                <Stack key={type} direction="row" spacing={0.75} alignItems="center">
+                  <DeviceLegendIcon type={type} />
+                  <Typography variant="caption" color="text.secondary">
+                    {DEVICE_TYPE_LABELS[type]}
+                  </Typography>
+                </Stack>
+              ))}
+              {LOCATION_LEGEND.map(({ type, label }) => (
+                <Stack key={type} direction="row" spacing={0.75} alignItems="center">
+                  <LocationLegendIcon type={type} />
+                  <Typography variant="caption" color="text.secondary">
+                    {label}
+                  </Typography>
+                </Stack>
+              ))}
             </Stack>
           </Stack>
 
@@ -239,7 +281,8 @@ export default function DeviceMap({
 
         <Box
           sx={{
-            height: 500,
+            height,
+            minHeight: 400,
             width: '100%',
             ...fullscreenMapSx,
           }}
@@ -278,28 +321,13 @@ export default function DeviceMap({
                 <Popup>
                   <Box sx={{ minWidth: 'min(180px, calc(100vw - 112px))', p: 0.5 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      {device.name || device.device_id}
+                      {device.name}
                     </Typography>
-                    {device.name && (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', display: 'block', mb: 0.5 }}>
-                        {device.device_id}
-                      </Typography>
-                    )}
                     <Stack direction="row" spacing={0.5} sx={{ mb: 1 }}>
                       <Chip
-                        label={
-                          device.device_type === 'camera_trap' ? 'Camera Trap'
-                          : device.device_type === 'refugia' ? 'Refugia'
-                          : device.device_type === 'moth_light_trap' ? 'Moth Light Trap'
-                          : 'Audio Recorder'
-                        }
+                        label={DEVICE_TYPE_LABELS[device.device_type]}
                         size="small"
-                        color={
-                          device.device_type === 'camera_trap' ? 'primary'
-                          : device.device_type === 'refugia' ? 'success'
-                          : device.device_type === 'moth_light_trap' ? 'warning'
-                          : 'secondary'
-                        }
+                        color={DEVICE_CHIP_COLORS[device.device_type]}
                         variant="outlined"
                         sx={{ height: 20, fontSize: '0.7rem' }}
                       />
