@@ -73,7 +73,7 @@ class OrganisationRead(OrganisationBase):
 
 class DeviceBase(SQLModel):
     """Base device fields"""
-    device_id: str = Field(max_length=50, description="Device serial number from audio filenames")
+    device_id: str = Field(max_length=50, description="Internal unique device identifier (auto-generated)")
     name: str = Field(max_length=255, description="Friendly name for the device (shown to end users)")
     device_type: DeviceType = Field(default=DeviceType.audio_recorder, description="Type of device")
 
@@ -118,6 +118,8 @@ class Device(DeviceBase, table=True):  # type: ignore[call-arg]
 
 class DeviceCreate(DeviceBase):
     """Model for creating a new device"""
+    # Auto-generated server-side when omitted; no longer a user-entered serial.
+    device_id: Optional[str] = Field(None, max_length=50)  # type: ignore[assignment]
     latitude: float = Field(ge=-90, le=90, description="Latitude coordinate")
     longitude: float = Field(ge=-180, le=180, description="Longitude coordinate")
     location_id: Optional[int] = Field(None, description="Associated location ID")
@@ -889,7 +891,6 @@ class AudioRecordingBase(SQLModel):
     """Base audio recording fields"""
     filename: str = Field(max_length=255, description="Original filename")
     recording_timestamp: Optional[datetime] = Field(None, description="Timestamp extracted from filename")
-    device_serial: Optional[str] = Field(None, max_length=50, description="Device serial number")
     unmatched_species: Optional[List[str]] = Field(
         default=None,
         sa_column=sa.Column(sa.JSON, nullable=True),
@@ -1001,45 +1002,6 @@ class AudioDetectionRead(AudioDetectionBase):
 
 
 # ============================================================================
-# Detections Summary Models (Aggregated by Species)
-# ============================================================================
-
-class DetectionClip(SQLModel):
-    """Single detection with audio playback info and device context"""
-    confidence: float = Field(description="Detection confidence (0-1)")
-    audio_recording_id: int = Field(description="Audio recording ID for fetching download URL")
-    start_time: time_type = Field(description="Start time within the audio file")
-    end_time: time_type = Field(description="End time within the audio file")
-    # Device info for location attribution
-    device_id: Optional[str] = Field(None, description="Device serial number")
-    device_name: Optional[str] = Field(None, description="Device friendly name")
-    device_latitude: Optional[float] = Field(None, description="Device GPS latitude")
-    device_longitude: Optional[float] = Field(None, description="Device GPS longitude")
-    location_id: Optional[int] = Field(None, description="Location ID from device")
-    location_name: Optional[str] = Field(None, description="Location name from device")
-
-
-class SpeciesDetectionSummary(SQLModel):
-    """Summary of detections for a single species"""
-    species_id: int = Field(description="Species ID")
-    species_name: Optional[str] = Field(description="Species common name")
-    species_scientific_name: Optional[str] = Field(description="Species scientific name")
-    detection_count: int = Field(description="Total number of detections for this species")
-    top_detections: List[DetectionClip] = Field(
-        default_factory=list,
-        description="Top 3 detections sorted by confidence (highest first)"
-    )
-
-
-class SurveyDetectionsSummaryResponse(SQLModel):
-    """Response for survey detections summary endpoint"""
-    species_summaries: List[SpeciesDetectionSummary] = Field(
-        default_factory=list,
-        description="List of species with their detection summaries"
-    )
-
-
-# ============================================================================
 # Audio Processing Models (Wizard - process without storage)
 # ============================================================================
 
@@ -1096,7 +1058,6 @@ class CameraTrapImageBase(SQLModel):
     """Base camera trap image fields"""
     filename: str = Field(max_length=255, description="Original filename")
     image_timestamp: Optional[datetime] = Field(None, description="Timestamp from EXIF or filename")
-    device_serial: Optional[str] = Field(None, max_length=50, description="Device serial number from filename")
     flagged_for_review: bool = Field(default=False, description="Whether image needs manual review")
     review_reason: Optional[str] = Field(None, max_length=255, description="Reason for flagging")
     unmatched_species: Optional[List[str]] = Field(
@@ -1189,72 +1150,3 @@ class CameraTrapDetectionRead(CameraTrapDetectionBase):
     """Model for reading camera trap detection"""
     id: int
     species_id: Optional[int]
-
-
-# ============================================================================
-# Camera Trap Detection Summary Models
-# ============================================================================
-
-class ImageDetectionClip(SQLModel):
-    """Single image detection with preview info and device context"""
-    confidence: float = Field(description="Detection confidence (0-1)")
-    camera_trap_image_id: int = Field(description="Image ID for fetching preview URL")
-    # Device info for location attribution
-    device_id: Optional[str] = Field(None, description="Device serial number")
-    device_name: Optional[str] = Field(None, description="Device friendly name")
-    device_latitude: Optional[float] = Field(None, description="Device GPS latitude")
-    device_longitude: Optional[float] = Field(None, description="Device GPS longitude")
-    location_id: Optional[int] = Field(None, description="Location ID from device")
-    location_name: Optional[str] = Field(None, description="Location name from device")
-
-
-class ImageSpeciesDetectionSummary(SQLModel):
-    """Summary of image detections for a single species"""
-    species_id: Optional[int] = Field(description="Species ID if matched")
-    species_name: str = Field(description="Species common name")
-    species_scientific_name: str = Field(description="Species scientific name")
-    detection_count: int = Field(description="Total number of detections for this species")
-    top_detections: List[ImageDetectionClip] = Field(
-        default_factory=list,
-        description="Top 3 detections sorted by confidence (highest first)"
-    )
-
-
-class SurveyImageDetectionsSummaryResponse(SQLModel):
-    """Response for survey image detections summary endpoint (DEPRECATED - use SurveyImageDetectionsResponse)"""
-    species_summaries: List[ImageSpeciesDetectionSummary] = Field(
-        default_factory=list,
-        description="List of species with their detection summaries"
-    )
-
-
-class ImageDetectionOption(SQLModel):
-    """A single species detection option for an image"""
-    species_id: Optional[int] = Field(None, description="Species ID if matched in database")
-    species_name: Optional[str] = Field(None, description="Species common name")
-    scientific_name: str = Field(description="Species scientific name")
-    confidence: float = Field(description="Detection confidence (0-1)")
-
-
-class ImageWithDetections(SQLModel):
-    """An image with its top species detection options"""
-    image_id: int = Field(description="Camera trap image ID")
-    filename: str = Field(description="Original filename")
-    device_id: Optional[str] = Field(None, description="Device serial number")
-    device_name: Optional[str] = Field(None, description="Device friendly name")
-    device_latitude: Optional[float] = Field(None, description="Device GPS latitude")
-    device_longitude: Optional[float] = Field(None, description="Device GPS longitude")
-    location_id: Optional[int] = Field(None, description="Location ID from device")
-    location_name: Optional[str] = Field(None, description="Location name from device")
-    detections: List[ImageDetectionOption] = Field(
-        default_factory=list,
-        description="Top 3 species detections sorted by confidence"
-    )
-
-
-class SurveyImageDetectionsResponse(SQLModel):
-    """Response for survey image detections endpoint - one row per image"""
-    images: List[ImageWithDetections] = Field(
-        default_factory=list,
-        description="List of images with their detection options"
-    )
