@@ -824,7 +824,7 @@ export const surveyorsAPI = {
 // Device Types (Audio Recorder & Camera Trap Devices)
 // ============================================================================
 
-export type DeviceType = 'audio_recorder' | 'camera_trap' | 'refugia';
+export type DeviceType = 'audio_recorder' | 'camera_trap' | 'refugia' | 'moth_light_trap';
 
 export interface Device {
   id: number;

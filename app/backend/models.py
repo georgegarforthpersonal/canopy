@@ -27,6 +27,7 @@ class DeviceType(str, PyEnum):
     audio_recorder = "audio_recorder"
     camera_trap = "camera_trap"
     refugia = "refugia"
+    moth_light_trap = "moth_light_trap"
 
 
 # ============================================================================
