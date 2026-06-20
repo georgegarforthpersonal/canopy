@@ -196,9 +196,6 @@ def add_boundaries(dry_run: bool = True) -> bool:
                     continue
 
                 coords = boundary.get("coordinates", [])
-                fill_color = boundary.get("fill_color", "#3388ff")
-                stroke_color = boundary.get("stroke_color", "#3388ff")
-                fill_opacity = boundary.get("fill_opacity", 0.2)
 
                 if not coords:
                     logger.warning(f"⚠️  Skipping '{location_name}' - no coordinates")
@@ -215,15 +212,10 @@ def add_boundaries(dry_run: bool = True) -> bool:
                     UPDATE location
                     SET
                         boundary_geometry = ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326),
-                        boundary_fill_color = %s,
-                        boundary_stroke_color = %s,
-                        boundary_fill_opacity = %s
+                        location_type = 'area'
                     WHERE id = %s
                 """, (
                     geojson,
-                    fill_color,
-                    stroke_color,
-                    fill_opacity,
                     location_info['id']
                 ))
                 updated_count += 1

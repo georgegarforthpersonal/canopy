@@ -23,10 +23,7 @@ Config file structure:
   "locations": [
     {
       "name": "Location Name",
-      "boundary_geometry": [[lng, lat], ...],  // Optional
-      "boundary_fill_color": "#3388ff",        // Optional
-      "boundary_stroke_color": "#3388ff",      // Optional
-      "boundary_fill_opacity": 0.2             // Optional
+      "boundary_geometry": [[lng, lat], ...]   // Optional
     }
   ]
 }
@@ -174,16 +171,12 @@ def setup_organisation(config_path: str, dry_run: bool = True, update: bool = Fa
                         text(f"""
                             UPDATE location
                             SET boundary_geometry = {geometry_sql},
-                                boundary_fill_color = :fill_color,
-                                boundary_stroke_color = :stroke_color,
-                                boundary_fill_opacity = :fill_opacity
+                                location_type = :location_type
                             WHERE id = :location_id
                         """),
                         {
                             "location_id": existing[0],
-                            "fill_color": loc.get('boundary_fill_color', '#3388ff'),
-                            "stroke_color": loc.get('boundary_stroke_color', '#3388ff'),
-                            "fill_opacity": loc.get('boundary_fill_opacity', 0.2)
+                            "location_type": 'area' if boundary_geometry else 'none',
                         }
                     )
                     logger.info("    Updated")
@@ -200,20 +193,16 @@ def setup_organisation(config_path: str, dry_run: bool = True, update: bool = Fa
                     conn.execute(
                         text(f"""
                             INSERT INTO location (
-                                name, organisation_id, boundary_geometry,
-                                boundary_fill_color, boundary_stroke_color, boundary_fill_opacity
+                                name, organisation_id, boundary_geometry, location_type
                             )
                             VALUES (
-                                :name, :org_id, {geometry_sql},
-                                :fill_color, :stroke_color, :fill_opacity
+                                :name, :org_id, {geometry_sql}, :location_type
                             )
                         """),
                         {
                             "name": loc['name'],
                             "org_id": org_id,
-                            "fill_color": loc.get('boundary_fill_color', '#3388ff'),
-                            "stroke_color": loc.get('boundary_stroke_color', '#3388ff'),
-                            "fill_opacity": loc.get('boundary_fill_opacity', 0.2)
+                            "location_type": 'area' if boundary_geometry else 'none',
                         }
                     )
                     logger.info("    Created")

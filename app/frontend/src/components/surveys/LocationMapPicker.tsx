@@ -10,7 +10,7 @@ import LayersIcon from '@mui/icons-material/Layers';
 import 'leaflet/dist/leaflet.css';
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
-import { DEFAULT_MAP_CENTER } from '../../config';
+import { DEFAULT_MAP_CENTER, LOCATION_TYPE_STYLE } from '../../config';
 import FieldBoundaryOverlay from './FieldBoundaryOverlay';
 
 // Fix for default marker icon in React Leaflet
@@ -219,10 +219,10 @@ export default function LocationMapPicker({
                     ([lng, lat]) => [lat, lng] as [number, number]
                   )}
                   pathOptions={{
-                    fillColor: locationBoundary.boundary_fill_color || '#3388ff',
-                    fillOpacity: locationBoundary.boundary_fill_opacity || 0.2,
-                    color: locationBoundary.boundary_stroke_color || '#3388ff',
-                    weight: 2,
+                    fillColor: LOCATION_TYPE_STYLE.area.fill,
+                    fillOpacity: LOCATION_TYPE_STYLE.area.fillOpacity,
+                    color: LOCATION_TYPE_STYLE.area.stroke,
+                    weight: LOCATION_TYPE_STYLE.area.weight,
                   }}
                   interactive={false}
                 />
