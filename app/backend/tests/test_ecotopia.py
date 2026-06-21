@@ -125,14 +125,59 @@ class TestGetDeviceGps:
             {"timestamp": "2026-06-02T12:00:22Z", "latitude": 51.2278, "longitude": -2.3233},
         ]
         monkeypatch.setattr(EcotopiaClient, "get_gps_history", lambda self, device_id, days=7: records)
+        monkeypatch.setattr(EcotopiaClient, "get_location_history", lambda self, device_id, days=7: [])
 
         response = cannwood_client.get("/api/ecotopia/devices/abc123/gps?days=7")
 
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2
-        assert data[0] == {"timestamp": "2026-05-27T00:00:31Z", "latitude": 52.5834, "longitude": 1.0607}
+        assert data[0] == {
+            "timestamp": "2026-05-27T00:00:31Z",
+            "latitude": 52.5834,
+            "longitude": 1.0607,
+            "source": "gnss",
+        }
         assert data[1]["latitude"] == 51.2278
+
+    def test_merges_satellite_stream_into_track(self, cannwood_client: TestClient, monkeypatch) -> None:
+        """UBILINK Tianqi positions are merged in (epoch-ms -> ISO, tagged
+        'satellite'), invalid ones dropped, a GNSS fix wins a timestamp tie, and
+        the result is oldest-first."""
+        monkeypatch.setattr(settings, "ecotopia_username", "user")
+        monkeypatch.setattr(settings, "ecotopia_password", "pass")
+        gnss = [
+            {"timestamp": "2026-06-02T16:00:46Z", "latitude": 51.2277, "longitude": -2.3232},
+        ]
+        # epoch-ms: 2026-06-02T16:00:46Z = 1780416046000 (collides with the GNSS fix);
+        # 2026-06-21T19:00:40Z = 1782068440000; plus a sentinel that must be dropped.
+        locations = [
+            {"timestamp": 1782068440000, "latitude": 51.1253, "longitude": -2.3819},
+            {"timestamp": 1780416046000, "latitude": 99.9, "longitude": 99.9},  # same ts, but GNSS wins anyway
+            {"timestamp": 1780000000000, "latitude": -99999.9, "longitude": -99999.9},  # sentinel -> dropped
+        ]
+        monkeypatch.setattr(EcotopiaClient, "get_gps_history", lambda self, device_id, days=7: gnss)
+        monkeypatch.setattr(
+            EcotopiaClient, "get_location_history", lambda self, device_id, days=7: locations
+        )
+
+        response = cannwood_client.get("/api/ecotopia/devices/abc123/gps?days=40")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2  # one merged (deduped) + one satellite; sentinel dropped
+        assert data[0] == {
+            "timestamp": "2026-06-02T16:00:46Z",
+            "latitude": 51.2277,
+            "longitude": -2.3232,
+            "source": "gnss",  # GNSS wins the timestamp tie over the satellite point
+        }
+        assert data[1] == {
+            "timestamp": "2026-06-21T19:00:40Z",
+            "latitude": 51.1253,
+            "longitude": -2.3819,
+            "source": "satellite",
+        }
 
     def test_503_when_credentials_missing(self, cannwood_client: TestClient, monkeypatch) -> None:
         monkeypatch.setattr(settings, "ecotopia_username", "")

@@ -1,7 +1,8 @@
 """Ecotopia / Druid tracker endpoints (gated to the Cannwood org)."""
 
+from datetime import datetime, timezone
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -47,6 +48,9 @@ class EcotopiaGpsFix(BaseModel):
     timestamp: str
     latitude: float
     longitude: float
+    # Delivery stream: "gnss" = full-detail GNSS log (v2/gps), "satellite" =
+    # Tianqi satellite-relayed UBILINK position (lon/lat only, lower confidence).
+    source: str = "gnss"
 
 
 def _to_device(d: Dict[str, Any]) -> EcotopiaDevice:
@@ -91,6 +95,44 @@ def _valid_fix(lon: Any, lat: Any) -> bool:
     )
 
 
+def _iso(ts: Any) -> str:
+    """Normalise a timestamp to ISO-UTC. The GNSS log already uses ISO strings;
+    UBILINK location records use epoch milliseconds."""
+    if isinstance(ts, (int, float)) and not isinstance(ts, bool):
+        return datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return str(ts)
+
+
+def _merge_track(
+    gnss: List[Dict[str, Any]], locations: List[Dict[str, Any]]
+) -> List[EcotopiaGpsFix]:
+    """Merge the GNSS log and the Tianqi satellite stream into one track, oldest
+    first. Keyed by timestamp so a GNSS fix wins over a satellite position at the
+    same instant (it carries quality metadata); both formats sort lexically as
+    ISO-UTC strings."""
+    by_ts: Dict[str, EcotopiaGpsFix] = {}
+    for record, source in ((r, "satellite") for r in locations):
+        if _valid_fix(record.get("longitude"), record.get("latitude")):
+            ts = _iso(record["timestamp"])
+            by_ts[ts] = EcotopiaGpsFix(
+                timestamp=ts, latitude=record["latitude"], longitude=record["longitude"], source=source
+            )
+    for record in gnss:  # second, so GNSS overrides a satellite point at the same ts
+        if _valid_fix(record.get("longitude"), record.get("latitude")):
+            ts = _iso(record["timestamp"])
+            by_ts[ts] = EcotopiaGpsFix(
+                timestamp=ts, latitude=record["latitude"], longitude=record["longitude"], source="gnss"
+            )
+    return sorted(by_ts.values(), key=lambda f: f.timestamp)
+
+
+def _fetch_track(
+    client: EcotopiaClient, device_id: str, days: int
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Both position streams for a device (run together off the event loop)."""
+    return client.get_gps_history(device_id, days), client.get_location_history(device_id, days)
+
+
 @router.get("/devices", response_model=List[EcotopiaDevice])
 async def get_devices() -> List[EcotopiaDevice]:
     """List the account's tracker devices from the Ecotopia API."""
@@ -105,15 +147,17 @@ async def get_devices() -> List[EcotopiaDevice]:
 
 @router.get("/devices/{device_id}/gps", response_model=List[EcotopiaGpsFix])
 async def get_device_gps(device_id: str, days: int = 7) -> List[EcotopiaGpsFix]:
-    """Return a device's successful GNSS fixes over the last `days`, oldest first."""
+    """Return a device's track over the last `days`, oldest first.
+
+    Merges the two upstream position streams so the track stays current even when
+    a bird is out of the GNSS log's uplink range: the v2 GNSS log (high-quality
+    satellite fixes, source="gnss") and the Tianqi satellite-relayed UBILINK
+    positions (source="satellite"), which are often the only recent points.
+    """
     client = _client()
     try:
-        records = await run_in_threadpool(client.get_gps_history, device_id, days)
+        gnss, locations = await run_in_threadpool(_fetch_track, client, device_id, days)
     except Exception as exc:  # noqa: BLE001 - surface upstream failures as 502
         raise HTTPException(status_code=502, detail=f"Ecotopia API error: {exc}") from exc
 
-    return [
-        EcotopiaGpsFix(timestamp=r["timestamp"], latitude=r["latitude"], longitude=r["longitude"])
-        for r in records
-        if _valid_fix(r.get("longitude"), r.get("latitude"))
-    ]
+    return _merge_track(gnss, locations)

@@ -47,19 +47,52 @@ class EcotopiaClient:
         return devices
 
     def get_gps_history(self, device_id: str, days: int = 7) -> List[Dict[str, Any]]:
-        """GNSS records from the last `days`, oldest first (newest-first, 20/page upstream)."""
+        """GNSS records from the last `days`, oldest first (newest-first, 20/page upstream).
+
+        NB: this endpoint currently ignores the `page` param for some devices and
+        just re-serves the latest 20 rows, so we stop once a page stops advancing
+        (oldest timestamp unchanged) rather than blindly fetching 100 duplicates.
+        """
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
         records: List[Dict[str, Any]] = []
+        prev_oldest = None
         for page in range(1, 101):
             batch = self._get_v2(f"gps/device/{device_id}/page/", {"page": page})
             if not batch:
                 break
             records.extend(batch)
-            if str(batch[-1].get("timestamp", ""))[:10] < cutoff:
+            oldest = str(batch[-1].get("timestamp", ""))
+            if oldest[:10] < cutoff or oldest == prev_oldest:  # past the window, or page didn't advance
                 break
+            prev_oldest = oldest
         recent = [r for r in records if str(r.get("timestamp", ""))[:10] >= cutoff]
         recent.sort(key=lambda r: r.get("timestamp", ""))
         return recent
+
+    def get_location_history(self, device_id: str, days: int = 7) -> List[Dict[str, Any]]:
+        """Tianqi satellite-relayed positions (ubilink_x1) from the last `days`.
+
+        These reach the platform over the Tianqi LEO satellite-IoT link and carry
+        only lon/lat (timestamps are epoch milliseconds; no GNSS quality fields).
+        They are NOT in the v2/gps log and, for a bird out of the GNSS log's
+        uplink range, are often the only current positions. IDs come newest-first,
+        fetched in two steps (ids, then detail) like device/getDetailByIDs.
+        """
+        cutoff_ms = (datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000
+        ids = self._post(
+            "ubilink_x1/getLocationIDs",
+            {"device_id": device_id, "page": {"limit": 5000, "sort": ["-timestamp"]}},
+        ).get("ids", [])
+        records: List[Dict[str, Any]] = []
+        for start in range(0, len(ids), 200):
+            batch = self._post(
+                "ubilink_x1/getLocationDetailByIDs", {"ids": ids[start : start + 200]}
+            ).get("locations", [])
+            records.extend(batch)
+            # IDs are newest-first, so once a batch dips before the cutoff, stop.
+            if batch and min(r.get("timestamp", 0) for r in batch) < cutoff_ms:
+                break
+        return [r for r in records if r.get("timestamp", 0) >= cutoff_ms]
 
     def _get_v2(self, path: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
         for attempt in range(2):
