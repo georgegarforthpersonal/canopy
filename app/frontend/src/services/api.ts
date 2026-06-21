@@ -947,11 +947,14 @@ export interface EcotopiaDevice {
   track_colour: string | null;
 }
 
-/** A single successful GNSS fix for a tracker device. */
+/** A single position in a tracker device's track. */
 export interface EcotopiaGpsFix {
   timestamp: string;
   latitude: number;
   longitude: number;
+  // Delivery stream: "gnss" = full-detail GNSS log; "satellite" = Tianqi
+  // satellite-relayed position (lon/lat only, lower positional confidence).
+  source: 'gnss' | 'satellite';
 }
 
 export const ecotopiaAPI = {
@@ -963,7 +966,8 @@ export const ecotopiaAPI = {
   },
 
   /**
-   * Get a device's successful GNSS fixes over the last `days` (oldest first).
+   * Get a device's track over the last `days` (oldest first) — the GNSS log
+   * merged with the Tianqi satellite-relayed positions.
    */
   getGpsHistory: (deviceId: string, days: number = 7): Promise<EcotopiaGpsFix[]> => {
     return fetchAPI(`/ecotopia/devices/${encodeURIComponent(deviceId)}/gps?days=${days}`);
