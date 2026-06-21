@@ -11,6 +11,7 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Divider,
+  Button,
 } from '@mui/material';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import { DivIcon, LatLngBounds, LatLng } from 'leaflet';
@@ -123,7 +124,15 @@ function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
   return null;
 }
 
-function DeviceSummary({ device }: { device: EcotopiaDevice }) {
+function DeviceSummary({
+  device,
+  selected,
+  onToggleTrack,
+}: {
+  device: EcotopiaDevice;
+  selected: boolean;
+  onToggleTrack: () => void;
+}) {
   const bird = birdLabel(device);
   return (
     <Box sx={{ mb: 1 }}>
@@ -146,16 +155,19 @@ function DeviceSummary({ device }: { device: EcotopiaDevice }) {
           Battery: {device.battery_voltage} V
         </Typography>
       )}
+      <Button size="small" onClick={onToggleTrack} sx={{ mt: 0.5, textTransform: 'none', px: 0.5, minWidth: 0 }}>
+        {selected ? 'Hide track' : 'View track'}
+      </Button>
     </Box>
   );
 }
 
 /** Cannwood-only GPS Tracking tab: tracked tags at their latest GNSS location, with
- *  co-located tags clustered and a historical polyline view per tracker. */
+ *  co-located tags clustered. Clicking a single tracker's pin (or a tracker in a
+ *  cluster popup) overlays that one tracker's historical track. */
 export function DeviceTrackerMap() {
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
   const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
-  const [viewMode, setViewMode] = useState<'current' | 'historical'>('current');
   const [trackDays, setTrackDays] = useState(7);
 
   const [zoom, setZoom] = useState<number>(DEFAULT_MAP_ZOOM);
@@ -164,9 +176,12 @@ export function DeviceTrackerMap() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [allTracks, setAllTracks] = useState<Map<string, EcotopiaGpsFix[]>>(new Map());
-  const [allTracksLoading, setAllTracksLoading] = useState(false);
-  const [allTracksError, setAllTracksError] = useState<string | null>(null);
+  // Historical track of the one tracker the user clicked on. The map always shows
+  // current positions; clicking a pin overlays that single tracker's history.
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [track, setTrack] = useState<EcotopiaGpsFix[]>([]);
+  const [trackLoading, setTrackLoading] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,30 +198,35 @@ export function DeviceTrackerMap() {
   }, []);
 
   useEffect(() => {
-    if (viewMode !== 'historical' || devices.length === 0) {
-      setAllTracks(new Map());
+    if (!selectedDeviceId) {
+      setTrack([]);
+      setTrackError(null);
       return;
     }
-    const locatedDevices = devices.filter((d) => d.latitude != null && d.longitude != null);
-    if (locatedDevices.length === 0) return;
     let cancelled = false;
-    setAllTracksLoading(true);
-    setAllTracksError(null);
-    Promise.all(
-      locatedDevices.map((d) =>
-        ecotopiaAPI.getGpsHistory(d.id, trackDays).then((fixes) => [d.id, fixes] as [string, EcotopiaGpsFix[]]),
-      ),
-    )
-      .then((results) => !cancelled && setAllTracks(new Map(results)))
-      .catch((err) => !cancelled && setAllTracksError(err instanceof Error ? err.message : 'Failed to load tracks'))
-      .finally(() => !cancelled && setAllTracksLoading(false));
+    // Drop the previously-selected tracker's path immediately so we never render
+    // a new tracker's pin/colour along the old tracker's track while the new
+    // history loads.
+    setTrack([]);
+    setTrackLoading(true);
+    setTrackError(null);
+    ecotopiaAPI
+      .getGpsHistory(selectedDeviceId, trackDays)
+      .then((fixes) => !cancelled && setTrack(fixes))
+      .catch((err) => !cancelled && setTrackError(err instanceof Error ? err.message : 'Failed to load track'))
+      .finally(() => !cancelled && setTrackLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [viewMode, trackDays, devices]);
+  }, [selectedDeviceId, trackDays]);
 
   const groups = useMemo(() => groupByLocation(devices, zoom), [devices, zoom]);
   const locatedCount = useMemo(() => devices.filter((d) => d.latitude != null && d.longitude != null).length, [devices]);
+
+  const selectedDevice = useMemo(
+    () => devices.find((d) => d.id === selectedDeviceId) ?? null,
+    [devices, selectedDeviceId],
+  );
 
   // Each tracker's colour is defined server-side on the bird mapping, so it stays
   // stable across renders and consistent with any other view that uses it.
@@ -216,15 +236,15 @@ export function DeviceTrackerMap() {
   );
 
   const fitPoints = useMemo<[number, number][]>(() => {
-    if (viewMode === 'historical' && allTracks.size > 0) {
-      return Array.from(allTracks.values()).flatMap((fixes) => fixes.map((f) => [f.latitude, f.longitude] as [number, number]));
+    if (selectedDeviceId && track.length > 0) {
+      return track.map((f) => [f.latitude, f.longitude] as [number, number]);
     }
     // Use raw device positions, not groups: groups depends on zoom, so using it
     // here would cause FitBounds to re-fire on every zoom change and fight the user.
     return devices
       .filter((d) => d.latitude != null && d.longitude != null)
       .map((d) => [d.latitude!, d.longitude!] as [number, number]);
-  }, [viewMode, allTracks, devices]);
+  }, [selectedDeviceId, track, devices]);
 
   if (loading) {
     return (
@@ -251,14 +271,10 @@ export function DeviceTrackerMap() {
               Tracker Locations
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {locatedCount} tag{locatedCount === 1 ? '' : 's'} with a recent fix
+              {locatedCount} tag{locatedCount === 1 ? '' : 's'} with a recent fix · tap a pin for its track
             </Typography>
           </Stack>
           <Stack direction="row" alignItems="center" gap={1}>
-            <ToggleButtonGroup value={viewMode} exclusive onChange={(_, v) => v && setViewMode(v)} size="small" sx={{ height: '32px' }}>
-              <ToggleButton value="current">Current</ToggleButton>
-              <ToggleButton value="historical">Historical</ToggleButton>
-            </ToggleButtonGroup>
             <ToggleButtonGroup value={mapType} exclusive onChange={(_, v) => v && setMapType(v)} size="small" sx={{ height: '32px' }}>
               <ToggleButton value="street" aria-label="street map">
                 <Tooltip title="Street Map">
@@ -274,21 +290,26 @@ export function DeviceTrackerMap() {
           </Stack>
         </Stack>
 
-        {viewMode === 'historical' && (
+        {selectedDevice && (
           <>
             <Divider sx={{ my: 1.5 }} />
             <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
               <Typography variant="body2">
-                {allTracksLoading
-                  ? 'Loading tracks…'
-                  : allTracksError
-                    ? `Error: ${allTracksError}`
-                    : 'Historical GPS tracks per device'}
+                {trackLoading
+                  ? 'Loading track…'
+                  : trackError
+                    ? `Error: ${trackError}`
+                    : `Track for ${tagName(selectedDevice)} (last ${trackDays} days)`}
               </Typography>
-              <ToggleButtonGroup value={trackDays} exclusive onChange={(_, v) => v && setTrackDays(v)} size="small" sx={{ height: '28px' }}>
-                <ToggleButton value={7}>7d</ToggleButton>
-                <ToggleButton value={30}>30d</ToggleButton>
-              </ToggleButtonGroup>
+              <Stack direction="row" alignItems="center" gap={1}>
+                <ToggleButtonGroup value={trackDays} exclusive onChange={(_, v) => v && setTrackDays(v)} size="small" sx={{ height: '28px' }}>
+                  <ToggleButton value={7}>7d</ToggleButton>
+                  <ToggleButton value={30}>30d</ToggleButton>
+                </ToggleButtonGroup>
+                <Button size="small" onClick={() => setSelectedDeviceId(null)} sx={{ textTransform: 'none' }}>
+                  Clear
+                </Button>
+              </Stack>
             </Stack>
           </>
         )}
@@ -323,35 +344,33 @@ export function DeviceTrackerMap() {
               />
             )}
 
-            {viewMode === 'historical' &&
-              Array.from(allTracks.entries()).map(([deviceId, fixes]) => {
-                const color = deviceColors.get(deviceId) ?? brandColors.main;
-                const device = devices.find((d) => d.id === deviceId);
-                let points: [number, number][] = fixes.map((f) => [f.latitude, f.longitude]);
-                // The paginated GPS history endpoint can lag behind the device's
-                // status_gps.  Extend the polyline to the device's current reported
-                // position so the track visually terminates at the badge pin.
-                if (device?.latitude != null && device?.longitude != null) {
-                  const last = points[points.length - 1];
-                  if (!last || Math.abs(last[0] - device.latitude) > 1e-5 || Math.abs(last[1] - device.longitude) > 1e-5) {
-                    points = [...points, [device.latitude, device.longitude]];
-                  }
+            {selectedDevice && (() => {
+              const color = deviceColors.get(selectedDevice.id) ?? brandColors.main;
+              let points: [number, number][] = track.map((f) => [f.latitude, f.longitude]);
+              // The paginated GPS history endpoint can lag behind the device's
+              // status_gps.  Extend the polyline to the device's current reported
+              // position so the track visually terminates at the badge pin.
+              if (selectedDevice.latitude != null && selectedDevice.longitude != null) {
+                const last = points[points.length - 1];
+                if (!last || Math.abs(last[0] - selectedDevice.latitude) > 1e-5 || Math.abs(last[1] - selectedDevice.longitude) > 1e-5) {
+                  points = [...points, [selectedDevice.latitude, selectedDevice.longitude]];
                 }
-                if (points.length === 0) return null;
-                const lastPoint = points[points.length - 1];
-                return (
-                  <Fragment key={deviceId}>
-                    {points.length > 1 && (
-                      <Polyline positions={points} pathOptions={{ color, weight: 3, opacity: 0.85 }} />
-                    )}
-                    <CircleMarker
-                      center={lastPoint}
-                      radius={5}
-                      pathOptions={{ color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 1 }}
-                    />
-                  </Fragment>
-                );
-              })}
+              }
+              if (points.length === 0) return null;
+              const lastPoint = points[points.length - 1];
+              return (
+                <Fragment>
+                  {points.length > 1 && (
+                    <Polyline positions={points} pathOptions={{ color, weight: 3, opacity: 0.85 }} />
+                  )}
+                  <CircleMarker
+                    center={lastPoint}
+                    radius={5}
+                    pathOptions={{ color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 1 }}
+                  />
+                </Fragment>
+              );
+            })()}
 
             {groups.map((group) => {
               const single = group.devices.length === 1;
@@ -359,8 +378,13 @@ export function DeviceTrackerMap() {
                 ? (deviceColors.get(group.devices[0].id) ?? brandColors.main)
                 : brandColors.main;
               const icon = single ? badgeIcon(tagName(group.devices[0]), pinColor, 11) : clusterIcon(group.devices.length);
+              // A single-tracker pin selects that tracker on click; clusters open a
+              // popup so the user can pick which co-located tracker's track to see.
+              const eventHandlers = single
+                ? { click: () => setSelectedDeviceId((cur) => (cur === group.devices[0].id ? null : group.devices[0].id)) }
+                : undefined;
               return (
-                <Marker key={group.key} position={[group.latitude, group.longitude]} icon={icon}>
+                <Marker key={group.key} position={[group.latitude, group.longitude]} icon={icon} eventHandlers={eventHandlers}>
                   <Popup>
                     <Box sx={{ minWidth: 'min(190px, calc(100vw - 112px))', maxHeight: 240, overflowY: 'auto', p: 0.5 }}>
                       {!single && (
@@ -369,7 +393,12 @@ export function DeviceTrackerMap() {
                         </Typography>
                       )}
                       {group.devices.map((d) => (
-                        <DeviceSummary key={d.id} device={d} />
+                        <DeviceSummary
+                          key={d.id}
+                          device={d}
+                          selected={d.id === selectedDeviceId}
+                          onToggleTrack={() => setSelectedDeviceId((cur) => (cur === d.id ? null : d.id))}
+                        />
                       ))}
                     </Box>
                   </Popup>
