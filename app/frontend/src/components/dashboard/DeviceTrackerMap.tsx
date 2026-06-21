@@ -204,6 +204,10 @@ export function DeviceTrackerMap() {
       return;
     }
     let cancelled = false;
+    // Drop the previously-selected tracker's path immediately so we never render
+    // a new tracker's pin/colour along the old tracker's track while the new
+    // history loads.
+    setTrack([]);
     setTrackLoading(true);
     setTrackError(null);
     ecotopiaAPI
