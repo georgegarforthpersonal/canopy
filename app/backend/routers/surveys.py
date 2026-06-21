@@ -306,6 +306,7 @@ async def get_survey(
         "conditions_met": survey.conditions_met,
         "notes": survey.notes,
         "location_id": survey.location_id,
+        "location_name": survey.location.name if survey.location else None,
         "device_id": survey.device_id,
         "surveyor_ids": surveyor_ids_list,
         "survey_type_id": survey.survey_type_id

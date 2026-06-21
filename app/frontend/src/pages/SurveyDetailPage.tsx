@@ -222,15 +222,6 @@ export function SurveyDetailPage() {
   // ============================================================================
 
   /**
-   * Get location name from ID
-   */
-  const getLocationName = (id: number | null): string => {
-    if (id === null) return 'Unknown';
-    const location = locations.find(l => l.id === id);
-    return location?.name || 'Unknown';
-  };
-
-  /**
    * Get species display name from ID
    */
   const getSpeciesName = (id: number): string => {
@@ -869,7 +860,7 @@ export function SurveyDetailPage() {
                         Location
                       </Typography>
                     </Stack>
-                    <Typography variant="body1">{getLocationName(survey.location_id)}</Typography>
+                    <Typography variant="body1">{survey.location_name ?? 'Unknown'}</Typography>
                   </Box>
                 </>
               )}
@@ -1278,7 +1269,7 @@ export function SurveyDetailPage() {
           <DialogTitle>Delete Survey?</DialogTitle>
           <DialogContent>
             <DialogContentText>
-              Are you sure you want to delete this survey from {formatDate(survey.date)} at {getLocationName(survey.location_id)}?
+              Are you sure you want to delete this survey from {formatDate(survey.date)} at {survey.location_name ?? 'Unknown'}?
               <br /><br />
               This action cannot be undone. All sightings associated with this survey will also be deleted.
             </DialogContentText>
