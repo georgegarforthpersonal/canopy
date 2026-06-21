@@ -597,6 +597,7 @@ class SurveyRead(SurveyBase):
     """Model for reading a survey (includes ID and surveyors)"""
     id: int
     surveyor_ids: List[int] = Field(default_factory=list, description="List of surveyor IDs")
+    location_name: Optional[str] = Field(None, description="Name of the survey's location, regardless of current survey-type config")
 
 
 class SpeciesTypeCount(SQLModel):

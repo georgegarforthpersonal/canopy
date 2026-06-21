@@ -335,6 +335,7 @@ export interface Survey {
   conditions_met: boolean | null;
   notes: string | null;
   location_id: number | null;
+  location_name: string | null;
   device_id: number | null;
   surveyor_ids: number[];
   sightings_count: number; // Total count across all species
