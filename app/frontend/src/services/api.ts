@@ -40,8 +40,20 @@ const getApiBaseUrl = () => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:8000/api';
   }
-  // Otherwise (e.g., accessed via 192.168.x.x from mobile), use the same host
-  return `http://${window.location.hostname}:8000/api`;
+
+  // For LAN dev (accessed from mobile on a non-standard port, e.g. :5173), the
+  // backend Uvicorn process runs separately on port 8000 of the same host.
+  const port = window.location.port;
+  if (port && port !== '80' && port !== '443') {
+    return `http://${window.location.hostname}:8000/api`;
+  }
+
+  // Production deployment (standard HTTP/HTTPS port): backend is served at /api
+  // on the same origin.  Using window.location.origin preserves the correct
+  // scheme and host, avoiding the wrong-port / HTTP-on-HTTPS failure that
+  // occurs when Railway serves the app over HTTPS on port 443 but the old
+  // fallback hardcoded http:// and port 8000.
+  return `${window.location.origin}/api`;
 };
 
 /**
