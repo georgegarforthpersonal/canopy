@@ -5,6 +5,7 @@ import {
   Typography,
   Stack,
   CircularProgress,
+  LinearProgress,
   Alert,
   Tooltip,
   IconButton,
@@ -56,7 +57,7 @@ function birdLabel(device: EcotopiaDevice): string | null {
   if (!device.sex && !device.ring_number) return null;
   const symbol = device.sex === 'female' ? '♀' : device.sex === 'male' ? '♂' : '';
   const ring = device.ring_number
-    ? `ring ${device.ring_number}${device.ring_colour ? ` (${device.ring_colour})` : ''}`
+    ? `${device.ring_number}${device.ring_colour ? ` (${device.ring_colour})` : ''}`
     : '';
   return [symbol, ring].filter(Boolean).join(' ');
 }
@@ -185,11 +186,13 @@ function TrackerTable({
   devices,
   colors,
   selectedId,
+  loading,
   onToggle,
 }: {
   devices: EcotopiaDevice[];
   colors: Map<string, string>;
   selectedId: string | null;
+  loading: boolean;
   onToggle: (id: string) => void;
 }) {
   return (
@@ -199,8 +202,8 @@ function TrackerTable({
           <TableRow>
             <TableCell>Tag</TableCell>
             <TableCell>Bird</TableCell>
-            <TableCell>Last fix</TableCell>
-            <TableCell>Battery</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>Last fix</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Battery</TableCell>
             <TableCell align="right">Track</TableCell>
           </TableRow>
         </TableHead>
@@ -223,19 +226,27 @@ function TrackerTable({
                   </Stack>
                 </TableCell>
                 <TableCell>{birdLabel(d) ?? '—'}</TableCell>
-                <TableCell>{d.gps_timestamp ? dayjs(d.gps_timestamp).format('MMM DD, YYYY HH:mm') : '—'}</TableCell>
-                <TableCell>{d.battery_voltage != null ? `${d.battery_voltage} V` : '—'}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                  {d.gps_timestamp ? dayjs(d.gps_timestamp).format('D MMM HH:mm') : '—'}
+                </TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                  {d.battery_voltage != null ? `${d.battery_voltage.toFixed(1)} V` : '—'}
+                </TableCell>
                 <TableCell align="right">
-                  <Button
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggle(d.id);
-                    }}
-                    sx={{ textTransform: 'none', minWidth: 64 }}
-                  >
-                    {isSel ? 'Hide' : 'Show'}
-                  </Button>
+                  {isSel && loading ? (
+                    <CircularProgress size={18} sx={{ display: 'block', ml: 'auto', mr: 1 }} />
+                  ) : (
+                    <Button
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggle(d.id);
+                      }}
+                      sx={{ textTransform: 'none', minWidth: 64 }}
+                    >
+                      {isSel ? 'Hide' : 'Show'}
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             );
@@ -264,6 +275,7 @@ export function DeviceTrackerMap() {
   // current positions; selecting a tracker overlays that single tracker's history.
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [track, setTrack] = useState<EcotopiaGpsFix[]>([]);
+  const [trackLoading, setTrackLoading] = useState(false);
 
   const trackDays = useMemo(() => Math.max(1, dayjs().diff(dayjs(TRACK_START), 'day')), []);
 
@@ -289,10 +301,12 @@ export function DeviceTrackerMap() {
     setTrack([]);
     if (!selectedDeviceId) return;
     let cancelled = false;
+    setTrackLoading(true);
     ecotopiaAPI
       .getGpsHistory(selectedDeviceId, trackDays)
       .then((fixes) => !cancelled && setTrack(fixes))
-      .catch(() => !cancelled && setTrack([]));
+      .catch(() => !cancelled && setTrack([]))
+      .finally(() => !cancelled && setTrackLoading(false));
     return () => {
       cancelled = true;
     };
@@ -347,6 +361,9 @@ export function DeviceTrackerMap() {
         className="fullscreen-map-container"
         sx={{ overflow: 'hidden', border: '1px solid', borderColor: 'divider', position: 'relative', ...fullscreenContainerSx }}
       >
+        {trackLoading && (
+          <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1100, height: 3 }} />
+        )}
         <Stack direction="row" spacing={0.5} sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000 }}>
           <ToggleButtonGroup
             value={mapType}
@@ -431,7 +448,7 @@ export function DeviceTrackerMap() {
         </Box>
       </Paper>
 
-      <TrackerTable devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} onToggle={toggleSelect} />
+      <TrackerTable devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} loading={trackLoading} onToggle={toggleSelect} />
     </Box>
   );
 }
