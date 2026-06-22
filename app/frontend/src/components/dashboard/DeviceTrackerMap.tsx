@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, Fragment } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import {
   Box,
   Paper,
@@ -12,9 +12,15 @@ import {
   ToggleButton,
   Divider,
   Button,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
 } from '@mui/material';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
-import { DivIcon, LatLngBounds, LatLng } from 'leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap } from 'react-leaflet';
+import { DivIcon, LatLngBounds, LatLng, Map as LeafletMap } from 'leaflet';
 import MapIcon from '@mui/icons-material/Map';
 import SatelliteIcon from '@mui/icons-material/Satellite';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
@@ -27,6 +33,11 @@ import type { EcotopiaDevice, EcotopiaGpsFix } from '../../services/api';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
 import { brandColors } from '../../theme';
+
+// Tracks always start from the programme start, not a rolling window. The GPS
+// endpoint takes a `days` count, so we convert this date to days at request time.
+const TRACK_START = '2026-06-02';
+const TRACK_START_LABEL = 'Jun 2, 2026';
 
 // Cluster radius in screen pixels (~50 m at zoom 16) — pins closer than this
 // at the current zoom are merged into a single group marker.
@@ -72,11 +83,23 @@ function groupByLocation(devices: EcotopiaDevice[], zoom: number): DeviceGroup[]
   return Array.from(groups.values());
 }
 
-// Circular pin for a single device.
-function badgeIcon(text: string, bg: string, fontSize: number): DivIcon {
-  const size = 34;
+// Circular pin for a single device. When another tracker is selected the
+// unselected pins are dimmed + desaturated (focus + context); the selected pin
+// is emphasised with a larger size and a white ring.
+function badgeIcon(
+  text: string,
+  bg: string,
+  opts: { dimmed?: boolean; emphasized?: boolean } = {},
+): DivIcon {
+  const { dimmed = false, emphasized = false } = opts;
+  const size = emphasized ? 40 : 34;
+  const fontSize = emphasized ? 13 : 11;
+  const shadow = emphasized
+    ? 'box-shadow:0 0 0 3px rgba(255,255,255,0.95),0 2px 6px rgba(0,0,0,0.4);'
+    : 'box-shadow:0 1px 4px rgba(0,0,0,0.35);';
+  const dim = dimmed ? 'filter:grayscale(100%);opacity:0.4;' : '';
   return new DivIcon({
-    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:${fontSize}px;font-weight:700;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,0.35);">${text}</div>`,
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:${fontSize}px;font-weight:700;line-height:1;${shadow}${dim}">${text}</div>`,
     className: '',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
@@ -84,10 +107,11 @@ function badgeIcon(text: string, bg: string, fontSize: number): DivIcon {
 }
 
 // Pill-shaped icon for co-located groups — visually distinct from individual circular pins.
-function clusterIcon(count: number): DivIcon {
+function clusterIcon(count: number, dimmed = false): DivIcon {
   const w = 42, h = 28;
+  const dim = dimmed ? 'filter:grayscale(100%);opacity:0.4;' : '';
   return new DivIcon({
-    html: `<div style="width:${w}px;height:${h}px;border-radius:6px;background:${brandColors.main};border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,0.35);">${count}</div>`,
+    html: `<div style="width:${w}px;height:${h}px;border-radius:6px;background:${brandColors.main};border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,0.35);${dim}">${count}</div>`,
     className: '',
     iconSize: [w, h],
     iconAnchor: [w / 2, h / 2],
@@ -124,64 +148,30 @@ function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
   return null;
 }
 
-function DeviceSummary({
-  device,
-  selected,
-  onToggleTrack,
-}: {
-  device: EcotopiaDevice;
-  selected: boolean;
-  onToggleTrack: () => void;
-}) {
-  const bird = birdLabel(device);
-  return (
-    <Box sx={{ mb: 1 }}>
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-        {tagName(device)}
-        {device.description ? ` — ${device.description}` : ''}
-      </Typography>
-      {bird && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          {bird}
-        </Typography>
-      )}
-      {device.gps_timestamp && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          Last fix: {dayjs(device.gps_timestamp).format('MMM DD, YYYY HH:mm')}
-        </Typography>
-      )}
-      {device.battery_voltage != null && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          Battery: {device.battery_voltage} V
-        </Typography>
-      )}
-      <Button size="small" onClick={onToggleTrack} sx={{ mt: 0.5, textTransform: 'none', px: 0.5, minWidth: 0 }}>
-        {selected ? 'Hide track' : 'View track'}
-      </Button>
-    </Box>
-  );
-}
-
 /** Cannwood-only GPS Tracking tab: tracked tags at their latest GNSS location, with
- *  co-located tags clustered. Clicking a single tracker's pin (or a tracker in a
- *  cluster popup) overlays that one tracker's historical track. */
+ *  co-located tags clustered. Clicking a single tracker's pin — or its row in the
+ *  table below the map — overlays that one tracker's historical track. */
 export function DeviceTrackerMap() {
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
   const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
-  const [trackDays, setTrackDays] = useState(7);
 
   const [zoom, setZoom] = useState<number>(DEFAULT_MAP_ZOOM);
+  const mapRef = useRef<LeafletMap | null>(null);
 
   const [devices, setDevices] = useState<EcotopiaDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Historical track of the one tracker the user clicked on. The map always shows
-  // current positions; clicking a pin overlays that single tracker's history.
+  // current positions; selecting a tracker overlays that single tracker's history.
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [track, setTrack] = useState<EcotopiaGpsFix[]>([]);
   const [trackLoading, setTrackLoading] = useState(false);
   const [trackError, setTrackError] = useState<string | null>(null);
+
+  const trackDays = useMemo(() => Math.max(1, dayjs().diff(dayjs(TRACK_START), 'day')), []);
+
+  const toggleSelect = (id: string) => setSelectedDeviceId((cur) => (cur === id ? null : id));
 
   useEffect(() => {
     let cancelled = false;
@@ -221,7 +211,14 @@ export function DeviceTrackerMap() {
   }, [selectedDeviceId, trackDays]);
 
   const groups = useMemo(() => groupByLocation(devices, zoom), [devices, zoom]);
-  const locatedCount = useMemo(() => devices.filter((d) => d.latitude != null && d.longitude != null).length, [devices]);
+  const locatedDevices = useMemo(
+    () =>
+      devices
+        .filter((d) => d.latitude != null && d.longitude != null)
+        .sort((a, b) => tagName(a).localeCompare(tagName(b))),
+    [devices],
+  );
+  const locatedCount = locatedDevices.length;
 
   const selectedDevice = useMemo(
     () => devices.find((d) => d.id === selectedDeviceId) ?? null,
@@ -271,7 +268,7 @@ export function DeviceTrackerMap() {
               Tracker Locations
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {locatedCount} tag{locatedCount === 1 ? '' : 's'} with a recent fix · tap a pin for its track
+              {locatedCount} tag{locatedCount === 1 ? '' : 's'} with a recent fix · tap a pin or row for its track
             </Typography>
           </Stack>
           <Stack direction="row" alignItems="center" gap={1}>
@@ -299,17 +296,11 @@ export function DeviceTrackerMap() {
                   ? 'Loading track…'
                   : trackError
                     ? `Error: ${trackError}`
-                    : `Track for ${tagName(selectedDevice)} (last ${trackDays} days)`}
+                    : `Track for ${tagName(selectedDevice)} since ${TRACK_START_LABEL}`}
               </Typography>
-              <Stack direction="row" alignItems="center" gap={1}>
-                <ToggleButtonGroup value={trackDays} exclusive onChange={(_, v) => v && setTrackDays(v)} size="small" sx={{ height: '28px' }}>
-                  <ToggleButton value={7}>7d</ToggleButton>
-                  <ToggleButton value={30}>30d</ToggleButton>
-                </ToggleButtonGroup>
-                <Button size="small" onClick={() => setSelectedDeviceId(null)} sx={{ textTransform: 'none' }}>
-                  Clear
-                </Button>
-              </Stack>
+              <Button size="small" onClick={() => setSelectedDeviceId(null)} sx={{ textTransform: 'none' }}>
+                Clear
+              </Button>
             </Stack>
           </>
         )}
@@ -329,7 +320,7 @@ export function DeviceTrackerMap() {
         </Stack>
 
         <Box sx={{ height: 500, width: '100%', ...fullscreenMapSx }}>
-          <MapContainer center={DEFAULT_MAP_CENTER} zoom={DEFAULT_MAP_ZOOM} style={{ height: '100%', width: '100%' }}>
+          <MapContainer ref={mapRef} center={DEFAULT_MAP_CENTER} zoom={DEFAULT_MAP_ZOOM} style={{ height: '100%', width: '100%' }}>
             {mapType === 'satellite' ? (
               <TileLayer
                 key="satellite"
@@ -374,36 +365,28 @@ export function DeviceTrackerMap() {
 
             {groups.map((group) => {
               const single = group.devices.length === 1;
-              const pinColor = single
-                ? (deviceColors.get(group.devices[0].id) ?? brandColors.main)
-                : brandColors.main;
-              const icon = single ? badgeIcon(tagName(group.devices[0]), pinColor, 11) : clusterIcon(group.devices.length);
-              // A single-tracker pin selects that tracker on click; clusters open a
-              // popup so the user can pick which co-located tracker's track to see.
-              const eventHandlers = single
-                ? { click: () => setSelectedDeviceId((cur) => (cur === group.devices[0].id ? null : group.devices[0].id)) }
-                : undefined;
-              return (
-                <Marker key={group.key} position={[group.latitude, group.longitude]} icon={icon} eventHandlers={eventHandlers}>
-                  <Popup>
-                    <Box sx={{ minWidth: 'min(190px, calc(100vw - 112px))', maxHeight: 240, overflowY: 'auto', p: 0.5 }}>
-                      {!single && (
-                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
-                          {group.devices.length} tags at this location
-                        </Typography>
-                      )}
-                      {group.devices.map((d) => (
-                        <DeviceSummary
-                          key={d.id}
-                          device={d}
-                          selected={d.id === selectedDeviceId}
-                          onToggleTrack={() => setSelectedDeviceId((cur) => (cur === d.id ? null : d.id))}
-                        />
-                      ))}
-                    </Box>
-                  </Popup>
-                </Marker>
-              );
+              const hasSelection = selectedDeviceId != null;
+              const containsSelected = group.devices.some((d) => d.id === selectedDeviceId);
+              let icon: DivIcon;
+              let eventHandlers: { click: () => void };
+              if (single) {
+                const d = group.devices[0];
+                const isSel = d.id === selectedDeviceId;
+                const pinColor = deviceColors.get(d.id) ?? brandColors.main;
+                icon = badgeIcon(tagName(d), pinColor, { emphasized: isSel, dimmed: hasSelection && !isSel });
+                eventHandlers = { click: () => toggleSelect(d.id) };
+              } else {
+                icon = clusterIcon(group.devices.length, hasSelection && !containsSelected);
+                // A cluster can't toggle one track unambiguously — zoom in to split
+                // the co-located tags into individually-clickable pins instead.
+                eventHandlers = {
+                  click: () => {
+                    const m = mapRef.current;
+                    if (m) m.flyTo([group.latitude, group.longitude], Math.min(m.getZoom() + 2, 17));
+                  },
+                };
+              }
+              return <Marker key={group.key} position={[group.latitude, group.longitude]} icon={icon} eventHandlers={eventHandlers} />;
             })}
 
             <ZoomWatcher onZoom={setZoom} />
@@ -412,6 +395,71 @@ export function DeviceTrackerMap() {
           </MapContainer>
         </Box>
       </Paper>
+
+      <TableContainer
+        component={Paper}
+        elevation={0}
+        sx={{ mt: 2, border: '1px solid', borderColor: 'divider' }}
+      >
+        <Table size="small" aria-label="tracker devices">
+          <TableHead>
+            <TableRow>
+              <TableCell>Tag</TableCell>
+              <TableCell>Bird</TableCell>
+              <TableCell>Last fix</TableCell>
+              <TableCell>Battery</TableCell>
+              <TableCell align="right">Track</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {locatedDevices.map((d) => {
+              const isSel = d.id === selectedDeviceId;
+              const color = deviceColors.get(d.id) ?? brandColors.main;
+              const bird = birdLabel(d);
+              return (
+                <TableRow
+                  key={d.id}
+                  hover
+                  selected={isSel}
+                  onClick={() => toggleSelect(d.id)}
+                  sx={{ cursor: 'pointer' }}
+                >
+                  <TableCell>
+                    <Stack direction="row" alignItems="center" gap={1}>
+                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {tagName(d)}
+                      </Typography>
+                      {d.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {d.description}
+                        </Typography>
+                      )}
+                    </Stack>
+                  </TableCell>
+                  <TableCell>{bird ?? '—'}</TableCell>
+                  <TableCell>
+                    {d.gps_timestamp ? dayjs(d.gps_timestamp).format('MMM DD, YYYY HH:mm') : '—'}
+                  </TableCell>
+                  <TableCell>{d.battery_voltage != null ? `${d.battery_voltage} V` : '—'}</TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelect(d.id);
+                      }}
+                      sx={{ textTransform: 'none', minWidth: 64 }}
+                    >
+                      {isSel ? 'Hide' : 'Show'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Box>
   );
 }
