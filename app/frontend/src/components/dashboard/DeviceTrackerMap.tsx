@@ -11,7 +11,6 @@ import {
   IconButton,
   ToggleButtonGroup,
   ToggleButton,
-  Button,
   Table,
   TableHead,
   TableBody,
@@ -181,19 +180,16 @@ function TrackOverlay({ device, track, color }: { device: EcotopiaDevice; track:
   );
 }
 
-// Every located tag; clicking a row (or its button) toggles that tag's track.
+// Read-only list of every located tag. The selected row is highlighted to tie
+// it to the pin on the map; selection itself happens by tapping a pin.
 function TrackerTable({
   devices,
   colors,
   selectedId,
-  loading,
-  onToggle,
 }: {
   devices: EcotopiaDevice[];
   colors: Map<string, string>;
   selectedId: string | null;
-  loading: boolean;
-  onToggle: (id: string) => void;
 }) {
   return (
     <TableContainer component={Paper} elevation={0} sx={{ mt: 2, border: '1px solid', borderColor: 'divider' }}>
@@ -204,53 +200,33 @@ function TrackerTable({
             <TableCell>Bird</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap' }}>Last fix</TableCell>
             <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Battery</TableCell>
-            <TableCell align="right">Track</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {devices.map((d) => {
-            const isSel = d.id === selectedId;
-            return (
-              <TableRow key={d.id} hover selected={isSel} onClick={() => onToggle(d.id)} sx={{ cursor: 'pointer' }}>
-                <TableCell>
-                  <Stack direction="row" alignItems="center" gap={1}>
-                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: colors.get(d.id) ?? brandColors.main, flexShrink: 0 }} />
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {tagName(d)}
+          {devices.map((d) => (
+            <TableRow key={d.id} selected={d.id === selectedId}>
+              <TableCell>
+                <Stack direction="row" alignItems="center" gap={1}>
+                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: colors.get(d.id) ?? brandColors.main, flexShrink: 0 }} />
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {tagName(d)}
+                  </Typography>
+                  {d.description && (
+                    <Typography variant="caption" color="text.secondary">
+                      {d.description}
                     </Typography>
-                    {d.description && (
-                      <Typography variant="caption" color="text.secondary">
-                        {d.description}
-                      </Typography>
-                    )}
-                  </Stack>
-                </TableCell>
-                <TableCell>{birdLabel(d) ?? '—'}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  {d.gps_timestamp ? dayjs(d.gps_timestamp).format('D MMM HH:mm') : '—'}
-                </TableCell>
-                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                  {d.battery_voltage != null ? `${d.battery_voltage.toFixed(1)} V` : '—'}
-                </TableCell>
-                <TableCell align="right">
-                  {isSel && loading ? (
-                    <CircularProgress size={18} sx={{ display: 'block', ml: 'auto', mr: 1 }} />
-                  ) : (
-                    <Button
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggle(d.id);
-                      }}
-                      sx={{ textTransform: 'none', minWidth: 64 }}
-                    >
-                      {isSel ? 'Hide' : 'Show'}
-                    </Button>
                   )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
+                </Stack>
+              </TableCell>
+              <TableCell>{birdLabel(d) ?? '—'}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                {d.gps_timestamp ? dayjs(d.gps_timestamp).format('D MMM HH:mm') : '—'}
+              </TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                {d.battery_voltage != null ? `${d.battery_voltage.toFixed(1)} V` : '—'}
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </TableContainer>
@@ -448,7 +424,7 @@ export function DeviceTrackerMap() {
         </Box>
       </Paper>
 
-      <TrackerTable devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} loading={trackLoading} onToggle={toggleSelect} />
+      <TrackerTable devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} />
     </Box>
   );
 }
