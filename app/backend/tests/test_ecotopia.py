@@ -179,6 +179,46 @@ class TestGetDeviceGps:
             "source": "satellite",
         }
 
+    def test_drops_fixes_before_birds_first_fix(self, cannwood_client: TestClient, monkeypatch) -> None:
+        """For a tracked bird, pre-release fixes (Norfolk rearing + the Frome
+        holding stop) before its first_fix are dropped; the track starts there."""
+        monkeypatch.setattr(settings, "ecotopia_username", "user")
+        monkeypatch.setattr(settings, "ecotopia_password", "pass")
+        # 240D's first_fix is 2026-06-04T14:00:26Z (see tracker_birds.py).
+        gnss = [
+            {"timestamp": "2026-05-27T08:00:40Z", "latitude": 52.5833, "longitude": 1.0608},  # Norfolk
+            {"timestamp": "2026-06-02T12:00:22Z", "latitude": 51.2278, "longitude": -2.3233},  # Frome stop
+            {"timestamp": "2026-06-04T14:00:26Z", "latitude": 51.1400, "longitude": -2.3772},  # first fix
+            {"timestamp": "2026-06-05T10:00:37Z", "latitude": 51.1399, "longitude": -2.3772},  # after
+        ]
+        monkeypatch.setattr(EcotopiaClient, "get_gps_history", lambda self, device_id, days=7: gnss)
+        monkeypatch.setattr(EcotopiaClient, "get_location_history", lambda self, device_id, days=7: [])
+
+        response = cannwood_client.get("/api/ecotopia/devices/69c7b38f46109fd46939985a/gps?days=40")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert [f["timestamp"] for f in data] == ["2026-06-04T14:00:26Z", "2026-06-05T10:00:37Z"]
+
+    def test_2408_first_fix_is_its_last_frome_fix(self, cannwood_client: TestClient, monkeypatch) -> None:
+        """2408 stopped reporting at the Frome stop, so its first_fix is that last
+        Frome fix — the track is the single point, with the earlier stop dropped."""
+        monkeypatch.setattr(settings, "ecotopia_username", "user")
+        monkeypatch.setattr(settings, "ecotopia_password", "pass")
+        # 2408's first_fix is 2026-06-02T16:00:47Z (its final reported fix).
+        gnss = [
+            {"timestamp": "2026-06-02T12:00:07Z", "latitude": 51.2277, "longitude": -2.3232},  # earlier Frome
+            {"timestamp": "2026-06-02T16:00:47Z", "latitude": 51.2277, "longitude": -2.3232},  # first fix
+        ]
+        monkeypatch.setattr(EcotopiaClient, "get_gps_history", lambda self, device_id, days=7: gnss)
+        monkeypatch.setattr(EcotopiaClient, "get_location_history", lambda self, device_id, days=7: [])
+
+        response = cannwood_client.get("/api/ecotopia/devices/69c7b38e46109fd4693995a1/gps?days=40")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert [f["timestamp"] for f in data] == ["2026-06-02T16:00:47Z"]
+
     def test_503_when_credentials_missing(self, cannwood_client: TestClient, monkeypatch) -> None:
         monkeypatch.setattr(settings, "ecotopia_username", "")
         monkeypatch.setattr(settings, "ecotopia_password", "")

@@ -13,7 +13,7 @@ from clients.ecotopia import EcotopiaClient
 from config import settings
 from dependencies import get_current_organisation
 from models import Organisation
-from tracker_birds import BIRD_BY_OBJECT_ID
+from tracker_birds import BIRD_BY_OBJECT_ID, first_fix_for
 
 CANNWOOD_SLUG = "cannwood"
 
@@ -160,4 +160,11 @@ async def get_device_gps(device_id: str, days: int = 7) -> List[EcotopiaGpsFix]:
     except Exception as exc:  # noqa: BLE001 - surface upstream failures as 502
         raise HTTPException(status_code=502, detail=f"Ecotopia API error: {exc}") from exc
 
-    return _merge_track(gnss, locations)
+    track = _merge_track(gnss, locations)
+    # Drop pre-release fixes (Norfolk rearing + Frome holding stop) so the track
+    # starts at the bird's first real fix. Timestamps are ISO-UTC, so a lexical
+    # compare matches the merge's own ordering.
+    first_fix = first_fix_for(device_id)
+    if first_fix:
+        track = [f for f in track if f.timestamp >= first_fix]
+    return track
