@@ -377,7 +377,9 @@ export function DeviceTrackerMap() {
           </Tooltip>
         </Stack>
 
-        <Box sx={{ height: 500, width: '100%', ...fullscreenMapSx }}>
+        {/* Shorter on mobile so the table below peeks above the fold and the
+            user can tell there's more to scroll to. */}
+        <Box sx={{ height: { xs: 340, sm: 500 }, width: '100%', ...fullscreenMapSx }}>
           <MapContainer ref={mapRef} center={DEFAULT_MAP_CENTER} zoom={DEFAULT_MAP_ZOOM} attributionControl={false} style={{ height: '100%', width: '100%' }}>
             <AttributionControl prefix={false} />
             {mapType === 'satellite' ? (
