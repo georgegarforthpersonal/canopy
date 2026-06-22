@@ -1,5 +1,4 @@
-import { Box, Typography, Paper, Stack, IconButton, Tooltip, CircularProgress, Alert, Autocomplete, TextField, Tabs, Tab, Button } from '@mui/material';
-import LockIcon from '@mui/icons-material/Lock';
+import { Box, Typography, Paper, Stack, IconButton, Tooltip, CircularProgress, Alert, Autocomplete, TextField, Tabs, Tab } from '@mui/material';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar } from 'recharts';
 import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
@@ -7,7 +6,6 @@ import { dashboardAPI, locationsAPI, getOrgSlug } from '../services/api';
 import type { CumulativeSpeciesResponse, SpeciesWithCount, SpeciesOccurrenceResponse, SpeciesSightingLocation, LocationWithBoundary } from '../services/api';
 import SightingsMap from '../components/dashboard/SightingsMap';
 import { DeviceTrackerMap } from '../components/dashboard/DeviceTrackerMap';
-import { useAuth } from '../context/AuthContext';
 import { speciesTypes, getSpeciesIcon, getSpeciesDisplayName } from '../config';
 import { notionColors, brandColors } from '../theme';
 import { SPACING } from '../config/responsive';
@@ -26,15 +24,9 @@ export function DashboardsPage() {
   // State Management
   // ============================================================================
 
-  // Cannwood-only "Devices" tab alongside the species dashboards (auth-gated)
+  // Cannwood-only "GPS tracking" tab alongside the species dashboards
   const isCannwood = getOrgSlug() === 'cannwood';
-  const { isAuthenticated, requireAuth } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
-
-  const handleTabChange = (value: number) => {
-    setActiveTab(value);
-    if (value === 1 && !isAuthenticated) requireAuth(() => {});
-  };
 
   const [selectedSpeciesTypes, setSelectedSpeciesTypes] = useState<string[]>(['bird']); // Default: bird selected
   const [chartData, setChartData] = useState<CumulativeSpeciesResponse | null>(null);
@@ -360,35 +352,14 @@ export function DashboardsPage() {
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
       {isCannwood && (
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs value={activeTab} onChange={(_e, v) => handleTabChange(v)}>
+          <Tabs value={activeTab} onChange={(_e, v) => setActiveTab(v)}>
             <Tab label="Species" />
             <Tab label="GPS tracking" />
           </Tabs>
         </Box>
       )}
 
-      {isCannwood && activeTab === 1 && (
-        isAuthenticated ? (
-          <DeviceTrackerMap />
-        ) : (
-          <Paper
-            elevation={0}
-            sx={{ p: 4, textAlign: 'center', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}
-          >
-            <LockIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              Enter the admin password to view tracker locations.
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() => requireAuth(() => {})}
-              sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
-            >
-              Unlock
-            </Button>
-          </Paper>
-        )
-      )}
+      {isCannwood && activeTab === 1 && <DeviceTrackerMap />}
 
       {(!isCannwood || activeTab === 0) && (
         <>
