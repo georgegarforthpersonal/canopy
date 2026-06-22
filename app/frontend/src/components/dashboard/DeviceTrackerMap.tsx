@@ -19,7 +19,7 @@ import {
   TableCell,
   TableContainer,
 } from '@mui/material';
-import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import { DivIcon, LatLngBounds, LatLng, Map as LeafletMap } from 'leaflet';
 import MapIcon from '@mui/icons-material/Map';
 import SatelliteIcon from '@mui/icons-material/Satellite';
@@ -134,6 +134,13 @@ function FitBounds({ points }: { points: [number, number][] }) {
   return null;
 }
 
+// Clears the selected tracker when the user clicks the map background. Leaflet
+// marker clicks don't propagate here, so pin taps still select normally.
+function MapClickHandler({ onClick }: { onClick: () => void }) {
+  useMapEvents({ click: () => onClick() });
+  return null;
+}
+
 // Notifies the parent whenever the map zoom level changes so grouping can
 // recalculate — pins that overlap at low zoom split apart as the user zooms in.
 function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
@@ -232,16 +239,15 @@ export function DeviceTrackerMap() {
     [devices],
   );
 
-  const fitPoints = useMemo<[number, number][]>(() => {
-    if (selectedDeviceId && track.length > 0) {
-      return track.map((f) => [f.latitude, f.longitude] as [number, number]);
-    }
-    // Use raw device positions, not groups: groups depends on zoom, so using it
-    // here would cause FitBounds to re-fire on every zoom change and fight the user.
-    return devices
-      .filter((d) => d.latitude != null && d.longitude != null)
-      .map((d) => [d.latitude!, d.longitude!] as [number, number]);
-  }, [selectedDeviceId, track, devices]);
+  // Fit to all tags' current positions. Selecting a tag overlays its track
+  // without moving the map — only a cluster tap (flyTo) changes the view.
+  const fitPoints = useMemo<[number, number][]>(
+    () =>
+      devices
+        .filter((d) => d.latitude != null && d.longitude != null)
+        .map((d) => [d.latitude!, d.longitude!] as [number, number]),
+    [devices],
+  );
 
   if (loading) {
     return (
@@ -390,6 +396,7 @@ export function DeviceTrackerMap() {
             })}
 
             <ZoomWatcher onZoom={setZoom} />
+            <MapClickHandler onClick={() => setSelectedDeviceId(null)} />
             <FitBounds points={fitPoints} />
             <MapResizeHandler isFullscreen={isFullscreen} />
           </MapContainer>
