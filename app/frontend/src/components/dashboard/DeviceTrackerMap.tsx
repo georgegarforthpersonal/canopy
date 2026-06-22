@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Paper,
@@ -156,6 +156,96 @@ function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
   return null;
 }
 
+// The selected tracker's historical path, terminating at its current pin.
+function TrackOverlay({ device, track, color }: { device: EcotopiaDevice; track: EcotopiaGpsFix[]; color: string }) {
+  let points: [number, number][] = track.map((f) => [f.latitude, f.longitude]);
+  // The paginated GPS history can lag behind status_gps, so extend the line to
+  // the device's current position so it ends at the badge pin.
+  if (device.latitude != null && device.longitude != null) {
+    const last = points[points.length - 1];
+    if (!last || Math.abs(last[0] - device.latitude) > 1e-5 || Math.abs(last[1] - device.longitude) > 1e-5) {
+      points = [...points, [device.latitude, device.longitude]];
+    }
+  }
+  if (points.length === 0) return null;
+  return (
+    <>
+      {points.length > 1 && <Polyline positions={points} pathOptions={{ color, weight: 3, opacity: 0.85 }} />}
+      <CircleMarker
+        center={points[points.length - 1]}
+        radius={5}
+        pathOptions={{ color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 1 }}
+      />
+    </>
+  );
+}
+
+// Every located tag; clicking a row (or its button) toggles that tag's track.
+function TrackerTable({
+  devices,
+  colors,
+  selectedId,
+  onToggle,
+}: {
+  devices: EcotopiaDevice[];
+  colors: Map<string, string>;
+  selectedId: string | null;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <TableContainer component={Paper} elevation={0} sx={{ mt: 2, border: '1px solid', borderColor: 'divider' }}>
+      <Table size="small" aria-label="tracker devices">
+        <TableHead>
+          <TableRow>
+            <TableCell>Tag</TableCell>
+            <TableCell>Bird</TableCell>
+            <TableCell>Last fix</TableCell>
+            <TableCell>Battery</TableCell>
+            <TableCell align="right">Track</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {devices.map((d) => {
+            const isSel = d.id === selectedId;
+            return (
+              <TableRow key={d.id} hover selected={isSel} onClick={() => onToggle(d.id)} sx={{ cursor: 'pointer' }}>
+                <TableCell>
+                  <Stack direction="row" alignItems="center" gap={1}>
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: colors.get(d.id) ?? brandColors.main, flexShrink: 0 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {tagName(d)}
+                    </Typography>
+                    {d.description && (
+                      <Typography variant="caption" color="text.secondary">
+                        {d.description}
+                      </Typography>
+                    )}
+                  </Stack>
+                </TableCell>
+                <TableCell>{birdLabel(d) ?? '—'}</TableCell>
+                <TableCell>{d.gps_timestamp ? dayjs(d.gps_timestamp).format('MMM DD, YYYY HH:mm') : '—'}</TableCell>
+                <TableCell>{d.battery_voltage != null ? `${d.battery_voltage} V` : '—'}</TableCell>
+                <TableCell align="right">
+                  <Button
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggle(d.id);
+                    }}
+                    sx={{ textTransform: 'none', minWidth: 64 }}
+                  >
+                    {isSel ? 'Hide' : 'Show'}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+
 /** Cannwood-only GPS Tracking tab: tracked tags at their latest GNSS location, with
  *  co-located tags clustered. Clicking a single tracker's pin — or its row in the
  *  table below the map — overlays that one tracker's historical track. */
@@ -216,7 +306,6 @@ export function DeviceTrackerMap() {
         .sort((a, b) => tagName(a).localeCompare(tagName(b))),
     [devices],
   );
-  const locatedCount = locatedDevices.length;
 
   const selectedDevice = useMemo(
     () => devices.find((d) => d.id === selectedDeviceId) ?? null,
@@ -230,14 +319,9 @@ export function DeviceTrackerMap() {
     [devices],
   );
 
-  // Fit to all tags' current positions. Selecting a tag overlays its track
-  // without moving the map — only a cluster tap (flyTo) changes the view.
   const fitPoints = useMemo<[number, number][]>(
-    () =>
-      devices
-        .filter((d) => d.latitude != null && d.longitude != null)
-        .map((d) => [d.latitude!, d.longitude!] as [number, number]),
-    [devices],
+    () => locatedDevices.map((d) => [d.latitude!, d.longitude!] as [number, number]),
+    [locatedDevices],
   );
 
   if (loading) {
@@ -248,7 +332,7 @@ export function DeviceTrackerMap() {
     );
   }
   if (error) return <Alert severity="error">{error}</Alert>;
-  if (locatedCount === 0) {
+  if (locatedDevices.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400, color: 'text.secondary' }}>
         <Typography variant="body1">No tracker devices with a recent location</Typography>
@@ -305,33 +389,13 @@ export function DeviceTrackerMap() {
               />
             )}
 
-            {selectedDevice && (() => {
-              const color = deviceColors.get(selectedDevice.id) ?? brandColors.main;
-              let points: [number, number][] = track.map((f) => [f.latitude, f.longitude]);
-              // The paginated GPS history endpoint can lag behind the device's
-              // status_gps.  Extend the polyline to the device's current reported
-              // position so the track visually terminates at the badge pin.
-              if (selectedDevice.latitude != null && selectedDevice.longitude != null) {
-                const last = points[points.length - 1];
-                if (!last || Math.abs(last[0] - selectedDevice.latitude) > 1e-5 || Math.abs(last[1] - selectedDevice.longitude) > 1e-5) {
-                  points = [...points, [selectedDevice.latitude, selectedDevice.longitude]];
-                }
-              }
-              if (points.length === 0) return null;
-              const lastPoint = points[points.length - 1];
-              return (
-                <Fragment>
-                  {points.length > 1 && (
-                    <Polyline positions={points} pathOptions={{ color, weight: 3, opacity: 0.85 }} />
-                  )}
-                  <CircleMarker
-                    center={lastPoint}
-                    radius={5}
-                    pathOptions={{ color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 1 }}
-                  />
-                </Fragment>
-              );
-            })()}
+            {selectedDevice && (
+              <TrackOverlay
+                device={selectedDevice}
+                track={track}
+                color={deviceColors.get(selectedDevice.id) ?? brandColors.main}
+              />
+            )}
 
             {groups.map((group) => {
               const single = group.devices.length === 1;
@@ -367,70 +431,7 @@ export function DeviceTrackerMap() {
         </Box>
       </Paper>
 
-      <TableContainer
-        component={Paper}
-        elevation={0}
-        sx={{ mt: 2, border: '1px solid', borderColor: 'divider' }}
-      >
-        <Table size="small" aria-label="tracker devices">
-          <TableHead>
-            <TableRow>
-              <TableCell>Tag</TableCell>
-              <TableCell>Bird</TableCell>
-              <TableCell>Last fix</TableCell>
-              <TableCell>Battery</TableCell>
-              <TableCell align="right">Track</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {locatedDevices.map((d) => {
-              const isSel = d.id === selectedDeviceId;
-              const color = deviceColors.get(d.id) ?? brandColors.main;
-              const bird = birdLabel(d);
-              return (
-                <TableRow
-                  key={d.id}
-                  hover
-                  selected={isSel}
-                  onClick={() => toggleSelect(d.id)}
-                  sx={{ cursor: 'pointer' }}
-                >
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" gap={1}>
-                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {tagName(d)}
-                      </Typography>
-                      {d.description && (
-                        <Typography variant="caption" color="text.secondary">
-                          {d.description}
-                        </Typography>
-                      )}
-                    </Stack>
-                  </TableCell>
-                  <TableCell>{bird ?? '—'}</TableCell>
-                  <TableCell>
-                    {d.gps_timestamp ? dayjs(d.gps_timestamp).format('MMM DD, YYYY HH:mm') : '—'}
-                  </TableCell>
-                  <TableCell>{d.battery_voltage != null ? `${d.battery_voltage} V` : '—'}</TableCell>
-                  <TableCell align="right">
-                    <Button
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelect(d.id);
-                      }}
-                      sx={{ textTransform: 'none', minWidth: 64 }}
-                    >
-                      {isSel ? 'Hide' : 'Show'}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <TrackerTable devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} onToggle={toggleSelect} />
     </Box>
   );
 }
