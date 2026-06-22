@@ -10,7 +10,6 @@ import {
   IconButton,
   ToggleButtonGroup,
   ToggleButton,
-  Divider,
   Button,
   Table,
   TableHead,
@@ -37,7 +36,6 @@ import { brandColors } from '../../theme';
 // Tracks always start from the programme start, not a rolling window. The GPS
 // endpoint takes a `days` count, so we convert this date to days at request time.
 const TRACK_START = '2026-06-02';
-const TRACK_START_LABEL = 'Jun 2, 2026';
 
 // Cluster radius in screen pixels (~50 m at zoom 16) — pins closer than this
 // at the current zoom are merged into a single group marker.
@@ -176,8 +174,6 @@ export function DeviceTrackerMap() {
   // current positions; selecting a tracker overlays that single tracker's history.
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [track, setTrack] = useState<EcotopiaGpsFix[]>([]);
-  const [trackLoading, setTrackLoading] = useState(false);
-  const [trackError, setTrackError] = useState<string | null>(null);
 
   const trackDays = useMemo(() => Math.max(1, dayjs().diff(dayjs(TRACK_START), 'day')), []);
 
@@ -198,23 +194,15 @@ export function DeviceTrackerMap() {
   }, []);
 
   useEffect(() => {
-    if (!selectedDeviceId) {
-      setTrack([]);
-      setTrackError(null);
-      return;
-    }
-    let cancelled = false;
-    // Drop the previously-selected tracker's path immediately so we never render
-    // a new tracker's pin/colour along the old tracker's track while the new
-    // history loads.
+    // Drop the previous tracker's path immediately so we never draw a new
+    // tracker's pin along the old track while the new history loads.
     setTrack([]);
-    setTrackLoading(true);
-    setTrackError(null);
+    if (!selectedDeviceId) return;
+    let cancelled = false;
     ecotopiaAPI
       .getGpsHistory(selectedDeviceId, trackDays)
       .then((fixes) => !cancelled && setTrack(fixes))
-      .catch((err) => !cancelled && setTrackError(err instanceof Error ? err.message : 'Failed to load track'))
-      .finally(() => !cancelled && setTrackLoading(false));
+      .catch(() => !cancelled && setTrack([]));
     return () => {
       cancelled = true;
     };
@@ -270,57 +258,30 @@ export function DeviceTrackerMap() {
 
   return (
     <Box>
-      <Paper elevation={0} sx={{ p: 2, mb: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider' }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
-          <Stack direction="row" alignItems="center" gap={2}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-              Tracker Locations
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {locatedCount} tag{locatedCount === 1 ? '' : 's'} with a recent fix · tap a pin or row for its track
-            </Typography>
-          </Stack>
-          <Stack direction="row" alignItems="center" gap={1}>
-            <ToggleButtonGroup value={mapType} exclusive onChange={(_, v) => v && setMapType(v)} size="small" sx={{ height: '32px' }}>
-              <ToggleButton value="street" aria-label="street map">
-                <Tooltip title="Street Map">
-                  <MapIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
-              <ToggleButton value="satellite" aria-label="satellite view">
-                <Tooltip title="Satellite View">
-                  <SatelliteIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
-            </ToggleButtonGroup>
-          </Stack>
-        </Stack>
-
-        {selectedDevice && (
-          <>
-            <Divider sx={{ my: 1.5 }} />
-            <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
-              <Typography variant="body2">
-                {trackLoading
-                  ? 'Loading track…'
-                  : trackError
-                    ? `Error: ${trackError}`
-                    : `Track for ${tagName(selectedDevice)} since ${TRACK_START_LABEL}`}
-              </Typography>
-              <Button size="small" onClick={() => setSelectedDeviceId(null)} sx={{ textTransform: 'none' }}>
-                Clear
-              </Button>
-            </Stack>
-          </>
-        )}
-      </Paper>
-
       <Paper
         elevation={0}
         className="fullscreen-map-container"
         sx={{ overflow: 'hidden', border: '1px solid', borderColor: 'divider', position: 'relative', ...fullscreenContainerSx }}
       >
         <Stack direction="row" spacing={0.5} sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000 }}>
+          <ToggleButtonGroup
+            value={mapType}
+            exclusive
+            onChange={(_, v) => v && setMapType(v)}
+            size="small"
+            sx={{ bgcolor: 'white', boxShadow: 2 }}
+          >
+            <ToggleButton value="street" aria-label="street map">
+              <Tooltip title="Street Map">
+                <MapIcon fontSize="small" />
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="satellite" aria-label="satellite view">
+              <Tooltip title="Satellite View">
+                <SatelliteIcon fontSize="small" />
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
           <Tooltip title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
             <IconButton size="small" onClick={toggleFullscreen} sx={{ bgcolor: 'white', boxShadow: 2, '&:hover': { bgcolor: 'grey.100' } }}>
               {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
