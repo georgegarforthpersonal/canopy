@@ -11,12 +11,6 @@ import {
   IconButton,
   ToggleButtonGroup,
   ToggleButton,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableContainer,
 } from '@mui/material';
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, AttributionControl, useMap, useMapEvents } from 'react-leaflet';
 import { DivIcon, LatLngBounds, LatLng, Map as LeafletMap } from 'leaflet';
@@ -50,6 +44,15 @@ function colocationDecimals(zoom: number): number {
 
 function tagName(device: EcotopiaDevice): string {
   return device.uuid ? device.uuid.slice(-4).toUpperCase() : device.id;
+}
+
+// Compact "time since" label — surfaces how stale a fix is at a glance.
+function relativeFix(iso: string): string {
+  const mins = dayjs().diff(dayjs(iso), 'minute');
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
+  return `${Math.floor(mins / 1440)}d ago`;
 }
 
 function birdLabel(device: EcotopiaDevice): string | null {
@@ -182,9 +185,9 @@ function TrackOverlay({ device, track, color }: { device: EcotopiaDevice; track:
   );
 }
 
-// Read-only list of every located tag. The selected row is highlighted to tie
-// it to the pin on the map; selection itself happens by tapping a pin.
-function TrackerTable({
+// Read-only list of every located tag, one compact two-line row each. The
+// selected row is highlighted to tie it to its pin; selection happens on the map.
+function TrackerList({
   devices,
   colors,
   selectedId,
@@ -194,54 +197,50 @@ function TrackerTable({
   selectedId: string | null;
 }) {
   return (
-    <TableContainer component={Paper} elevation={0} sx={{ mt: 2, border: '1px solid', borderColor: 'divider' }}>
-      <Table
-        size="small"
-        aria-label="tracker devices"
-        sx={{ '& .MuiTableCell-root': { px: 1, fontSize: '0.8125rem' } }}
-      >
-        <TableHead>
-          <TableRow>
-            <TableCell>Tag</TableCell>
-            <TableCell>Bird</TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap' }}>Last fix</TableCell>
-            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Battery</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {devices.map((d) => (
-            <TableRow key={d.id} selected={d.id === selectedId}>
-              <TableCell>
-                <Stack direction="row" alignItems="center" gap={1}>
-                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: colors.get(d.id) ?? brandColors.main, flexShrink: 0 }} />
-                  <Typography sx={{ fontWeight: 600, fontSize: 'inherit' }}>
-                    {tagName(d)}
-                  </Typography>
-                  {d.description && (
-                    <Typography variant="caption" color="text.secondary">
-                      {d.description}
-                    </Typography>
-                  )}
-                </Stack>
-              </TableCell>
-              <TableCell>{birdLabel(d) ?? '—'}</TableCell>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                {d.gps_timestamp ? dayjs(d.gps_timestamp).format('D MMM HH:mm') : '—'}
-              </TableCell>
-              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                {d.battery_voltage != null ? `${d.battery_voltage.toFixed(1)} V` : '—'}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <Paper elevation={0} sx={{ mt: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      {devices.map((d, i) => {
+        const bird = birdLabel(d);
+        return (
+          <Box
+            key={d.id}
+            sx={{
+              px: 1.5,
+              py: 1,
+              borderTop: i === 0 ? 'none' : '1px solid',
+              borderColor: 'divider',
+              bgcolor: d.id === selectedId ? 'action.selected' : 'transparent',
+            }}
+          >
+            <Stack direction="row" alignItems="baseline" gap={1}>
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: colors.get(d.id) ?? brandColors.main, flexShrink: 0, alignSelf: 'center' }} />
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {tagName(d)}
+              </Typography>
+              {bird && (
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+                  {bird}
+                </Typography>
+              )}
+            </Stack>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', ml: '20px' }}
+              title={d.gps_timestamp ? dayjs(d.gps_timestamp).format('D MMM YYYY HH:mm') : undefined}
+            >
+              {d.gps_timestamp ? relativeFix(d.gps_timestamp) : 'No fix'}
+              {d.battery_voltage != null && ` · ${d.battery_voltage.toFixed(1)} V`}
+            </Typography>
+          </Box>
+        );
+      })}
+    </Paper>
   );
 }
 
 /** Cannwood-only GPS Tracking tab: tracked tags at their latest GNSS location, with
- *  co-located tags clustered. Clicking a single tracker's pin — or its row in the
- *  table below the map — overlays that one tracker's historical track. */
+ *  co-located tags clustered. Tapping a tracker's pin overlays its historical
+ *  track; a read-only list of all tags sits below the map. */
 export function DeviceTrackerMap() {
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
   const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
@@ -443,7 +442,7 @@ export function DeviceTrackerMap() {
         </Box>
       </Paper>
 
-      <TrackerTable devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} />
+      <TrackerList devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} />
     </Box>
   );
 }
