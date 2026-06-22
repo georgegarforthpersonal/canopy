@@ -68,12 +68,14 @@ interface DeviceGroup {
   devices: EcotopiaDevice[];
 }
 
-function groupByLocation(devices: EcotopiaDevice[], zoom: number): DeviceGroup[] {
+function groupByLocation(devices: EcotopiaDevice[], zoom: number, selectedId: string | null): DeviceGroup[] {
   const dp = colocationDecimals(zoom);
   const groups = new Map<string, DeviceGroup>();
   for (const d of devices) {
     if (d.latitude == null || d.longitude == null) continue;
-    const key = `${d.latitude.toFixed(dp)},${d.longitude.toFixed(dp)}`;
+    // The selected tracker always gets its own pin so it stays visible even when
+    // zoomed out far enough to cluster its neighbours.
+    const key = d.id === selectedId ? `sel:${d.id}` : `${d.latitude.toFixed(dp)},${d.longitude.toFixed(dp)}`;
     const existing = groups.get(key);
     if (existing) existing.devices.push(d);
     else groups.set(key, { key, latitude: d.latitude, longitude: d.longitude, devices: [d] });
@@ -298,7 +300,7 @@ export function DeviceTrackerMap() {
     };
   }, [selectedDeviceId, trackDays]);
 
-  const groups = useMemo(() => groupByLocation(devices, zoom), [devices, zoom]);
+  const groups = useMemo(() => groupByLocation(devices, zoom, selectedDeviceId), [devices, zoom, selectedDeviceId]);
   const locatedDevices = useMemo(
     () =>
       devices
@@ -398,29 +400,41 @@ export function DeviceTrackerMap() {
             )}
 
             {groups.map((group) => {
-              const single = group.devices.length === 1;
               const hasSelection = selectedDeviceId != null;
-              const containsSelected = group.devices.some((d) => d.id === selectedDeviceId);
-              let icon: DivIcon;
-              let eventHandlers: { click: () => void };
-              if (single) {
+              if (group.devices.length === 1) {
                 const d = group.devices[0];
                 const isSel = d.id === selectedDeviceId;
-                const pinColor = deviceColors.get(d.id) ?? brandColors.main;
-                icon = badgeIcon(tagName(d), pinColor, { emphasized: isSel, dimmed: hasSelection && !isSel });
-                eventHandlers = { click: () => toggleSelect(d.id) };
-              } else {
-                icon = clusterIcon(group.devices.length, hasSelection && !containsSelected);
-                // A cluster can't toggle one track unambiguously — zoom in to split
-                // the co-located tags into individually-clickable pins instead.
-                eventHandlers = {
-                  click: () => {
-                    const m = mapRef.current;
-                    if (m) m.flyTo([group.latitude, group.longitude], Math.min(m.getZoom() + 2, 17));
-                  },
-                };
+                const icon = badgeIcon(tagName(d), deviceColors.get(d.id) ?? brandColors.main, {
+                  emphasized: isSel,
+                  dimmed: hasSelection && !isSel,
+                });
+                return (
+                  <Marker
+                    key={group.key}
+                    position={[group.latitude, group.longitude]}
+                    icon={icon}
+                    zIndexOffset={isSel ? 1000 : 0}
+                    eventHandlers={{ click: () => toggleSelect(d.id) }}
+                  />
+                );
               }
-              return <Marker key={group.key} position={[group.latitude, group.longitude]} icon={icon} eventHandlers={eventHandlers} />;
+              // The selected tracker is never in a cluster, so clusters dim whenever
+              // one is selected. A cluster can't toggle a track unambiguously — tap it
+              // to zoom in and split it into individually-clickable pins.
+              const icon = clusterIcon(group.devices.length, hasSelection);
+              return (
+                <Marker
+                  key={group.key}
+                  position={[group.latitude, group.longitude]}
+                  icon={icon}
+                  eventHandlers={{
+                    click: () => {
+                      const m = mapRef.current;
+                      if (m) m.flyTo([group.latitude, group.longitude], Math.min(m.getZoom() + 2, 17));
+                    },
+                  }}
+                />
+              );
             })}
 
             <ZoomWatcher onZoom={setZoom} />
