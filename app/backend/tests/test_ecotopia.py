@@ -38,8 +38,8 @@ def _override_org(slug: str) -> None:
 
 @pytest.fixture
 def cannwood_client(client: TestClient, auth_headers: dict) -> TestClient:
-    """The shared client overridden to the Cannwood org and authenticated, so
-    requests pass the router's org gate and admin-auth requirement."""
+    """The shared client overridden to the Cannwood org so requests pass the
+    router's org gate. (The endpoints no longer require admin auth.)"""
     _override_org("cannwood")
     client.headers.update(auth_headers)
     return client
@@ -104,11 +104,16 @@ class TestGetEcotopiaDevices:
         response = client.get("/api/ecotopia/devices", headers=auth_headers)
         assert response.status_code == 404
 
-    def test_401_when_not_authenticated(self, client: TestClient) -> None:
-        """Requires admin auth even for the Cannwood org."""
+    def test_accessible_without_auth(self, client: TestClient, monkeypatch) -> None:
+        """The Cannwood tracker endpoints are public — no admin auth required."""
         _override_org("cannwood")
+        monkeypatch.setattr(settings, "ecotopia_username", "user")
+        monkeypatch.setattr(settings, "ecotopia_password", "pass")
+        monkeypatch.setattr(EcotopiaClient, "list_devices", lambda self: [SAMPLE_DEVICE])
+
         response = client.get("/api/ecotopia/devices")  # no auth headers
-        assert response.status_code == 401
+
+        assert response.status_code == 200
 
 
 class TestGetDeviceGps:
