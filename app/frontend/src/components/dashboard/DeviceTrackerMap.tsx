@@ -195,7 +195,11 @@ function TrackerTable({
 }) {
   return (
     <TableContainer component={Paper} elevation={0} sx={{ mt: 2, border: '1px solid', borderColor: 'divider' }}>
-      <Table size="small" aria-label="tracker devices">
+      <Table
+        size="small"
+        aria-label="tracker devices"
+        sx={{ '& .MuiTableCell-root': { px: 1, fontSize: '0.8125rem' } }}
+      >
         <TableHead>
           <TableRow>
             <TableCell>Tag</TableCell>
@@ -210,7 +214,7 @@ function TrackerTable({
               <TableCell>
                 <Stack direction="row" alignItems="center" gap={1}>
                   <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: colors.get(d.id) ?? brandColors.main, flexShrink: 0 }} />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  <Typography sx={{ fontWeight: 600, fontSize: 'inherit' }}>
                     {tagName(d)}
                   </Typography>
                   {d.description && (
