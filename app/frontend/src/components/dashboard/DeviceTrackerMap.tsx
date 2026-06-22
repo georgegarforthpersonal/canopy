@@ -28,6 +28,11 @@ import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
 import { brandColors } from '../../theme';
 
+// Tracks always start from the programme start, not a rolling window. The GPS
+// endpoint takes a `days` count, so we convert this date to days at request time.
+const TRACK_START = '2026-06-02';
+const TRACK_START_LABEL = 'Jun 2, 2026';
+
 // Cluster radius in screen pixels (~50 m at zoom 16) — pins closer than this
 // at the current zoom are merged into a single group marker.
 const CLUSTER_PIXEL_RADIUS = 20;
@@ -168,7 +173,6 @@ function DeviceSummary({
 export function DeviceTrackerMap() {
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
   const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
-  const [trackDays, setTrackDays] = useState(7);
 
   const [zoom, setZoom] = useState<number>(DEFAULT_MAP_ZOOM);
 
@@ -182,6 +186,8 @@ export function DeviceTrackerMap() {
   const [track, setTrack] = useState<EcotopiaGpsFix[]>([]);
   const [trackLoading, setTrackLoading] = useState(false);
   const [trackError, setTrackError] = useState<string | null>(null);
+
+  const trackDays = useMemo(() => Math.max(1, dayjs().diff(dayjs(TRACK_START), 'day')), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -299,17 +305,11 @@ export function DeviceTrackerMap() {
                   ? 'Loading track…'
                   : trackError
                     ? `Error: ${trackError}`
-                    : `Track for ${tagName(selectedDevice)} (last ${trackDays} days)`}
+                    : `Track for ${tagName(selectedDevice)} since ${TRACK_START_LABEL}`}
               </Typography>
-              <Stack direction="row" alignItems="center" gap={1}>
-                <ToggleButtonGroup value={trackDays} exclusive onChange={(_, v) => v && setTrackDays(v)} size="small" sx={{ height: '28px' }}>
-                  <ToggleButton value={7}>7d</ToggleButton>
-                  <ToggleButton value={30}>30d</ToggleButton>
-                </ToggleButtonGroup>
-                <Button size="small" onClick={() => setSelectedDeviceId(null)} sx={{ textTransform: 'none' }}>
-                  Clear
-                </Button>
-              </Stack>
+              <Button size="small" onClick={() => setSelectedDeviceId(null)} sx={{ textTransform: 'none' }}>
+                Clear
+              </Button>
             </Stack>
           </>
         )}
