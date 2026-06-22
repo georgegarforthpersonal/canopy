@@ -52,13 +52,8 @@ function tagName(device: EcotopiaDevice): string {
   return device.uuid ? device.uuid.slice(-4).toUpperCase() : device.id;
 }
 
-function birdLabel(device: EcotopiaDevice): string | null {
-  if (!device.sex && !device.ring_number) return null;
-  const symbol = device.sex === 'female' ? '♀' : device.sex === 'male' ? '♂' : '';
-  const ring = device.ring_number
-    ? `${device.ring_number}${device.ring_colour ? ` (${device.ring_colour})` : ''}`
-    : '';
-  return [symbol, ring].filter(Boolean).join(' ');
+function sexSymbol(device: EcotopiaDevice): string {
+  return device.sex === 'female' ? '♀' : device.sex === 'male' ? '♂' : '';
 }
 
 interface DeviceGroup {
@@ -203,9 +198,9 @@ function TrackerTable({
         <TableHead>
           <TableRow>
             <TableCell>Tag</TableCell>
-            <TableCell>Bird</TableCell>
+            <TableCell>Sex</TableCell>
+            <TableCell>Ring</TableCell>
             <TableCell sx={{ whiteSpace: 'nowrap' }}>Last fix</TableCell>
-            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Battery</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -224,12 +219,22 @@ function TrackerTable({
                   )}
                 </Stack>
               </TableCell>
-              <TableCell>{birdLabel(d) ?? '—'}</TableCell>
+              <TableCell>{sexSymbol(d) || '—'}</TableCell>
+              <TableCell>
+                {d.ring_number ? (
+                  <Stack direction="row" alignItems="center" gap={0.75}>
+                    <Box
+                      title={d.ring_colour ?? undefined}
+                      sx={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid', borderColor: d.ring_colour ?? 'text.disabled', flexShrink: 0 }}
+                    />
+                    {d.ring_number}
+                  </Stack>
+                ) : (
+                  '—'
+                )}
+              </TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>
                 {d.gps_timestamp ? dayjs(d.gps_timestamp).format('D MMM HH:mm') : '—'}
-              </TableCell>
-              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                {d.battery_voltage != null ? `${d.battery_voltage.toFixed(1)} V` : '—'}
               </TableCell>
             </TableRow>
           ))}
