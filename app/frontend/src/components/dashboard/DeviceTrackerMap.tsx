@@ -118,19 +118,22 @@ function clusterIcon(count: number, dimmed = false): DivIcon {
   });
 }
 
+// Fits the view to all tags once, on first load. Selecting or deselecting a
+// tracker never moves the map — the only post-load view change is a cluster tap.
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
-  const key = points.map((p) => p.join(',')).join('|');
+  const hasFit = useRef(false);
   useEffect(() => {
-    if (points.length === 0) return () => { stopMapAnimation(map); };
-    if (points.length === 1) {
-      map.setView(points[0], 14);
-    } else {
-      map.fitBounds(new LatLngBounds(points.map((p) => new LatLng(p[0], p[1]))), { padding: [60, 60], maxZoom: 15 });
+    if (!hasFit.current && points.length > 0) {
+      hasFit.current = true;
+      if (points.length === 1) {
+        map.setView(points[0], 14);
+      } else {
+        map.fitBounds(new LatLngBounds(points.map((p) => new LatLng(p[0], p[1]))), { padding: [60, 60], maxZoom: 15 });
+      }
     }
     return () => { stopMapAnimation(map); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, map]);
+  }, [points, map]);
   return null;
 }
 
