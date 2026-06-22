@@ -18,7 +18,7 @@ import {
   TableCell,
   TableContainer,
 } from '@mui/material';
-import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, AttributionControl, useMap, useMapEvents } from 'react-leaflet';
 import { DivIcon, LatLngBounds, LatLng, Map as LeafletMap } from 'leaflet';
 import MapIcon from '@mui/icons-material/Map';
 import SatelliteIcon from '@mui/icons-material/Satellite';
@@ -369,7 +369,8 @@ export function DeviceTrackerMap() {
         </Stack>
 
         <Box sx={{ height: 500, width: '100%', ...fullscreenMapSx }}>
-          <MapContainer ref={mapRef} center={DEFAULT_MAP_CENTER} zoom={DEFAULT_MAP_ZOOM} style={{ height: '100%', width: '100%' }}>
+          <MapContainer ref={mapRef} center={DEFAULT_MAP_CENTER} zoom={DEFAULT_MAP_ZOOM} attributionControl={false} style={{ height: '100%', width: '100%' }}>
+            <AttributionControl prefix={false} />
             {mapType === 'satellite' ? (
               <TileLayer
                 key="satellite"
