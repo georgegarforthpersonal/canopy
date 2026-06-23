@@ -40,8 +40,9 @@ const getApiBaseUrl = () => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:8000/api';
   }
-  // Otherwise (e.g., accessed via 192.168.x.x from mobile), use the same host
-  return `http://${window.location.hostname}:8000/api`;
+  // Otherwise (e.g., accessed via 192.168.x.x from mobile), use the same host.
+  // Use window.location.protocol so an HTTPS frontend doesn't trigger a mixed-content block.
+  return `${window.location.protocol}//${window.location.hostname}:8000/api`;
 };
 
 /**
