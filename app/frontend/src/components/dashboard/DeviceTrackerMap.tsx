@@ -113,8 +113,9 @@ function clusterIcon(count: number, dimmed = false): DivIcon {
   });
 }
 
-// Fits the view to all tags once, on first load. Selecting or deselecting a
-// tracker never moves the map — the only post-load view change is a cluster tap.
+// Fits the view to all tags once, on first load. Clicking a pin never moves the
+// map; clicking a table row does (pans to it, or reframes all pins on deselect),
+// and tapping a cluster zooms in.
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
   const hasFit = useRef(false);
@@ -177,21 +178,50 @@ function TrackOverlay({ device, track, color }: { device: EcotopiaDevice; track:
   );
 }
 
-// Read-only list of every located tag. The selected row is highlighted to tie
-// it to the pin on the map; selection itself happens by tapping a pin.
+// List of every located tag. The selected row is highlighted to tie it to the
+// pin on the map; clicking a row toggles selection just like tapping a pin, and
+// selecting a pin scrolls its row into view.
 function TrackerTable({
   devices,
   colors,
   selectedId,
+  onSelect,
 }: {
   devices: EcotopiaDevice[];
   colors: Map<string, string>;
   selectedId: string | null;
+  onSelect: (id: string) => void;
 }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const selectedRowRef = useRef<HTMLTableRowElement | null>(null);
+
+  // Bring the selected row into view by scrolling ONLY the table container — not
+  // the page — so the map stays exactly where it is when a pin is clicked.
+  useEffect(() => {
+    const container = containerRef.current;
+    const row = selectedRowRef.current;
+    if (!container || !row) return;
+    const cRect = container.getBoundingClientRect();
+    const rRect = row.getBoundingClientRect();
+    // The sticky header overlaps the top of the scroll area; offset for it.
+    const headerH = container.querySelector('thead')?.getBoundingClientRect().height ?? 0;
+    if (rRect.top < cRect.top + headerH) {
+      container.scrollTop -= cRect.top + headerH - rRect.top;
+    } else if (rRect.bottom > cRect.bottom) {
+      container.scrollTop += rRect.bottom - cRect.bottom;
+    }
+  }, [selectedId]);
+
   return (
-    <TableContainer component={Paper} elevation={0} sx={{ mt: 2, border: '1px solid', borderColor: 'divider' }}>
+    <TableContainer
+      ref={containerRef}
+      component={Paper}
+      elevation={0}
+      sx={{ mt: 2, border: '1px solid', borderColor: 'divider', flex: 1, minHeight: 0, overflow: 'auto' }}
+    >
       <Table
         size="small"
+        stickyHeader
         aria-label="tracker devices"
         sx={{ '& .MuiTableCell-root': { px: 1, fontSize: '0.8125rem' } }}
       >
@@ -205,7 +235,14 @@ function TrackerTable({
         </TableHead>
         <TableBody>
           {devices.map((d) => (
-            <TableRow key={d.id} selected={d.id === selectedId}>
+            <TableRow
+              key={d.id}
+              hover
+              selected={d.id === selectedId}
+              ref={d.id === selectedId ? selectedRowRef : undefined}
+              onClick={() => onSelect(d.id)}
+              sx={{ cursor: 'pointer' }}
+            >
               <TableCell>
                 <Stack direction="row" alignItems="center" gap={1}>
                   <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: colors.get(d.id) ?? brandColors.main, flexShrink: 0 }} />
@@ -268,6 +305,22 @@ export function DeviceTrackerMap() {
 
   const toggleSelect = (id: string) => setSelectedDeviceId((cur) => (cur === id ? null : id));
 
+  // Row clicks mirror pin clicks, but additionally recentre the map on the
+  // tracker's pin (pin clicks leave the map untouched). Deselecting does nothing
+  // to the map.
+  const selectFromRow = (id: string) => {
+    if (selectedDeviceId === id) {
+      setSelectedDeviceId(null);
+      fitAllPins();
+      return;
+    }
+    const d = devices.find((dev) => dev.id === id);
+    if (d?.latitude != null && d.longitude != null) {
+      mapRef.current?.panTo([d.latitude, d.longitude]);
+    }
+    setSelectedDeviceId(id);
+  };
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -325,6 +378,17 @@ export function DeviceTrackerMap() {
     [locatedDevices],
   );
 
+  // Frame every pin — used when a row is unclicked to return to the overview.
+  const fitAllPins = () => {
+    const map = mapRef.current;
+    if (!map || fitPoints.length === 0) return;
+    if (fitPoints.length === 1) {
+      map.setView(fitPoints[0], 14);
+    } else {
+      map.fitBounds(new LatLngBounds(fitPoints.map((p) => new LatLng(p[0], p[1]))), { padding: [60, 60], maxZoom: 15 });
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
@@ -342,11 +406,21 @@ export function DeviceTrackerMap() {
   }
 
   return (
-    <Box>
+    // Bound the tab to the visible viewport and lay it out as a column: the map
+    // keeps its fixed height while the table fills the remaining space and
+    // scrolls internally, so the map stays fully visible and the page itself
+    // never scrolls. The subtracted height is everything above/around this tab —
+    // xs: 56 app bar + 16+16 page padding + 24+48 tabs (margin+height) = 160;
+    // sm: 64 + 24+24 + 24+48 = 184, rounded to 188 for breathing room.
+    // overflow:hidden keeps the fixed-height map from spilling out (and the page
+    // from scrolling) when the viewport is too short to fit map + table — e.g. a
+    // phone in landscape; the table just gets little or no room rather than the
+    // whole tab overflowing.
+    <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: { xs: 'calc(100dvh - 160px)', sm: 'calc(100dvh - 188px)' } }}>
       <Paper
         elevation={0}
         className="fullscreen-map-container"
-        sx={{ overflow: 'hidden', border: '1px solid', borderColor: 'divider', position: 'relative', ...fullscreenContainerSx }}
+        sx={{ overflow: 'hidden', border: '1px solid', borderColor: 'divider', position: 'relative', flexShrink: 0, ...fullscreenContainerSx }}
       >
         {trackLoading && (
           <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1100, height: 3 }} />
@@ -450,7 +524,7 @@ export function DeviceTrackerMap() {
         </Box>
       </Paper>
 
-      <TrackerTable devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} />
+      <TrackerTable devices={locatedDevices} colors={deviceColors} selectedId={selectedDeviceId} onSelect={selectFromRow} />
     </Box>
   );
 }
