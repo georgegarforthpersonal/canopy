@@ -22,6 +22,20 @@ export function initSentry(orgSlug: string): void {
     initialScope: {
       tags: { org: orgSlug },
     },
+    beforeSend(event) {
+      // Sentry's fetch instrumentation captures network-level TypeErrors before
+      // application catch blocks run. Suppress them here — transient server
+      // outages (e.g. deploy restarts) are not actionable application bugs, and
+      // the app already surfaces an error state to the user.
+      if (
+        event.exception?.values?.some(
+          (v) => v.type === 'TypeError' && v.value?.includes('Failed to fetch')
+        )
+      ) {
+        return null;
+      }
+      return event;
+    },
   });
 }
 
@@ -36,7 +50,7 @@ interface ApiErrorContext {
  *
  * Skips errors that are expected and not actionable:
  * - aborted requests (user navigated away / component unmounted)
- * - network failures while the browser knows it is offline
+ * - network-level failures with no HTTP status (offline or server unreachable)
  * - 4xx responses (validation, auth, not-found — surfaced to the user in-app)
  *
  * Sentry marks each error object it captures, so an error reported here will
@@ -49,9 +63,11 @@ export function reportApiError(error: unknown, context: ApiErrorContext): void {
   if (context.status !== undefined && context.status < 500) {
     return;
   }
-  // A fetch that rejects (no status) while offline is just "user has no
-  // signal" — there is nothing to fix, so don't report it.
-  if (context.status === undefined && !navigator.onLine) {
+  // A fetch that rejects with no HTTP status is a network-level failure
+  // (offline, or server temporarily unreachable, e.g. during a deploy restart).
+  // navigator.onLine only checks for a network interface, not whether this
+  // specific host is reachable, so treat all no-status TypeErrors the same way.
+  if (context.status === undefined && error instanceof TypeError) {
     return;
   }
 
