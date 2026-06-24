@@ -113,8 +113,9 @@ function clusterIcon(count: number, dimmed = false): DivIcon {
   });
 }
 
-// Fits the view to all tags once, on first load. Selecting or deselecting a
-// tracker never moves the map — the only post-load view change is a cluster tap.
+// Fits the view to all tags once, on first load. Clicking a pin never moves the
+// map; clicking a table row does (pans to it, or reframes all pins on deselect),
+// and tapping a cluster zooms in.
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
   const hasFit = useRef(false);
@@ -405,11 +406,17 @@ export function DeviceTrackerMap() {
   }
 
   return (
-    // Bound the tab to the visible viewport (minus the app bar, page padding and
-    // the dashboard tabs) and lay it out as a column: the map keeps its fixed
-    // height while the table fills the remaining space and scrolls internally,
-    // so the map stays fully visible and the page itself never scrolls.
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: { xs: 'calc(100dvh - 160px)', sm: 'calc(100dvh - 188px)' } }}>
+    // Bound the tab to the visible viewport and lay it out as a column: the map
+    // keeps its fixed height while the table fills the remaining space and
+    // scrolls internally, so the map stays fully visible and the page itself
+    // never scrolls. The subtracted height is everything above/around this tab —
+    // xs: 56 app bar + 16+16 page padding + 24+48 tabs (margin+height) = 160;
+    // sm: 64 + 24+24 + 24+48 = 184, rounded to 188 for breathing room.
+    // overflow:hidden keeps the fixed-height map from spilling out (and the page
+    // from scrolling) when the viewport is too short to fit map + table — e.g. a
+    // phone in landscape; the table just gets little or no room rather than the
+    // whole tab overflowing.
+    <Box sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: { xs: 'calc(100dvh - 160px)', sm: 'calc(100dvh - 188px)' } }}>
       <Paper
         elevation={0}
         className="fullscreen-map-container"
