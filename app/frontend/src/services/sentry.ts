@@ -49,9 +49,10 @@ export function reportApiError(error: unknown, context: ApiErrorContext): void {
   if (context.status !== undefined && context.status < 500) {
     return;
   }
-  // A fetch that rejects (no status) while offline is just "user has no
-  // signal" — there is nothing to fix, so don't report it.
-  if (context.status === undefined && !navigator.onLine) {
+  // A fetch that rejects with no HTTP status is a network-level failure
+  // (offline, DNS, CORS, TLS, transient server unreachability). These are
+  // not bugs in application code and are not actionable here, so skip them.
+  if (context.status === undefined) {
     return;
   }
 
