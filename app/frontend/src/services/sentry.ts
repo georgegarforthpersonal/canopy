@@ -49,9 +49,14 @@ export function reportApiError(error: unknown, context: ApiErrorContext): void {
   if (context.status !== undefined && context.status < 500) {
     return;
   }
-  // A fetch that rejects (no status) while offline is just "user has no
-  // signal" — there is nothing to fix, so don't report it.
-  if (context.status === undefined && !navigator.onLine) {
+  // A fetch that rejects (no status) is a network-level failure — either the
+  // browser is offline, the server is temporarily unreachable, or (rarely) a
+  // stream-read error. None of these are actionable in app code.
+  // navigator.onLine is insufficient: it returns true whenever the device has
+  // local network connectivity, even when the target server is down. CORS
+  // misconfigurations (also TypeError) are consistent across many requests and
+  // will surface through user reports and DevTools rather than a single event.
+  if (context.status === undefined && error instanceof TypeError) {
     return;
   }
 
