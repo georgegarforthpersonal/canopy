@@ -264,6 +264,50 @@ async function uploadMediaFiles<T>(endpoint: string, files: File[]): Promise<T> 
   }
 }
 
+/**
+ * Upload a single file under the form field name `file`.
+ * Used for endpoints that accept one file per request (e.g. survey-type files).
+ */
+async function uploadSingleFile<T>(endpoint: string, file: File): Promise<T> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'X-Org-Slug': ORG_SLUG,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorMessage = `Upload failed: ${response.status}`;
+      try {
+        const error = await response.json();
+        if (error.detail) {
+          errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+        }
+      } catch {
+        // Ignore parse errors
+      }
+      throw new ApiError(errorMessage, response.status);
+    }
+
+    return response.json();
+  } catch (error) {
+    reportApiError(error, { endpoint, method: 'POST', status: statusOf(error) });
+    throw error;
+  }
+}
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -325,9 +369,13 @@ export interface SpeciesTypeCount {
   count: number; // Number of sightings of this type
 }
 
+/** Survey lifecycle status. */
+export type SurveyStatus = 'scheduled' | 'completed' | 'cancelled';
+
 export interface Survey {
   id: number;
   date: string;
+  status: SurveyStatus;
   start_time: string | null;
   end_time: string | null;
   sun_percentage: number | null;
@@ -376,6 +424,7 @@ export interface SurveyQueryParams {
   start_date?: string; // YYYY-MM-DD format
   end_date?: string; // YYYY-MM-DD format
   survey_type_id?: number; // Filter by survey type ID
+  survey_status?: SurveyStatus; // Filter by lifecycle status
 }
 
 export interface SurveyDetail extends Omit<Survey, 'sightings_count'> {
@@ -564,6 +613,18 @@ export interface SurveyTypeWithDetails extends SurveyType {
 }
 
 /**
+ * A reference file attached to a survey type (methodology PDF, recording form, etc.)
+ */
+export interface SurveyTypeFile {
+  id: number;
+  survey_type_id: number;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
+}
+
+/**
  * Request body for creating a survey type
  */
 export interface SurveyTypeCreate {
@@ -628,6 +689,7 @@ export const surveysAPI = {
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     if (params?.survey_type_id) queryParams.append('survey_type_id', params.survey_type_id.toString());
+    if (params?.survey_status) queryParams.append('survey_status', params.survey_status);
 
     const queryString = queryParams.toString();
     const endpoint = queryString ? `/surveys?${queryString}` : '/surveys';
@@ -1160,6 +1222,39 @@ export const surveyTypesAPI = {
    */
   getSpeciesTypes: (): Promise<SpeciesTypeRef[]> => {
     return fetchAPI('/survey-types/species-types');
+  },
+
+  /**
+   * List reference files attached to a survey type (most recent first)
+   */
+  getFiles: (surveyTypeId: number): Promise<SurveyTypeFile[]> => {
+    return fetchAPI(`/survey-types/${surveyTypeId}/files`);
+  },
+
+  /**
+   * Upload a reference file to a survey type
+   */
+  uploadFile: (surveyTypeId: number, file: File): Promise<SurveyTypeFile> => {
+    return uploadSingleFile(`/survey-types/${surveyTypeId}/files`, file);
+  },
+
+  /**
+   * Get a presigned download URL for a survey type file
+   */
+  getFileDownloadUrl: (
+    surveyTypeId: number,
+    fileId: number,
+  ): Promise<{ download_url: string; expires_in: number; filename: string }> => {
+    return fetchAPI(`/survey-types/${surveyTypeId}/files/${fileId}/download`);
+  },
+
+  /**
+   * Delete a reference file from a survey type
+   */
+  deleteFile: (surveyTypeId: number, fileId: number): Promise<void> => {
+    return fetchAPI(`/survey-types/${surveyTypeId}/files/${fileId}`, {
+      method: 'DELETE',
+    });
   },
 };
 

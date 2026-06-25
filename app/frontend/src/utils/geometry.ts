@@ -103,3 +103,49 @@ export function formatLength(metres: number): string {
   if (metres >= 1000) return `${(metres / 1000).toFixed(2)} km`;
   return `${Math.round(metres)} m`;
 }
+
+/** Average of a list of [lng, lat] positions. */
+function averagePosition(positions: Position[]): Position | null {
+  if (positions.length === 0) return null;
+  const sum = positions.reduce<[number, number]>(
+    (acc, [lng, lat]) => [acc[0] + lng, acc[1] + lat],
+    [0, 0],
+  );
+  return [sum[0] / positions.length, sum[1] / positions.length];
+}
+
+/**
+ * A single representative [lng, lat] point for a geometry, suitable for placing
+ * a marker/label: the point itself, a line's midpoint, or a polygon ring's
+ * average vertex. Returns null for empty/unknown geometry.
+ */
+export function geometryRepresentativePoint(
+  geometry: GeoJsonGeometry | null | undefined,
+): Position | null {
+  if (!geometry) return null;
+  switch (geometry.type) {
+    case 'Point':
+      return geometry.coordinates as Position;
+    case 'MultiPoint':
+      return averagePosition(geometry.coordinates as Position[]);
+    case 'LineString': {
+      const line = geometry.coordinates as Position[];
+      if (line.length === 0) return null;
+      return line[Math.floor(line.length / 2)];
+    }
+    case 'MultiLineString': {
+      const lines = geometry.coordinates as Position[][];
+      return averagePosition(lines.flat());
+    }
+    case 'Polygon': {
+      const rings = geometry.coordinates as Position[][];
+      return averagePosition(rings[0] ?? []);
+    }
+    case 'MultiPolygon': {
+      const polys = geometry.coordinates as Position[][][];
+      return averagePosition(polys.map((p) => p[0] ?? []).flat());
+    }
+    default:
+      return null;
+  }
+}
