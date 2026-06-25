@@ -1,10 +1,11 @@
 import { AppBar, Toolbar, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, useMediaQuery, useTheme } from '@mui/material';
-import { Assignment, BarChart, Settings, Menu as MenuIcon, Close, Lock, LockOpen } from '@mui/icons-material';
+import { Assignment, BarChart, Settings, SpaceDashboard, Menu as MenuIcon, Close, Lock, LockOpen } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import healLogo from '../../assets/heal_logo.jpg';
 import { showLogo } from '../../theme';
+import { getOrgSlug } from '../../services/api';
 
 /**
  * TopNavBar - Main navigation bar with logo and navigation icons
@@ -24,12 +25,24 @@ export function TopNavBar() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const { isAuthenticated, logout, requireAuth } = useAuth();
 
+  // Spaces is a Heal-only beta for now.
+  const showSpaces = getOrgSlug() === 'heal';
+
   const navItems = [
     {
       icon: Assignment,
       label: 'Surveys',
       path: '/surveys',
     },
+    ...(showSpaces
+      ? [
+          {
+            icon: SpaceDashboard,
+            label: 'Spaces (Beta)',
+            path: '/spaces',
+          },
+        ]
+      : []),
     {
       icon: BarChart,
       label: 'Dashboards',

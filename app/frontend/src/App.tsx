@@ -21,6 +21,9 @@ import { DashboardsPage } from './pages/DashboardsPage';
 import { AdminPage } from './pages/AdminPage';
 import { NewCameraTrapSurveyPage } from './pages/NewCameraTrapSurveyPage';
 import { NewAudioSurveyPage } from './pages/NewAudioSurveyPage';
+import SpacesPage from './pages/spaces/SpacesPage';
+import SpaceDetailPage from './pages/spaces/SpaceDetailPage';
+import AllSurveysPage from './pages/spaces/AllSurveysPage';
 
 // Set dayjs to use UK locale globally (dd/mm/yyyy format)
 dayjs.locale('en-gb');
@@ -49,6 +52,11 @@ const router = createBrowserRouter([
       </AuthProvider>
     ),
     children: [
+      // Survey Spaces (beta) — grid, per-type space, and full survey history
+      { path: '/spaces', element: <SpacesPage /> },
+      { path: '/spaces/:typeId', element: <SpaceDetailPage /> },
+      { path: '/spaces/:typeId/all', element: <AllSurveysPage /> },
+
       // Dashboard page
       { path: '/dashboards', element: <DashboardsPage /> },
 
