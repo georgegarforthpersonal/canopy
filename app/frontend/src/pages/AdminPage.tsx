@@ -33,6 +33,7 @@ import { Add, Delete, RestoreFromTrash, Edit, Lock, Download } from '@mui/icons-
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import SurveyTypeFilesManager from '../components/admin/SurveyTypeFilesManager';
 import { SPACING } from '../config/responsive';
 import { useResponsive } from '../hooks/useResponsive';
 import { useRowHighlight } from '../hooks';
@@ -1143,6 +1144,9 @@ export function AdminPage() {
             )}
             sx={{ mt: 2 }}
           />
+          {surveyTypeDialogMode === 'edit' && editingSurveyType && (
+            <SurveyTypeFilesManager surveyTypeId={editingSurveyType.id} />
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSurveyTypeDialogOpen(false)} disabled={savingSurveyType}>
