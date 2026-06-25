@@ -121,6 +121,11 @@ class EcotopiaClient:
                 json={"token": self.token, "data": data},
                 timeout=self.timeout,
             )
+            # The token can expire either as an HTTP 401 or an in-body code 401,
+            # depending on the endpoint — re-login and retry once on either.
+            if response.status_code == 401 and attempt == 0:
+                self.token = ""
+                continue
             response.raise_for_status()
             body = response.json()
             if body.get("code") == 401 and attempt == 0:
