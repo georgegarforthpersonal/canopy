@@ -30,6 +30,19 @@ class DeviceType(str, PyEnum):
     moth_light_trap = "moth_light_trap"
 
 
+class SurveyStatus(str, PyEnum):
+    """Lifecycle of a survey.
+
+    - scheduled: planned/assigned, not yet carried out
+    - completed: the survey took place and was recorded (any sighting count,
+      including a valid nil count of zero)
+    - cancelled: scheduled but did not happen (e.g. weather, no-shows)
+    """
+    scheduled = "scheduled"
+    completed = "completed"
+    cancelled = "cancelled"
+
+
 # ============================================================================
 # Organisation Models
 # ============================================================================
@@ -529,6 +542,41 @@ class SurveyTypeWithDetails(SurveyTypeRead):
 
 
 # ============================================================================
+# Survey Type File Models (reference files: methodology PDFs, recording forms)
+# ============================================================================
+
+class SurveyTypeFile(SQLModel, table=True):  # type: ignore[call-arg]
+    """A reference file attached to a survey type, stored in R2."""
+    __tablename__ = "survey_type_file"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    survey_type_id: int = Field(
+        foreign_key="survey_type.id", ondelete="CASCADE", index=True,
+        description="Survey type this file belongs to"
+    )
+    organisation_id: int = Field(foreign_key="organisation.id", index=True)
+    filename: str = Field(max_length=255, description="Original filename as uploaded")
+    content_type: Optional[str] = Field(default=None, max_length=100, description="MIME type")
+    size_bytes: Optional[int] = Field(default=None, description="File size in bytes")
+    r2_key: str = Field(max_length=500, unique=True, description="R2 storage key")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
+    )
+
+
+class SurveyTypeFileRead(SQLModel):
+    """Model for reading a survey type file (no R2 key exposed)."""
+    id: int
+    survey_type_id: int
+    filename: str
+    content_type: Optional[str]
+    size_bytes: Optional[int]
+    created_at: datetime
+
+
+# ============================================================================
 # Survey Models
 # ============================================================================
 
@@ -544,6 +592,11 @@ class SurveyBase(SQLModel):
     location_id: Optional[int] = Field(None, foreign_key="location.id", description="Location ID (required when survey type uses survey-level location)")
     survey_type_id: Optional[int] = Field(None, foreign_key="survey_type.id", description="Survey type ID")
     device_id: Optional[int] = Field(None, foreign_key="device.id", description="Device ID (for camera trap surveys)")
+    status: SurveyStatus = Field(
+        default=SurveyStatus.completed,
+        sa_column=sa.Column("status", sa.String(20), nullable=False, server_default="completed"),
+        description="Survey lifecycle: scheduled, completed (recorded, incl. nil counts) or cancelled",
+    )
 
 
 class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
@@ -590,6 +643,7 @@ class SurveyUpdate(SQLModel):
     notes: Optional[str] = None
     location_id: Optional[int] = Field(None, gt=0)
     device_id: Optional[int] = None
+    status: Optional[SurveyStatus] = None
     surveyor_ids: Optional[List[int]] = None
 
 

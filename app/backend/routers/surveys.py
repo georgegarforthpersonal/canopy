@@ -26,7 +26,7 @@ from auth import require_admin
 from dependencies import get_current_organisation
 import logging
 from models import (
-    Survey, SurveyRead, SurveyCreate, SurveyUpdate,
+    Survey, SurveyRead, SurveyCreate, SurveyUpdate, SurveyStatus,
     Sighting, SightingCreate, SightingUpdate, SightingWithDetails,
     Species, SpeciesType, Location, SurveySurveyor,
     BreedingStatusCode, BreedingStatusCodeRead,
@@ -113,6 +113,7 @@ async def get_surveys(
     start_date: Optional[date] = Query(None, description="Filter surveys from this date (inclusive)"),
     end_date: Optional[date] = Query(None, description="Filter surveys until this date (inclusive)"),
     survey_type_id: Optional[int] = Query(None, description="Filter by survey type ID"),
+    survey_status: Optional[SurveyStatus] = Query(None, description="Filter by lifecycle status"),
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db)
 ) -> dict[str, Any]:
@@ -147,6 +148,10 @@ async def get_surveys(
         # Apply survey type filter
         if survey_type_id:
             query = query.filter(Survey.survey_type_id == survey_type_id)
+
+        # Apply lifecycle status filter
+        if survey_status:
+            query = query.filter(Survey.status == survey_status)
 
         # Get total count for pagination metadata
         total = query.count()
@@ -243,6 +248,7 @@ async def get_surveys(
                 "notes": survey.notes,
                 "location_id": survey.location_id,
                 "device_id": survey.device_id,
+                "status": survey.status,
                 "surveyor_ids": surveyor_ids_map.get(survey.id, []),
                 "sightings_count": sightings_count_map.get(survey.id, 0),
                 "species_breakdown": species_breakdown_map.get(survey.id, []),
@@ -308,6 +314,7 @@ async def get_survey(
         "location_id": survey.location_id,
         "location_name": survey.location.name if survey.location else None,
         "device_id": survey.device_id,
+        "status": survey.status,
         "surveyor_ids": surveyor_ids_list,
         "survey_type_id": survey.survey_type_id
     }
@@ -341,6 +348,7 @@ async def create_survey(
             location_id=survey.location_id,
             device_id=survey.device_id,
             survey_type_id=survey.survey_type_id,
+            status=survey.status,
             organisation_id=org.id
         )
         db.add(db_survey)
@@ -368,6 +376,7 @@ async def create_survey(
             "notes": db_survey.notes,
             "location_id": db_survey.location_id,
             "device_id": db_survey.device_id,
+            "status": db_survey.status,
             "survey_type_id": db_survey.survey_type_id,
             "surveyor_ids": survey.surveyor_ids
         }
@@ -446,6 +455,7 @@ async def update_survey(
         "notes": db_survey.notes,
         "location_id": db_survey.location_id,
         "device_id": db_survey.device_id,
+        "status": db_survey.status,
         "survey_type_id": db_survey.survey_type_id,
         "surveyor_ids": surveyor_ids_list
     }
