@@ -40,7 +40,13 @@ const getApiBaseUrl = () => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:8000/api';
   }
-  // Otherwise (e.g., accessed via 192.168.x.x from mobile), use the same host
+  // For HTTPS deployments (e.g. Railway) the backend is on the same origin at /api.
+  // Mixed-content rules block http:// fetches from https:// pages, so we must
+  // match the page protocol here rather than hard-coding http://:8000.
+  if (window.location.protocol === 'https:') {
+    return `https://${window.location.hostname}/api`;
+  }
+  // HTTP local-network access (e.g. 192.168.x.x from a mobile device during dev)
   return `http://${window.location.hostname}:8000/api`;
 };
 
