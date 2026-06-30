@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from typing import Callable, Optional
 
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 
 from config import settings
 from database.connection import get_session_factory
@@ -128,28 +129,37 @@ class JobDispatcher:
     def claim(self, kind: JobKind, limit: int) -> list[int]:
         """Atomically claim up to `limit` pending rows and mark them processing."""
         SessionLocal = get_session_factory()
-        with SessionLocal() as db:
-            rows = db.execute(
-                text(
-                    f"""
-                    UPDATE {kind.table}
-                    SET processing_status = 'processing',
-                        processing_started_at = :now,
-                        processing_error = NULL,
-                        processing_attempts = processing_attempts + 1
-                    WHERE id IN (
-                        SELECT id FROM {kind.table}
-                        WHERE processing_status = 'pending'
-                        ORDER BY id
-                        LIMIT :limit
-                        FOR UPDATE SKIP LOCKED
-                    )
-                    RETURNING id
-                    """
-                ),
-                {"now": datetime.utcnow(), "limit": limit},
-            ).scalars().all()
-            db.commit()
+        try:
+            with SessionLocal() as db:
+                rows = db.execute(
+                    text(
+                        f"""
+                        UPDATE {kind.table}
+                        SET processing_status = 'processing',
+                            processing_started_at = :now,
+                            processing_error = NULL,
+                            processing_attempts = processing_attempts + 1
+                        WHERE id IN (
+                            SELECT id FROM {kind.table}
+                            WHERE processing_status = 'pending'
+                            ORDER BY id
+                            LIMIT :limit
+                            FOR UPDATE SKIP LOCKED
+                        )
+                        RETURNING id
+                        """
+                    ),
+                    {"now": datetime.utcnow(), "limit": limit},
+                ).scalars().all()
+                db.commit()
+        except ProgrammingError as e:
+            if getattr(getattr(e, "orig", None), "pgcode", None) == "42P01":
+                logger.warning(
+                    f"Skipping {kind.name} jobs: table '{kind.table}' not found "
+                    f"— a database migration may be pending"
+                )
+                return []
+            raise
         if rows:
             logger.info(f"Claimed {len(rows)} {kind.name} job(s): {list(rows)}")
         return list(rows)
@@ -158,30 +168,39 @@ class JobDispatcher:
         """Requeue (or fail) rows stuck in 'processing' past the job timeout."""
         cutoff = datetime.utcnow() - timedelta(seconds=self.job_timeout * 1.5)
         SessionLocal = get_session_factory()
-        with SessionLocal() as db:
-            for kind in JOB_KINDS:
-                result = db.execute(
-                    text(
-                        f"""
-                        UPDATE {kind.table}
-                        SET processing_status = CASE
-                                WHEN processing_attempts >= :max_attempts THEN 'failed'
-                                ELSE 'pending'
-                            END,
-                            processing_error = CASE
-                                WHEN processing_attempts >= :max_attempts
-                                THEN 'Processing was interrupted and exceeded the retry limit'
-                                ELSE processing_error
-                            END
-                        WHERE processing_status = 'processing'
-                          AND (processing_started_at IS NULL OR processing_started_at < :cutoff)
-                        """
-                    ),
-                    {"max_attempts": self.max_attempts, "cutoff": cutoff},
+        try:
+            with SessionLocal() as db:
+                for kind in JOB_KINDS:
+                    result = db.execute(
+                        text(
+                            f"""
+                            UPDATE {kind.table}
+                            SET processing_status = CASE
+                                    WHEN processing_attempts >= :max_attempts THEN 'failed'
+                                    ELSE 'pending'
+                                END,
+                                processing_error = CASE
+                                    WHEN processing_attempts >= :max_attempts
+                                    THEN 'Processing was interrupted and exceeded the retry limit'
+                                    ELSE processing_error
+                                END
+                            WHERE processing_status = 'processing'
+                              AND (processing_started_at IS NULL OR processing_started_at < :cutoff)
+                            """
+                        ),
+                        {"max_attempts": self.max_attempts, "cutoff": cutoff},
+                    )
+                    if result.rowcount:
+                        logger.warning(f"Requeued {result.rowcount} stale {kind.name} job(s)")
+                db.commit()
+        except ProgrammingError as e:
+            if getattr(getattr(e, "orig", None), "pgcode", None) == "42P01":
+                logger.warning(
+                    "Stale sweep skipped: a job queue table is missing "
+                    "— a database migration may be pending"
                 )
-                if result.rowcount:
-                    logger.warning(f"Requeued {result.rowcount} stale {kind.name} job(s)")
-            db.commit()
+                return
+            raise
 
     async def _run_job(self, kind: JobKind, row_id: int) -> None:
         loop = asyncio.get_running_loop()
