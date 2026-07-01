@@ -6,7 +6,7 @@ import { Box, Paper, Typography, ButtonBase } from '@mui/material';
 import { AssignmentTurnedIn, ChevronRight } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
 import { spaceCardSx, spaceColors } from '../../pages/spaces/spacesTokens';
-import { buildWorklist } from '../../pages/spaces/surveyState';
+import { buildWorklist, deriveSurveyState } from '../../pages/spaces/surveyState';
 import SurveyWorklistRow from './SurveyWorklistRow';
 
 interface SurveysPanelProps {
@@ -51,7 +51,7 @@ export default function SurveysPanel({
         <SurveyWorklistRow
           key={s.id}
           survey={s}
-          state="needs-survey"
+          state={deriveSurveyState(s) === 'due-this-week' ? 'due-this-week' : 'needs-survey'}
           surveyors={resolveSurveyors(s.surveyor_ids)}
           onAddSurvey={onAddSurvey}
           onAssign={onAssign}

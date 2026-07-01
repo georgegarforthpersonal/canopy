@@ -330,13 +330,38 @@ export interface Species {
 }
 
 /** Spatial representation of a location. */
-export type LocationType = 'area' | 'route' | 'point' | 'none';
+// 'sector' is a sub-segment of a route; sectors are never top-level locations,
+// they are only returned nested under their parent route.
+export type LocationType = 'area' | 'route' | 'point' | 'none' | 'sector';
 
 export interface Location {
   id: number;
   name: string;
   // Optional because some legacy responses (e.g. survey-type details) may omit it.
   location_type?: LocationType;
+  // Parent route name for a sector (null/absent for top-level locations). Used to
+  // display children as "<parent> - child".
+  parent_name?: string | null;
+}
+
+/** Display label for a location: "<parent> - child" for sectors, else the name. */
+export function locationDisplayName(loc: Location): string {
+  return loc.parent_name ? `${loc.parent_name} - ${loc.name}` : loc.name;
+}
+
+/** A sector (sub-segment) of a route, nested under its parent route. */
+export interface Sector {
+  id: number;
+  name: string;
+  ordinal: number; // 1-based order within the route
+  geometry: GeoJsonGeometry | null; // GeoJSON LineString
+}
+
+/** A sector as sent to the API when creating/updating a route. */
+export interface SectorInput {
+  id?: number; // present when updating an existing sector in place
+  name: string;
+  geometry: GeoJsonGeometry; // GeoJSON LineString
 }
 
 /**
@@ -347,17 +372,21 @@ export interface LocationWithBoundary extends Location {
   geometry: GeoJsonGeometry | null;
   // Polygon outer ring as [lng, lat] pairs — kept for backward-compatible overlays; null for non-areas.
   boundary_geometry: [number, number][] | null;
+  // Ordered sub-segments of a route; null/absent for non-routes.
+  sectors?: Sector[] | null;
 }
 
 /**
  * Payload for creating/updating a location with optional geometry.
  * `geometry` is GeoJSON ([lng, lat]); omit it on update to leave the shape
- * unchanged, or send `null` to clear it.
+ * unchanged, or send `null` to clear it. `sectors` behaves the same: omit to
+ * leave untouched, send a list to replace the full set.
  */
 export interface LocationInput {
   name: string;
   location_type: LocationType;
   geometry?: GeoJsonGeometry | null;
+  sectors?: SectorInput[] | null;
 }
 
 /**
@@ -376,6 +405,10 @@ export interface Survey {
   id: number;
   date: string;
   status: SurveyStatus;
+  // Weekly-cadence surveys carry an inclusive window they may be carried out in;
+  // null for day-precise schedules (where `date` is the scheduled day).
+  scheduled_window_start: string | null;
+  scheduled_window_end: string | null;
   start_time: string | null;
   end_time: string | null;
   sun_percentage: number | null;
@@ -425,6 +458,18 @@ export interface SurveyQueryParams {
   end_date?: string; // YYYY-MM-DD format
   survey_type_id?: number; // Filter by survey type ID
   survey_status?: SurveyStatus; // Filter by lifecycle status
+}
+
+/**
+ * Request body for bulk-scheduling a recurring series of surveys.
+ * The frontend expands the recurrence rule into explicit `dates`.
+ */
+export interface SurveyScheduleRequest {
+  survey_type_id?: number | null;
+  location_id?: number | null;
+  surveyor_ids: number[];
+  notes?: string | null;
+  dates: string[]; // YYYY-MM-DD, one survey created per date
 }
 
 export interface SurveyDetail extends Omit<Survey, 'sightings_count'> {
@@ -581,12 +626,19 @@ export interface SpeciesTypeRef {
 }
 
 /**
+ * How surveys of a type are scheduled: for a specific day, or a whole week
+ * (any day within the window).
+ */
+export type ScheduleCadence = 'date' | 'weekly';
+
+/**
  * Survey type configuration
  */
 export interface SurveyType {
   id: number;
   name: string;
   description: string | null;
+  schedule_cadence: ScheduleCadence;
   location_at_sighting_level: boolean;
   allow_geolocation: boolean;
   allow_sighting_notes: boolean;
@@ -644,6 +696,7 @@ export interface SurveyTypeCreate {
   sighting_device_type?: DeviceType | null;
   icon?: string;
   color?: string;
+  schedule_cadence?: ScheduleCadence;
   location_ids: number[];
   species_type_ids: number[];
 }
@@ -668,6 +721,7 @@ export interface SurveyTypeUpdate {
   sighting_device_type?: DeviceType | null;
   icon?: string;
   color?: string;
+  schedule_cadence?: ScheduleCadence;
   is_active?: boolean;
   location_ids?: number[];
   species_type_ids?: number[];
@@ -711,6 +765,17 @@ export const surveysAPI = {
     return fetchAPI('/surveys', {
       method: 'POST',
       body: JSON.stringify(survey),
+    });
+  },
+
+  /**
+   * Bulk-schedule a recurring series of surveys (one per date), each created
+   * with status 'scheduled'. Used by the admin scheduling UI.
+   */
+  bulkSchedule: (payload: SurveyScheduleRequest): Promise<Survey[]> => {
+    return fetchAPI('/surveys/schedule', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 

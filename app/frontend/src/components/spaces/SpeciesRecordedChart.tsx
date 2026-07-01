@@ -33,14 +33,13 @@ export default function SpeciesRecordedChart({ speciesType }: SpeciesRecordedCha
             )}
           </Box>
         </Box>
-        <Typography sx={{ fontSize: 12, color: spaceColors.textMuted }}>Cumulative</Typography>
       </Box>
 
       <Box sx={{ mt: 1.5 }}>
         <CumulativeSpeciesChart
           speciesType={speciesType}
           color={spaceColors.brand}
-          height={140}
+          height={240}
           emptyMessage="No data yet"
           onSummary={setSummary}
         />

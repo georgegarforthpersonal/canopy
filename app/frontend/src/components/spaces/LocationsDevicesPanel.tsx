@@ -1,9 +1,10 @@
 /**
  * Locations & devices panel for a space. Lists the locations assigned to the
  * survey type plus the devices sited at them, as either a map or a list (local
- * toggle, default Map). Letters (A/B/C…) tie the two views together.
+ * toggle, default Map). Letters (A/B/C…) tie the two views together. The map is
+ * the same shared DeviceMap used by the admin tab, in read-only mode.
  */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Paper,
@@ -12,17 +13,16 @@ import {
   ToggleButton,
   CircularProgress,
 } from '@mui/material';
-import { Map as MapIcon, ViewList } from '@mui/icons-material';
+import { Map as MapIcon, ViewList, Place as PlaceIcon } from '@mui/icons-material';
 import type { Device, LocationWithBoundary } from '../../services/api';
 import {
-  geometryRepresentativePoint,
   geometryLengthM,
   geometryAreaSqm,
   formatLength,
   formatArea,
 } from '../../utils/geometry';
 import { spaceCardSx, spaceColors } from '../../pages/spaces/spacesTokens';
-import SpaceLocationsMap, { type LetteredLocation } from './SpaceLocationsMap';
+import DeviceMap from '../admin/DeviceMap';
 
 interface LocationsDevicesPanelProps {
   locations: LocationWithBoundary[];
@@ -30,12 +30,15 @@ interface LocationsDevicesPanelProps {
   loading: boolean;
 }
 
-const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 function locationDetail(loc: LocationWithBoundary): string {
   if (loc.location_type === 'route') {
     const len = geometryLengthM(loc.geometry);
-    return len > 0 ? `Transect · ${formatLength(len)}` : 'Transect';
+    const sectorCount = loc.sectors?.length ?? 0;
+    const parts = ['Transect'];
+    if (sectorCount > 0) parts.push(`${sectorCount} ${sectorCount === 1 ? 'sector' : 'sectors'}`);
+    if (len > 0) parts.push(formatLength(len));
+    return parts.join(' · ');
   }
   if (loc.location_type === 'area') {
     const area = geometryAreaSqm(loc.geometry);
@@ -70,19 +73,6 @@ export default function LocationsDevicesPanel({
   loading,
 }: LocationsDevicesPanelProps) {
   const [view, setView] = useState<'map' | 'list'>('map');
-
-  const letteredLocations = useMemo<LetteredLocation[]>(
-    () =>
-      locations.map((location, idx) => {
-        const rep = geometryRepresentativePoint(location.geometry);
-        return {
-          location,
-          letter: LETTERS[idx] ?? '•',
-          point: rep ? [rep[1], rep[0]] : null, // [lng,lat] → [lat,lng]
-        };
-      }),
-    [locations],
-  );
 
   const isEmpty = locations.length === 0 && devices.length === 0;
 
@@ -148,10 +138,15 @@ export default function LocationsDevicesPanel({
           </Typography>
         </Box>
       ) : view === 'map' ? (
-        <SpaceLocationsMap letteredLocations={letteredLocations} devices={devices} />
+        <DeviceMap
+          locationsWithBoundaries={locations}
+          devices={devices}
+          readOnly
+          height={360}
+        />
       ) : (
         <Box>
-          {letteredLocations.map(({ location, letter }) => (
+          {locations.map((location) => (
             <Box
               key={`loc-${location.id}`}
               sx={{
@@ -173,12 +168,10 @@ export default function LocationsDevicesPanel({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: 12.5,
                   flexShrink: 0,
                 }}
               >
-                {letter}
+                <PlaceIcon sx={{ fontSize: 16 }} />
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: spaceColors.textPrimary }} noWrap>

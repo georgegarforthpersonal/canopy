@@ -160,6 +160,7 @@ async def get_survey_type(
         sighting_device_type=survey_type.sighting_device_type,
         icon=survey_type.icon,
         color=survey_type.color,
+        schedule_cadence=survey_type.schedule_cadence,
         is_active=survey_type.is_active,
         locations=[LocationRead.model_validate(loc) for loc in locations],
         species_types=[SpeciesTypeRead.model_validate(st) for st in species_types]
@@ -220,6 +221,7 @@ async def create_survey_type(
         sighting_device_type=survey_type.sighting_device_type,
         icon=survey_type.icon,
         color=survey_type.color,
+        schedule_cadence=survey_type.schedule_cadence,
         organisation_id=org.id
     )
     db.add(db_survey_type)

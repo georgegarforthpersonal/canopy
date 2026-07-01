@@ -5,15 +5,17 @@
  * lifecycle `status`, and we map it (plus the date for scheduled rows) to a
  * worklist state. The status is authoritative — a completed survey with a nil
  * count of zero is still "recorded", not "needs a survey".
- *   - upcoming     : scheduled, date in the future
- *   - needs-survey : scheduled, date today/past (overdue, not yet recorded)
- *   - recorded     : completed (any sighting count, including zero)
- *   - cancelled    : scheduled survey that did not take place
+ *   - upcoming      : scheduled, date/window in the future
+ *   - due-this-week : scheduled weekly cadence, today falls inside the window
+ *                     (due to be carried out, but NOT yet overdue)
+ *   - needs-survey  : scheduled, date/window today or past (overdue, not recorded)
+ *   - recorded      : completed (any sighting count, including zero)
+ *   - cancelled     : scheduled survey that did not take place
  */
 import dayjs from 'dayjs';
 import type { Survey } from '../../services/api';
 
-export type SurveyState = 'recorded' | 'upcoming' | 'needs-survey' | 'cancelled';
+export type SurveyState = 'recorded' | 'upcoming' | 'due-this-week' | 'needs-survey' | 'cancelled';
 
 /** Today's date as an ISO YYYY-MM-DD string (local time). */
 function todayIso(): string {
@@ -23,23 +25,17 @@ function todayIso(): string {
 export function deriveSurveyState(survey: Survey, today: string = todayIso()): SurveyState {
   if (survey.status === 'completed') return 'recorded';
   if (survey.status === 'cancelled') return 'cancelled';
-  // scheduled: ISO date strings compare correctly lexicographically.
+  // Weekly cadence: the survey may be carried out any day within the inclusive
+  // [start, end] window, so it is "due this week" (not overdue) while today is
+  // inside the window, and only becomes overdue once the window has passed.
+  const { scheduled_window_start: windowStart, scheduled_window_end: windowEnd } = survey;
+  if (windowStart && windowEnd) {
+    if (today < windowStart) return 'upcoming';
+    if (today <= windowEnd) return 'due-this-week';
+    return 'needs-survey';
+  }
+  // Day-precise cadence: ISO date strings compare correctly lexicographically.
   return survey.date > today ? 'upcoming' : 'needs-survey';
-}
-
-export interface DateBlockParts {
-  month: string; // "JUN"
-  day: string; // "21"
-  weekday: string; // "SAT"
-}
-
-export function dateBlockParts(isoDate: string): DateBlockParts {
-  const d = dayjs(isoDate);
-  return {
-    month: d.format('MMM').toUpperCase(),
-    day: d.format('D'),
-    weekday: d.format('ddd').toUpperCase(),
-  };
 }
 
 /** Compact "next session" label, e.g. "Sat 27 Jun". */
@@ -47,13 +43,52 @@ export function formatSessionDate(isoDate: string): string {
   return dayjs(isoDate).format('ddd D MMM');
 }
 
+/** Whether a survey is scheduled for a whole week (weekly cadence) rather than a day. */
+export function hasWindow(survey: Survey): boolean {
+  return Boolean(survey.scheduled_window_start && survey.scheduled_window_end);
+}
+
 /**
- * Build the fixed worklist for the Surveys panel: up to 3 needs-survey rows
- * (most recent past first) followed by up to 3 upcoming rows (soonest first).
+ * The date label that heads a survey row: a week range for weekly cadence, or a
+ * single dated day, both carrying the year — e.g. "1–7 Jul 2026" / "Sat 27 Jun 2026".
+ */
+export function formatSurveyDate(survey: Survey): string {
+  if (survey.scheduled_window_start && survey.scheduled_window_end) {
+    return formatWeekRange(survey.scheduled_window_start, survey.scheduled_window_end);
+  }
+  return dayjs(survey.date).format('ddd D MMM YYYY');
+}
+
+/**
+ * Compact inclusive week-range label from two ISO dates, e.g.
+ *   same month  → "1–7 Jun 2026"
+ *   cross month → "29 Jun – 5 Jul 2026"
+ *   cross year  → "29 Dec 2025 – 4 Jan 2026"
+ */
+export function formatWeekRange(startIso: string, endIso: string): string {
+  const start = dayjs(startIso);
+  const end = dayjs(endIso);
+  if (start.isSame(end, 'year')) {
+    if (start.isSame(end, 'month')) {
+      return `${start.format('D')}–${end.format('D')} ${end.format('MMM YYYY')}`;
+    }
+    return `${start.format('D MMM')} – ${end.format('D MMM YYYY')}`;
+  }
+  return `${start.format('D MMM YYYY')} – ${end.format('D MMM YYYY')}`;
+}
+
+/**
+ * Build the fixed worklist for the Surveys panel: up to 3 rows that need doing
+ * (overdue and due-this-week, most recent first) followed by up to 3 upcoming
+ * rows (soonest first). A due-this-week (weekly, in-window) survey is actionable
+ * now, so it sits with needs-survey rather than being filtered out as upcoming.
  */
 export function buildWorklist(surveys: Survey[], today: string = todayIso()) {
   const needsSurvey = surveys
-    .filter((s) => deriveSurveyState(s, today) === 'needs-survey')
+    .filter((s) => {
+      const state = deriveSurveyState(s, today);
+      return state === 'needs-survey' || state === 'due-this-week';
+    })
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 3);
 
@@ -65,10 +100,10 @@ export function buildWorklist(surveys: Survey[], today: string = todayIso()) {
   return { needsSurvey, upcoming };
 }
 
-/** Soonest upcoming survey date, or null if none scheduled. */
-export function nextSessionDate(surveys: Survey[], today: string = todayIso()): string | null {
+/** Soonest upcoming survey, or null if none scheduled. */
+export function nextScheduledSurvey(surveys: Survey[], today: string = todayIso()): Survey | null {
   const upcoming = surveys
     .filter((s) => deriveSurveyState(s, today) === 'upcoming')
     .sort((a, b) => a.date.localeCompare(b.date));
-  return upcoming[0]?.date ?? null;
+  return upcoming[0] ?? null;
 }

@@ -1,6 +1,7 @@
 /**
  * All surveys: the full chronological history/forward-schedule for a survey
- * type. Status-only rows (no titles); the date block is the identifier. The
+ * type. Status-only rows (no titles); the date — a single day or a week range,
+ * with the year — heads each row and is the identifier (no calendar tile). The
  * server returns surveys date-descending (upcoming on top), paged via Load more.
  */
 import { useEffect, useState } from 'react';
@@ -17,11 +18,10 @@ import {
 } from '../../services/api';
 import { spaceCardSx, spaceColors } from './spacesTokens';
 import { primarySpeciesType } from './spaceMeta';
-import { deriveSurveyState, type SurveyState } from './surveyState';
+import { deriveSurveyState, formatSurveyDate, type SurveyState } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSurveyorLookup } from '../../hooks';
 import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
-import DateBlock from '../../components/spaces/DateBlock';
 import SurveyorAvatars from '../../components/spaces/SurveyorAvatars';
 import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
 
@@ -30,6 +30,7 @@ const PAGE_SIZE = 25;
 const STATUS_STYLES: Record<SurveyState, { label: string; color: string; bg: string }> = {
   recorded: { label: 'Recorded', color: '#2E6B42', bg: '#DBEDDB' },
   upcoming: { label: 'Upcoming', color: '#454648', bg: '#EBECED' },
+  'due-this-week': { label: 'Due this week', color: '#2C5F8A', bg: '#DCE8F2' },
   'needs-survey': { label: 'Needs survey', color: spaceColors.amberMonth, bg: '#FBF3DB' },
   cancelled: { label: 'Cancelled', color: '#888888', bg: '#EBECED' },
 };
@@ -137,6 +138,18 @@ export default function AllSurveysPage() {
     }
   };
 
+  // Open a survey, telling it to return here (the space's survey history)
+  // rather than the main surveys list after editing/deleting.
+  const goToSurvey = (surveyId: number) =>
+    navigate(`/surveys/${surveyId}`, {
+      state: {
+        returnTo: {
+          pathname: `/spaces/${surveyTypeId}/all`,
+          label: surveyType?.name ?? 'All surveys',
+        },
+      },
+    });
+
   return (
     <Box sx={{ bgcolor: spaceColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
@@ -166,6 +179,7 @@ export default function AllSurveysPage() {
             surveys.map((survey, idx) => {
               const state = deriveSurveyState(survey);
               const assigned = resolveSurveyors(survey.surveyor_ids);
+              const actionable = state === 'needs-survey' || state === 'due-this-week';
               return (
                 <Box
                   key={survey.id}
@@ -180,16 +194,20 @@ export default function AllSurveysPage() {
                     cursor: 'pointer',
                     '&:hover': { bgcolor: state === 'needs-survey' ? spaceColors.amberRowBg : spaceColors.page },
                   }}
-                  onClick={() => navigate(`/surveys/${survey.id}`)}
+                  onClick={() => goToSurvey(survey.id)}
                 >
-                  <DateBlock isoDate={survey.date} amber={state === 'needs-survey'} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    {survey.location_name && (
-                      <Typography sx={{ fontSize: 13, fontWeight: 600, color: spaceColors.textPrimary }} noWrap>
-                        {survey.location_name}
-                      </Typography>
-                    )}
-                    <StatusChip state={state} />
+                    <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: spaceColors.textPrimary }} noWrap>
+                      {formatSurveyDate(survey)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
+                      <StatusChip state={state} />
+                      {survey.location_name && (
+                        <Typography sx={{ fontSize: 13, color: spaceColors.textMuted }} noWrap>
+                          {survey.location_name}
+                        </Typography>
+                      )}
+                    </Box>
                   </Box>
 
                   {/* Right cell varies by status */}
@@ -242,13 +260,13 @@ export default function AllSurveysPage() {
                     </Box>
                   )}
 
-                  {state === 'needs-survey' && (
+                  {actionable && (
                     <Button
                       variant="contained"
                       startIcon={<Add sx={{ fontSize: 18 }} />}
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/surveys/${survey.id}`);
+                        goToSurvey(survey.id);
                       }}
                       sx={{
                         flexShrink: 0,

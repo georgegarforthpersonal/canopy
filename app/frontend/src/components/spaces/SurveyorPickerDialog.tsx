@@ -3,26 +3,21 @@
  * surveyors (not a self "sign me up") and saving PUTs the new surveyor_ids onto
  * the survey. The space updates the row's avatars from the returned ids.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Checkbox,
   Typography,
-  Box,
   CircularProgress,
 } from '@mui/material';
 import { surveysAPI, type Survey, type Surveyor } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { spaceColors } from '../../pages/spaces/spacesTokens';
 import { formatSessionDate } from '../../pages/spaces/surveyState';
+import SurveyorMultiSelect from '../surveys/SurveyorMultiSelect';
 
 interface SurveyorPickerDialogProps {
   open: boolean;
@@ -41,36 +36,20 @@ export default function SurveyorPickerDialog({
   onSaved,
 }: SurveyorPickerDialogProps) {
   const toast = useToast();
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Surveyor[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Reset selection to the survey's current surveyors each time it opens.
   useEffect(() => {
     if (open && survey) {
-      setSelected(new Set(survey.surveyor_ids));
+      const ids = new Set(survey.surveyor_ids);
+      setSelected(surveyors.filter((s) => ids.has(s.id)));
     }
-  }, [open, survey]);
-
-  const toggle = (id: number) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const sortedSurveyors = useMemo(
-    () =>
-      [...surveyors].sort((a, b) =>
-        `${a.last_name ?? ''} ${a.first_name}`.localeCompare(`${b.last_name ?? ''} ${b.first_name}`),
-      ),
-    [surveyors],
-  );
+  }, [open, survey, surveyors]);
 
   const handleSave = async () => {
     if (!survey) return;
-    const ids = Array.from(selected);
+    const ids = selected.map((s) => s.id);
     setSaving(true);
     try {
       await surveysAPI.update(survey.id, { surveyor_ids: ids });
@@ -95,33 +74,19 @@ export default function SurveyorPickerDialog({
           </Typography>
         )}
       </DialogTitle>
-      <DialogContent dividers sx={{ p: 0 }}>
-        {sortedSurveyors.length === 0 ? (
-          <Box sx={{ p: 3 }}>
-            <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
-              No surveyors available. Add surveyors in the Admin tab first.
-            </Typography>
-          </Box>
+      <DialogContent dividers>
+        {surveyors.length === 0 ? (
+          <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
+            No surveyors available. Add surveyors in the Admin tab first.
+          </Typography>
         ) : (
-          <List dense disablePadding>
-            {sortedSurveyors.map((s) => (
-              <ListItemButton key={s.id} onClick={() => toggle(s.id)} disabled={saving}>
-                <ListItemIcon sx={{ minWidth: 36 }}>
-                  <Checkbox
-                    edge="start"
-                    checked={selected.has(s.id)}
-                    tabIndex={-1}
-                    disableRipple
-                    sx={{ '&.Mui-checked': { color: spaceColors.brand } }}
-                  />
-                </ListItemIcon>
-                <ListItemText
-                  primary={`${s.first_name}${s.last_name ? ' ' + s.last_name : ''}`}
-                  primaryTypographyProps={{ fontSize: 14 }}
-                />
-              </ListItemButton>
-            ))}
-          </List>
+          <SurveyorMultiSelect
+            options={surveyors}
+            value={selected}
+            onChange={setSelected}
+            disabled={saving}
+            autoFocus
+          />
         )}
       </DialogContent>
       <DialogActions>

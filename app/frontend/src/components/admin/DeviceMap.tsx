@@ -7,8 +7,6 @@ import {
   CircularProgress,
   IconButton,
   Tooltip,
-  ToggleButtonGroup,
-  ToggleButton,
   FormControlLabel,
   Switch,
   Button,
@@ -19,9 +17,12 @@ import {
   TileLayer,
   Marker,
   Popup,
+  Tooltip as LeafletTooltip,
+  AttributionControl,
   useMap,
 } from 'react-leaflet';
 import { LatLngBounds, LatLng } from 'leaflet';
+import type { GeoJsonGeometry, Position } from '../../utils/geometry';
 import MapIcon from '@mui/icons-material/Map';
 import SatelliteIcon from '@mui/icons-material/Satellite';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
@@ -33,6 +34,7 @@ import 'leaflet/dist/leaflet.css';
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import type { Device, LocationType, LocationWithBoundary } from '../../services/api';
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
+import MapEntityPopup from '../MapEntityPopup';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, LOCATION_TYPE_STYLE } from '../../config';
 import { DEVICE_COLORS, DEVICE_SVG, DEVICE_TYPE_LABELS, DEVICE_CHIP_COLORS, getDeviceIcon } from '../../utils/deviceIcon';
@@ -43,29 +45,72 @@ interface DeviceMapProps {
   loading?: boolean;
   /** Height of the map area (not fullscreen). Defaults to a fixed 500px. */
   height?: number | string;
-  onEditDevice: (device: Device) => void;
-  onDeactivateDevice: (device: Device) => void;
-  onReactivateDevice: (device: Device) => void;
+  /** Read-only: shapes/markers show hover names but no click popups or actions. */
+  readOnly?: boolean;
+  onEditDevice?: (device: Device) => void;
+  onDeactivateDevice?: (device: Device) => void;
+  onReactivateDevice?: (device: Device) => void;
+  /** When set (and not read-only), clicking a location shape opens Edit/Delete. */
+  onEditLocation?: (loc: LocationWithBoundary) => void;
+  onDeleteLocation?: (loc: LocationWithBoundary) => void;
 }
 
-function FitBoundsToDevices({ devices }: { devices: Device[] }) {
+/** Recursively collect every [lng, lat] position from a GeoJSON geometry. */
+function collectPositions(geometry: GeoJsonGeometry | null | undefined): Position[] {
+  if (!geometry) return [];
+  const out: Position[] = [];
+  const walk = (coords: unknown) => {
+    if (Array.isArray(coords) && typeof coords[0] === 'number') {
+      out.push(coords as Position);
+    } else if (Array.isArray(coords)) {
+      coords.forEach(walk);
+    }
+  };
+  walk(geometry.coordinates);
+  return out;
+}
+
+/** Fit the map to every location boundary and device on first render. */
+function FitBounds({
+  devices,
+  locations,
+}: {
+  devices: Device[];
+  locations: LocationWithBoundary[];
+}) {
   const map = useMap();
-  const prevCount = useRef(0);
+  const hasFitted = useRef(false);
 
   useEffect(() => {
-    const withCoords = devices.filter((d) => d.latitude && d.longitude);
-    // Fit bounds on first load or when going from 0 to >0 devices (after CRUD)
-    const shouldFit = withCoords.length > 0 && prevCount.current === 0;
-    prevCount.current = withCoords.length;
+    // Prefer fitting to the location geometry — that's the focus of the map. A
+    // far-flung device shouldn't blow the bounds out; devices are only used to
+    // frame the map when there are no location boundaries at all.
+    const locationPoints: LatLng[] = [];
+    for (const loc of locations) {
+      for (const [lng, lat] of collectPositions(loc.geometry)) {
+        locationPoints.push(new LatLng(lat, lng));
+      }
+    }
+    let points = locationPoints;
+    if (points.length === 0) {
+      points = [];
+      for (const d of devices) {
+        if (d.latitude && d.longitude) points.push(new LatLng(d.latitude, d.longitude));
+      }
+    }
 
-    if (shouldFit) {
-      const bounds = new LatLngBounds(
-        withCoords.map((d) => new LatLng(d.latitude!, d.longitude!))
-      );
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    // Fit once, the first time there's anything to show.
+    if (!hasFitted.current && points.length > 0) {
+      hasFitted.current = true;
+      // Ensure the container has its final size before fitting, otherwise the
+      // computed zoom is for a stale (smaller) viewport and reads as zoomed-out.
+      map.invalidateSize();
+      // animate:false so a re-render (new devices/locations array) can't stop the
+      // fit animation partway via the cleanup below, leaving the map zoomed out.
+      map.fitBounds(new LatLngBounds(points), { padding: [10, 10], maxZoom: 17, animate: false });
     }
     return () => { stopMapAnimation(map); };
-  }, [devices, map]);
+  }, [devices, locations, map]);
 
   return null;
 }
@@ -134,12 +179,15 @@ export default function DeviceMap({
   locationsWithBoundaries,
   loading,
   height = 500,
+  readOnly = false,
   onEditDevice,
   onDeactivateDevice,
   onReactivateDevice,
+  onEditLocation,
+  onDeleteLocation,
 }: DeviceMapProps) {
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
-  const [mapType, setMapType] = useState<'street' | 'satellite'>('satellite');
+  const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
   const [showInactive, setShowInactive] = useState(false);
 
   const defaultCenter = DEFAULT_MAP_CENTER;
@@ -161,8 +209,9 @@ export default function DeviceMap({
   }
 
   return (
-    <Box sx={{ mb: 3 }}>
-      {/* Toolbar */}
+    <Box sx={readOnly ? undefined : { mb: 3 }}>
+      {/* Toolbar — hidden in read-only mode (e.g. the compact space map) */}
+      {!readOnly && (
       <Paper
         elevation={0}
         sx={{
@@ -218,28 +267,10 @@ export default function DeviceMap({
               label={<Typography variant="caption">Show inactive</Typography>}
               sx={{ mr: 1 }}
             />
-
-            <ToggleButtonGroup
-              value={mapType}
-              exclusive
-              onChange={(_, newValue) => newValue && setMapType(newValue)}
-              size="small"
-              sx={{ height: '32px' }}
-            >
-              <ToggleButton value="street" aria-label="street map">
-                <Tooltip title="Street Map">
-                  <MapIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
-              <ToggleButton value="satellite" aria-label="satellite view">
-                <Tooltip title="Satellite View">
-                  <SatelliteIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
-            </ToggleButtonGroup>
           </Stack>
         </Stack>
       </Paper>
+      )}
 
       {/* Map */}
       <Paper
@@ -279,6 +310,20 @@ export default function DeviceMap({
           </Tooltip>
         </Stack>
 
+        {/* In-map layer toggle (bottom-right) — available in read-only too, where
+            the toolbar is hidden. */}
+        <Box sx={{ position: 'absolute', bottom: 10, right: 10, zIndex: 1000 }}>
+          <Tooltip title={mapType === 'satellite' ? 'Street map' : 'Satellite view'}>
+            <IconButton
+              size="small"
+              onClick={() => setMapType(mapType === 'satellite' ? 'street' : 'satellite')}
+              sx={{ bgcolor: 'white', boxShadow: 2, '&:hover': { bgcolor: 'grey.100' } }}
+            >
+              {mapType === 'satellite' ? <MapIcon fontSize="small" /> : <SatelliteIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+
         <Box
           sx={{
             height,
@@ -291,24 +336,31 @@ export default function DeviceMap({
             center={defaultCenter}
             zoom={defaultZoom}
             style={{ height: '100%', width: '100%' }}
+            attributionControl={false}
           >
+            <AttributionControl prefix={false} position="bottomleft" />
             {mapType === 'satellite' ? (
               <TileLayer
                 key="satellite"
-                attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                attribution='Tiles &copy; Esri'
                 url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
               />
             ) : (
               <TileLayer
                 key="street"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                attribution='&copy; OpenStreetMap'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
             )}
 
-            {/* Field boundaries */}
+            {/* Field boundaries — always hoverable; clickable to edit unless read-only. */}
             {locationsWithBoundaries.length > 0 && (
-              <FieldBoundaryOverlay locations={locationsWithBoundaries} />
+              <FieldBoundaryOverlay
+                locations={locationsWithBoundaries}
+                interactive
+                onEditLocation={readOnly ? undefined : onEditLocation}
+                onDeleteLocation={readOnly ? undefined : onDeleteLocation}
+              />
             )}
 
             {/* Device markers */}
@@ -318,71 +370,83 @@ export default function DeviceMap({
                 position={[device.latitude!, device.longitude!]}
                 icon={getDeviceIcon(device)}
               >
+                {/* Hover shows the name; click opens the popup — same as locations. */}
+                <LeafletTooltip direction="top" className="field-boundary-label">
+                  {device.name}
+                </LeafletTooltip>
+                {!readOnly && (
                 <Popup>
-                  <Box sx={{ minWidth: 'min(180px, calc(100vw - 112px))', p: 0.5 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      {device.name}
-                    </Typography>
-                    <Stack direction="row" spacing={0.5} sx={{ mb: 1 }}>
-                      <Chip
-                        label={DEVICE_TYPE_LABELS[device.device_type]}
-                        size="small"
-                        color={DEVICE_CHIP_COLORS[device.device_type]}
-                        variant="outlined"
-                        sx={{ height: 20, fontSize: '0.7rem' }}
-                      />
-                      <Chip
-                        label={device.is_active ? 'Active' : 'Inactive'}
-                        size="small"
-                        color={device.is_active ? 'success' : 'default'}
-                        sx={{ height: 20, fontSize: '0.7rem' }}
-                      />
-                    </Stack>
-                    {device.location_name && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                        {device.location_name}
-                      </Typography>
-                    )}
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace', mb: 1 }}>
-                      {device.latitude!.toFixed(5)}, {device.longitude!.toFixed(5)}
-                    </Typography>
-                    <Stack direction="row" spacing={0.5}>
-                      <Button
-                        size="small"
-                        startIcon={<EditIcon sx={{ fontSize: 14 }} />}
-                        onClick={() => onEditDevice(device)}
-                        sx={{ fontSize: '0.7rem', minWidth: 0, py: 0.25 }}
-                      >
-                        Edit
-                      </Button>
-                      {device.is_active ? (
+                  <MapEntityPopup
+                    title={device.name}
+                    chips={
+                      <>
+                        <Chip
+                          label={DEVICE_TYPE_LABELS[device.device_type]}
+                          size="small"
+                          color={DEVICE_CHIP_COLORS[device.device_type]}
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                        <Chip
+                          label={device.is_active ? 'Active' : 'Inactive'}
+                          size="small"
+                          color={device.is_active ? 'success' : 'default'}
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </>
+                    }
+                    detail={
+                      <>
+                        {device.location_name && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                            {device.location_name}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontFamily: 'monospace' }}>
+                          {device.latitude!.toFixed(5)}, {device.longitude!.toFixed(5)}
+                        </Typography>
+                      </>
+                    }
+                    actions={
+                      <>
                         <Button
                           size="small"
-                          color="error"
-                          startIcon={<DeleteIcon sx={{ fontSize: 14 }} />}
-                          onClick={() => onDeactivateDevice(device)}
+                          startIcon={<EditIcon sx={{ fontSize: 14 }} />}
+                          onClick={() => onEditDevice?.(device)}
                           sx={{ fontSize: '0.7rem', minWidth: 0, py: 0.25 }}
                         >
-                          Deactivate
+                          Edit
                         </Button>
-                      ) : (
-                        <Button
-                          size="small"
-                          color="success"
-                          startIcon={<RestoreFromTrashIcon sx={{ fontSize: 14 }} />}
-                          onClick={() => onReactivateDevice(device)}
-                          sx={{ fontSize: '0.7rem', minWidth: 0, py: 0.25 }}
-                        >
-                          Reactivate
-                        </Button>
-                      )}
-                    </Stack>
-                  </Box>
+                        {device.is_active ? (
+                          <Button
+                            size="small"
+                            color="error"
+                            startIcon={<DeleteIcon sx={{ fontSize: 14 }} />}
+                            onClick={() => onDeactivateDevice?.(device)}
+                            sx={{ fontSize: '0.7rem', minWidth: 0, py: 0.25 }}
+                          >
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            color="success"
+                            startIcon={<RestoreFromTrashIcon sx={{ fontSize: 14 }} />}
+                            onClick={() => onReactivateDevice?.(device)}
+                            sx={{ fontSize: '0.7rem', minWidth: 0, py: 0.25 }}
+                          >
+                            Reactivate
+                          </Button>
+                        )}
+                      </>
+                    }
+                  />
                 </Popup>
+                )}
               </Marker>
             ))}
 
-            <FitBoundsToDevices devices={devices} />
+            <FitBounds devices={visibleDevices} locations={locationsWithBoundaries} />
             <MapResizeHandler isFullscreen={isFullscreen} />
           </MapContainer>
         </Box>

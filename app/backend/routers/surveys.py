@@ -18,15 +18,16 @@ Refactored to use SQLModel ORM instead of raw SQL.
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional, Any
 from datetime import date, datetime, time, timedelta, timezone
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, text
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import desc, func, text, case
 from sqlmodel import col
 from database.connection import get_db
 from auth import require_admin
 from dependencies import get_current_organisation
 import logging
 from models import (
-    Survey, SurveyRead, SurveyCreate, SurveyUpdate, SurveyStatus,
+    Survey, SurveyRead, SurveyCreate, SurveyUpdate, SurveyStatus, SurveyScheduleCreate,
+    ScheduleCadence,
     Sighting, SightingCreate, SightingUpdate, SightingWithDetails,
     Species, SpeciesType, Location, SurveySurveyor,
     BreedingStatusCode, BreedingStatusCodeRead,
@@ -249,6 +250,8 @@ async def get_surveys(
                 "location_id": survey.location_id,
                 "device_id": survey.device_id,
                 "status": survey.status,
+                "scheduled_window_start": survey.scheduled_window_start,
+                "scheduled_window_end": survey.scheduled_window_end,
                 "surveyor_ids": surveyor_ids_map.get(survey.id, []),
                 "sightings_count": sightings_count_map.get(survey.id, 0),
                 "species_breakdown": species_breakdown_map.get(survey.id, []),
@@ -302,6 +305,16 @@ async def get_survey(
         .all()
     surveyor_ids_list = [sid[0] for sid in surveyor_ids]
 
+    # A sector location is displayed as "<parent> - child".
+    location_name = None
+    if survey.location is not None:
+        loc = survey.location
+        if loc.parent_location_id is not None:
+            parent = db.query(Location).filter(Location.id == loc.parent_location_id).first()
+            location_name = f"{parent.name} - {loc.name}" if parent else loc.name
+        else:
+            location_name = loc.name
+
     return {
         "id": survey.id,
         "date": survey.date,
@@ -312,9 +325,11 @@ async def get_survey(
         "conditions_met": survey.conditions_met,
         "notes": survey.notes,
         "location_id": survey.location_id,
-        "location_name": survey.location.name if survey.location else None,
+        "location_name": location_name,
         "device_id": survey.device_id,
         "status": survey.status,
+        "scheduled_window_start": survey.scheduled_window_start,
+        "scheduled_window_end": survey.scheduled_window_end,
         "surveyor_ids": surveyor_ids_list,
         "survey_type_id": survey.survey_type_id
     }
@@ -386,6 +401,94 @@ async def create_survey(
         raise HTTPException(status_code=500, detail=f"Failed to create survey: {str(e)}")
 
 
+@router.post(
+    "/schedule",
+    response_model=List[SurveyRead],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
+async def schedule_surveys(
+    schedule: SurveyScheduleCreate,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db)
+) -> List[dict[str, Any]]:
+    """
+    Bulk-create a recurring series of scheduled surveys.
+
+    Every survey shares the same survey type, location and pre-assigned
+    surveyors, and is created with status 'scheduled' (one per date). The whole
+    series is created in a single transaction.
+
+    The survey type's ``schedule_cadence`` decides how each date is interpreted:
+    a 'date' type schedules a specific day, a 'weekly' type schedules the whole
+    week beginning on that date (the survey may be carried out any day within it).
+    """
+    try:
+        # The cadence is a property of the survey type; look it up once.
+        cadence = ScheduleCadence.date
+        if schedule.survey_type_id is not None:
+            survey_type = db.query(SurveyType).filter(
+                SurveyType.id == schedule.survey_type_id,
+                SurveyType.organisation_id == org.id,
+            ).first()
+            if survey_type is not None:
+                cadence = survey_type.schedule_cadence
+
+        created: list[Survey] = []
+        for survey_date in schedule.dates:
+            if cadence == ScheduleCadence.weekly:
+                window_start: Optional[date] = survey_date
+                window_end: Optional[date] = survey_date + timedelta(days=6)
+            else:
+                window_start = None
+                window_end = None
+
+            db_survey = Survey(
+                date=survey_date,
+                notes=schedule.notes,
+                location_id=schedule.location_id,
+                survey_type_id=schedule.survey_type_id,
+                status=SurveyStatus.scheduled,
+                scheduled_window_start=window_start,
+                scheduled_window_end=window_end,
+                organisation_id=org.id,
+            )
+            db.add(db_survey)
+            db.flush()  # Get the ID without committing
+
+            for surveyor_id in schedule.surveyor_ids:
+                db.add(SurveySurveyor(survey_id=db_survey.id, surveyor_id=surveyor_id))
+
+            created.append(db_survey)
+
+        db.commit()
+
+        return [
+            {
+                "id": s.id,
+                "date": s.date,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "sun_percentage": s.sun_percentage,
+                "temperature_celsius": s.temperature_celsius,
+                "conditions_met": s.conditions_met,
+                "notes": s.notes,
+                "location_id": s.location_id,
+                "device_id": s.device_id,
+                "status": s.status,
+                "scheduled_window_start": s.scheduled_window_start,
+                "scheduled_window_end": s.scheduled_window_end,
+                "survey_type_id": s.survey_type_id,
+                "surveyor_ids": list(schedule.surveyor_ids),
+            }
+            for s in created
+        ]
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to schedule surveys: {str(e)}")
+
+
 @router.put("/{survey_id}", response_model=SurveyRead, dependencies=[Depends(require_admin)])
 async def update_survey(
     survey_id: int,
@@ -418,6 +521,18 @@ async def update_survey(
 
     for field, value in update_data.items():
         setattr(db_survey, field, value)
+
+    # Saving a scheduled survey's details records it — even with zero sightings,
+    # which is a valid nil count. Assigning surveyors alone sends only
+    # surveyor_ids (no recording fields here) and must not flip the lifecycle;
+    # an explicit status in the payload (e.g. cancelled) always wins.
+    recording_fields = update_data.keys() - {'status'}
+    if (
+        db_survey.status == SurveyStatus.scheduled
+        and recording_fields
+        and 'status' not in update_data
+    ):
+        db_survey.status = SurveyStatus.completed
 
     # Update surveyor associations if provided
     if survey.surveyor_ids is not None:
@@ -535,7 +650,13 @@ async def get_survey_sightings(
     if not survey:
         raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
 
-    # Get sightings with species names and location names
+    # Get sightings with species names and location names. Locations that are
+    # sectors (have a parent route) are displayed as "<parent> - child".
+    ParentLocation = aliased(Location)
+    location_name_expr = case(
+        (col(ParentLocation.id).isnot(None), func.concat(ParentLocation.name, ' - ', Location.name)),
+        else_=Location.name,
+    ).label('location_name')
     sightings = db.query(
         Sighting.id,
         Sighting.survey_id,
@@ -546,9 +667,10 @@ async def get_survey_sightings(
         Sighting.notes,
         Species.name.label('species_name'),  # type: ignore[union-attr]
         Species.scientific_name.label('species_scientific_name'),  # type: ignore[union-attr]
-        col(Location.name).label('location_name')
+        location_name_expr,
     ).join(Species, Sighting.species_id == Species.id)\
      .outerjoin(Location, Sighting.location_id == Location.id)\
+     .outerjoin(ParentLocation, Location.parent_location_id == ParentLocation.id)\
      .filter(Sighting.survey_id == survey_id)\
      .order_by(func.coalesce(Species.name, Species.scientific_name))\
      .all()

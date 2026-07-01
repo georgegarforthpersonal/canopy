@@ -43,6 +43,17 @@ class SurveyStatus(str, PyEnum):
     cancelled = "cancelled"
 
 
+class ScheduleCadence(str, PyEnum):
+    """How surveys of a type are scheduled.
+
+    - date: scheduled for a specific day (scheduled date == survey date).
+    - weekly: scheduled for a whole week; the survey may be carried out any day
+      within the window (``scheduled_window_start`` .. ``scheduled_window_end``).
+    """
+    date = "date"
+    weekly = "weekly"
+
+
 # ============================================================================
 # Organisation Models
 # ============================================================================
@@ -355,6 +366,7 @@ class LocationType(str, PyEnum):
     route = "route"    # line / transect route
     point = "point"    # single point
     none = "none"      # no GPS geometry
+    sector = "sector"  # a sub-segment of a route (has a parent route location)
 
 
 # GeoJSON geometry types accepted for each location type
@@ -363,6 +375,8 @@ GEOMETRY_TYPES_BY_LOCATION_TYPE: Dict[LocationType, set[str]] = {
     LocationType.route: {"LineString", "MultiLineString"},
     LocationType.point: {"Point", "MultiPoint"},
     LocationType.none: set(),
+    # A sector is geometrically a line, just like a route.
+    LocationType.sector: {"LineString", "MultiLineString"},
 }
 
 
@@ -381,6 +395,22 @@ class Location(LocationBase, table=True):  # type: ignore[call-arg]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     organisation_id: int = Field(foreign_key="organisation.id", index=True, description="Organisation this location belongs to")
+    # For sectors (location_type == "sector"): the parent route this sector
+    # belongs to. NULL for all top-level locations. Deleting a route removes
+    # its sectors (CASCADE); the router also deletes them explicitly so the
+    # cascade holds on backends where FK enforcement is off.
+    parent_location_id: Optional[int] = Field(
+        default=None,
+        sa_column=sa.Column(
+            "parent_location_id",
+            sa.Integer,
+            sa.ForeignKey("location.id", ondelete="CASCADE"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    # Ordering of sectors within their parent route (1-based). NULL for non-sectors.
+    ordinal: Optional[int] = Field(default=None, description="Sector order within its parent route")
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
@@ -410,11 +440,36 @@ class Location(LocationBase, table=True):  # type: ignore[call-arg]
     devices: List["Device"] = Relationship(back_populates="location")
 
 
+class SectorInput(SQLModel):
+    """A sector (sub-segment) of a route, supplied when creating/updating a route.
+
+    Sectors are persisted as child ``Location`` rows (location_type == "sector")
+    pointing at the parent route via ``parent_location_id``. Their order is the
+    order of the array (ordinal is assigned server-side, 1-based).
+    """
+    id: Optional[int] = Field(default=None, description="Existing sector id, if updating in place")
+    name: str = Field(max_length=255)
+    geometry: Dict[str, Any] = Field(description="GeoJSON LineString for this sector")
+
+
+class SectorRead(SQLModel):
+    """A sector nested under its parent route for map/list display."""
+    id: int
+    name: str
+    ordinal: int
+    geometry: Optional[Dict[str, Any]] = None
+
+
 class LocationCreate(LocationBase):
     """Model for creating a new location, optionally with geometry."""
     geometry: Optional[Dict[str, Any]] = Field(
         default=None,
         description="GeoJSON geometry (Polygon/LineString/Point) matching location_type",
+    )
+    # Sectors of a route (only meaningful when location_type == "route").
+    sectors: Optional[List[SectorInput]] = Field(
+        default=None,
+        description="Ordered sub-segments of a route, persisted as child locations",
     )
 
 
@@ -423,15 +478,21 @@ class LocationUpdate(SQLModel):
 
     Geometry handling uses ``model_fields_set`` in the router to distinguish an
     omitted ``geometry`` (leave unchanged) from an explicit ``null`` (clear it).
+    The same convention applies to ``sectors``: omitted leaves them untouched, an
+    explicit list replaces the full set (insert/update/delete to match).
     """
     name: Optional[str] = Field(None, max_length=255)
     location_type: Optional[LocationType] = None
     geometry: Optional[Dict[str, Any]] = None
+    sectors: Optional[List[SectorInput]] = None
 
 
 class LocationRead(LocationBase):
     """Model for reading a location (includes ID)"""
     id: int
+    # Name of the parent route for a sector (null for top-level locations), so
+    # clients can display children as "<parent> - child".
+    parent_name: Optional[str] = None
 
 
 class LocationWithBoundary(LocationRead):
@@ -443,6 +504,10 @@ class LocationWithBoundary(LocationRead):
     # with existing boundary overlays; null for non-area locations.
     boundary_geometry: Optional[List[List[float]]] = Field(
         None, description="Array of [lng, lat] coordinate pairs forming the boundary polygon"
+    )
+    # Sub-segments of a route, ordered by ordinal. Empty/absent for non-routes.
+    sectors: Optional[List[SectorRead]] = Field(
+        None, description="Ordered sectors of this route (child locations)"
     )
 
 
@@ -472,6 +537,11 @@ class SurveyTypeBase(SQLModel):
     )
     icon: Optional[str] = Field(None, max_length=50, description="Lucide icon identifier (deprecated)")
     color: Optional[str] = Field(None, max_length=20, description="Notion-style color key (e.g., 'blue', 'purple')")
+    schedule_cadence: ScheduleCadence = Field(
+        default=ScheduleCadence.date,
+        sa_column=sa.Column("schedule_cadence", sa.String(20), nullable=False, server_default="date"),
+        description="Whether surveys of this type are scheduled for a specific day or a whole week",
+    )
 
 
 class SurveyType(SurveyTypeBase, table=True):  # type: ignore[call-arg]
@@ -524,6 +594,7 @@ class SurveyTypeUpdate(SQLModel):
     sighting_device_type: Optional[DeviceType] = None
     icon: Optional[str] = Field(None, max_length=50)
     color: Optional[str] = Field(None, max_length=20)
+    schedule_cadence: Optional[ScheduleCadence] = None
     is_active: Optional[bool] = None
     location_ids: Optional[List[int]] = None
     species_type_ids: Optional[List[int]] = None
@@ -597,6 +668,15 @@ class SurveyBase(SQLModel):
         sa_column=sa.Column("status", sa.String(20), nullable=False, server_default="completed"),
         description="Survey lifecycle: scheduled, completed (recorded, incl. nil counts) or cancelled",
     )
+    # Scheduling window for weekly-cadence survey types: the survey may be carried
+    # out any day in [start, end]. Null for day-precise schedules, where ``date``
+    # is the scheduled day. On completion ``date`` records the actual day.
+    scheduled_window_start: Optional[date_type] = Field(
+        None, description="First day of the scheduling window (weekly cadence); null for day-precise"
+    )
+    scheduled_window_end: Optional[date_type] = Field(
+        None, description="Last day of the scheduling window (weekly cadence); null for day-precise"
+    )
 
 
 class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
@@ -630,6 +710,20 @@ class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
 class SurveyCreate(SurveyBase):
     """Model for creating a new survey"""
     surveyor_ids: List[int] = Field(description="List of surveyor IDs")
+
+
+class SurveyScheduleCreate(SQLModel):
+    """Bulk-schedule a recurring series of surveys.
+
+    Creates one `scheduled` survey per date, sharing the same survey type,
+    location and (optionally) pre-assigned surveyors. Used by the admin
+    scheduling UI; the frontend expands the recurrence rule into explicit dates.
+    """
+    survey_type_id: Optional[int] = Field(None, description="Survey type for every scheduled survey")
+    location_id: Optional[int] = Field(None, gt=0, description="Survey-level location (when the type uses one)")
+    surveyor_ids: List[int] = Field(default_factory=list, description="Surveyors pre-assigned to every survey")
+    notes: Optional[str] = Field(None, description="Optional note applied to every survey")
+    dates: List[date_type] = Field(..., min_length=1, max_length=104, description="One survey is created per date")
 
 
 class SurveyUpdate(SQLModel):

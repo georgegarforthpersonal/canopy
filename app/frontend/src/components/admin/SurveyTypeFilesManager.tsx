@@ -30,6 +30,7 @@ export default function SurveyTypeFilesManager({ surveyTypeId }: SurveyTypeFiles
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadFiles = useCallback(async () => {
@@ -47,21 +48,46 @@ export default function SurveyTypeFilesManager({ surveyTypeId }: SurveyTypeFiles
     loadFiles();
   }, [loadFiles]);
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (event.target) event.target.value = ''; // allow re-uploading the same file
-    if (!file) return;
+  const uploadFiles = useCallback(
+    async (selected: File[]) => {
+      if (selected.length === 0) return;
 
-    setUploading(true);
-    try {
-      const created = await surveyTypesAPI.uploadFile(surveyTypeId, file);
-      setFiles((prev) => [created, ...prev]);
-      toast.success('File uploaded');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
+      setUploading(true);
+      try {
+        const results = await Promise.allSettled(
+          selected.map((file) => surveyTypesAPI.uploadFile(surveyTypeId, file)),
+        );
+        const created = results
+          .filter((r): r is PromiseFulfilledResult<SurveyTypeFile> => r.status === 'fulfilled')
+          .map((r) => r.value);
+        const failed = results.length - created.length;
+
+        if (created.length > 0) setFiles((prev) => [...created, ...prev]);
+        if (failed === 0) {
+          toast.success(created.length === 1 ? 'File uploaded' : `${created.length} files uploaded`);
+        } else if (created.length === 0) {
+          toast.error(failed === 1 ? 'Upload failed' : `${failed} files failed to upload`);
+        } else {
+          toast.error(`${created.length} uploaded, ${failed} failed`);
+        }
+      } finally {
+        setUploading(false);
+      }
+    },
+    [surveyTypeId, toast],
+  );
+
+  const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? []);
+    if (event.target) event.target.value = ''; // allow re-uploading the same file
+    void uploadFiles(selected);
+  };
+
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setDragOver(false);
+    if (uploading) return;
+    void uploadFiles(Array.from(event.dataTransfer.files ?? []));
   };
 
   const handleDownload = async (file: SurveyTypeFile) => {
@@ -87,7 +113,27 @@ export default function SurveyTypeFilesManager({ surveyTypeId }: SurveyTypeFiles
   };
 
   return (
-    <Box sx={{ mt: 3 }}>
+    <Box
+      sx={{
+        mt: 3,
+        p: 1,
+        mx: -1,
+        borderRadius: 1,
+        border: '2px dashed',
+        borderColor: dragOver ? 'primary.main' : 'transparent',
+        bgcolor: dragOver ? 'action.hover' : 'transparent',
+        transition: 'border-color 120ms, background-color 120ms',
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!uploading) setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+      }}
+      onDrop={handleDrop}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Typography variant="subtitle2">Reference files</Typography>
         <Button
@@ -98,10 +144,11 @@ export default function SurveyTypeFilesManager({ surveyTypeId }: SurveyTypeFiles
         >
           Upload
         </Button>
-        <input ref={inputRef} type="file" hidden onChange={handleUpload} />
+        <input ref={inputRef} type="file" hidden multiple onChange={handleUpload} />
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
         Methodology guides, recording forms and ID sheets shown to surveyors in the survey space.
+        Drag and drop files here, or use Upload.
       </Typography>
 
       {loading ? (

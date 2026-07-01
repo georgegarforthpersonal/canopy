@@ -1,8 +1,8 @@
 /**
  * Space detail: the single-screen overview for one survey type. Neutral hero
  * plus two balanced columns — Surveys worklist + Species recorded (left); Files,
- * Locations & devices, Species abundance (right). On mobile the columns stack in
- * the order Surveys → Species recorded → Files → Locations → Abundance.
+ * Locations & devices (right). On mobile the columns stack in the order
+ * Surveys → Species recorded → Files → Locations.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -29,7 +29,6 @@ import SurveysPanel from '../../components/spaces/SurveysPanel';
 import FilesPanel from '../../components/spaces/FilesPanel';
 import LocationsDevicesPanel from '../../components/spaces/LocationsDevicesPanel';
 import SpeciesRecordedChart from '../../components/spaces/SpeciesRecordedChart';
-import SpeciesAbundanceChart from '../../components/spaces/SpeciesAbundanceChart';
 import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
 
 export default function SpaceDetailPage() {
@@ -98,6 +97,7 @@ export default function SpaceDetailPage() {
               location_type: loc.location_type ?? geo?.location_type,
               geometry: geo?.geometry ?? null,
               boundary_geometry: geo?.boundary_geometry ?? null,
+              sectors: geo?.sectors ?? null,
             };
           }),
         );
@@ -145,7 +145,10 @@ export default function SpaceDetailPage() {
   }
 
   const speciesType = primarySpeciesType(surveyType);
-  const goToSurvey = (s: Survey) => navigate(`/surveys/${s.id}`);
+  const goToSurvey = (s: Survey) =>
+    navigate(`/surveys/${s.id}`, {
+      state: { returnTo: { pathname: `/spaces/${surveyTypeId}`, label: surveyType.name } },
+    });
 
   const handleAssignSaved = (surveyId: number, surveyorIds: number[]) => {
     setSurveys((prev) =>
@@ -182,7 +185,7 @@ export default function SpaceDetailPage() {
           }}
         >
           {/* Left column */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25, flex: 1.55, width: '100%', minWidth: 0 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25, flex: 1, width: '100%', minWidth: 0 }}>
             <SurveysPanel
               surveys={surveys}
               resolveSurveyors={resolveSurveyors}
@@ -203,7 +206,6 @@ export default function SpaceDetailPage() {
               devices={devices}
               loading={locationsLoading}
             />
-            <SpeciesAbundanceChart speciesType={speciesType} />
           </Box>
         </Box>
       </Box>

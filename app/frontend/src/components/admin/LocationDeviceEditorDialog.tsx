@@ -38,16 +38,19 @@ import type {
   LocationType,
   LocationWithBoundary,
   LocationInput,
+  SectorInput,
   Device,
   DeviceType,
   DeviceCreate,
   DeviceUpdate,
 } from '../../services/api';
-import type { GeoJsonGeometry } from '../../utils/geometry';
+import { geometryLengthM, type GeoJsonGeometry, type Position } from '../../utils/geometry';
+import { splitLine } from '../../utils/sectorGeometry';
 import { DEVICE_TYPE_LABELS } from '../../utils/deviceIcon';
 import { brandColors } from '../../theme';
 import { useResponsive } from '../../hooks/useResponsive';
 import LocationDrawMap, { type DrawableLocationType } from './LocationDrawMap';
+import SectorEditor from './SectorEditor';
 import LocationMapPicker from '../surveys/LocationMapPicker';
 
 export type EditorKind = 'location' | 'device';
@@ -101,6 +104,10 @@ export default function LocationDeviceEditorDialog({
   const [name, setName] = useState('');
   const [locationType, setLocationType] = useState<LocationType>('none');
   const [geometry, setGeometry] = useState<GeoJsonGeometry | null>(null);
+  // Route sectors: divider fractions + per-sector names/ids kept in step.
+  const [sectorDividers, setSectorDividers] = useState<number[]>([]);
+  const [sectorNames, setSectorNames] = useState<string[]>([]);
+  const [sectorIds, setSectorIds] = useState<(number | undefined)[]>([]);
 
   // Device form
   const [deviceName, setDeviceName] = useState('');
@@ -122,10 +129,35 @@ export default function LocationDeviceEditorDialog({
       setName(location.name);
       setLocationType(location.location_type ?? 'none');
       setGeometry(location.geometry ?? null);
+
+      // Rebuild the editable divider/name/id state from stored sectors.
+      const secs = location.sectors ?? [];
+      const route = location.geometry;
+      if (location.location_type === 'route' && route?.type === 'LineString' && secs.length >= 2) {
+        const total = geometryLengthM(route);
+        const divs: number[] = [];
+        let acc = 0;
+        secs.forEach((sec, idx) => {
+          if (idx < secs.length - 1 && sec.geometry) {
+            acc += geometryLengthM(sec.geometry);
+            divs.push(total > 0 ? acc / total : 0);
+          }
+        });
+        setSectorDividers(divs);
+        setSectorNames(secs.map((s) => s.name));
+        setSectorIds(secs.map((s) => s.id as number | undefined));
+      } else {
+        setSectorDividers([]);
+        setSectorNames([]);
+        setSectorIds([]);
+      }
     } else {
       setName('');
       setLocationType('none');
       setGeometry(null);
+      setSectorDividers([]);
+      setSectorNames([]);
+      setSectorIds([]);
     }
 
     if (device) {
@@ -146,6 +178,31 @@ export default function LocationDeviceEditorDialog({
     setLocationType(next);
     // A shape drawn for one type can't carry over to another.
     setGeometry(null);
+    // Sectors only belong to a route; drop them on any type change.
+    setSectorDividers([]);
+    setSectorNames([]);
+    setSectorIds([]);
+  };
+
+  const handleGeometryChange = (next: GeoJsonGeometry | null) => {
+    setGeometry(next);
+    // Clearing/redrawing the route invalidates its dividers (fractions of the
+    // old line); reset them so sectors are re-created against the new shape.
+    if (!next) {
+      setSectorDividers([]);
+      setSectorNames([]);
+      setSectorIds([]);
+    }
+  };
+
+  const handleSectorsChange = (nextDividers: number[], nextNames: string[]) => {
+    // A change in divider count is a structural re-split: existing sector ids no
+    // longer map cleanly, so drop them (a rename keeps the same count and ids).
+    if (nextDividers.length !== sectorDividers.length) {
+      setSectorIds(new Array(nextNames.length).fill(undefined));
+    }
+    setSectorDividers(nextDividers);
+    setSectorNames(nextNames);
   };
 
   // Don't show the location being edited as a faint reference on its own map.
@@ -169,6 +226,21 @@ export default function LocationDeviceEditorDialog({
       // Always send geometry so edits (including removals) persist; null for 'none'.
       geometry: isDrawable ? geometry : null,
     };
+
+    // Routes carry sectors; an explicit list replaces the stored set, and [] clears.
+    if (locationType === 'route') {
+      if (geometry?.type === 'LineString' && sectorDividers.length >= 1) {
+        payload.sectors = splitLine(geometry.coordinates as Position[], sectorDividers).map(
+          (coords, i): SectorInput => ({
+            id: sectorIds[i],
+            name: (sectorNames[i] ?? '').trim() || `Sector ${i + 1}`,
+            geometry: { type: 'LineString', coordinates: coords },
+          }),
+        );
+      } else {
+        payload.sectors = [];
+      }
+    }
 
     try {
       const saved = location
@@ -297,9 +369,27 @@ export default function LocationDeviceEditorDialog({
                 <LocationDrawMap
                   locationType={locationType as DrawableLocationType}
                   value={geometry}
-                  onChange={setGeometry}
+                  onChange={handleGeometryChange}
                   referenceLocations={locationReferenceForMap}
                 />
+              )}
+
+              {locationType === 'route' && geometry?.type === 'LineString' && (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Sectors
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                    Optionally split this transect into named sectors. Click the route to drop a
+                    divider; click a divider to remove it.
+                  </Typography>
+                  <SectorEditor
+                    routeGeometry={geometry}
+                    dividers={sectorDividers}
+                    names={sectorNames}
+                    onChange={handleSectorsChange}
+                  />
+                </Box>
               )}
             </>
           ) : (

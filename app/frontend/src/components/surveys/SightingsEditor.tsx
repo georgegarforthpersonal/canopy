@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Box, Typography, TextField, Autocomplete, IconButton, Alert, Stack, Card, CardContent, Button, Chip, Tooltip } from '@mui/material';
 import { Delete, Edit, Add, LocationOnOutlined, PinDrop, StickyNote2Outlined, PhotoCamera, Close } from '@mui/icons-material';
 import type { Species, BreedingStatusCode, LocationWithBoundary, Location, Device } from '../../services/api';
-import { imagesAPI } from '../../services/api';
+import { imagesAPI, locationDisplayName } from '../../services/api';
 import { AddSightingModal } from './AddSightingModal';
 import type { SightingData } from './AddSightingModal';
 import { LocationModal } from './LocationModal';
@@ -255,7 +255,7 @@ export function SightingsEditor({
   const getLocationName = (locationId: number | null | undefined): string => {
     if (!locationId) return '';
     const loc = locations.find((l) => l.id === locationId);
-    return loc?.name || '';
+    return loc ? locationDisplayName(loc) : '';
   };
 
   const getDeviceDisplayName = (deviceId: number | null | undefined): string => {
@@ -848,7 +848,7 @@ export function SightingsEditor({
                 {gridConfig.showLocation && (
                   <Autocomplete
                     options={locations}
-                    getOptionLabel={(option) => option.name}
+                    getOptionLabel={locationDisplayName}
                     value={locations.find((l) => l.id === sighting.location_id) || null}
                     onChange={(_, newValue) =>
                       updateSighting(sighting.tempId, 'location_id', newValue?.id || null)
