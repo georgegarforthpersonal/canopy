@@ -84,6 +84,7 @@ EXPORT_TABLES: list[dict[str, Any]] = [
     {"table": "surveyor", "org_filter": "direct"},
     {"table": "location", "org_filter": "direct"},
     {"table": "survey_type", "org_filter": "direct"},
+    {"table": "survey_type_file", "org_filter": "direct"},
     {"table": "device", "org_filter": "direct"},
     {"table": "survey", "org_filter": "direct"},
     # Indirectly org-scoped via FK chain

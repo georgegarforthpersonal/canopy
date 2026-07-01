@@ -10,3 +10,4 @@ export { useRowHighlight } from './useRowHighlight';
 export { useArrowKeyNavigation } from './useArrowKeyNavigation';
 export { useCameraTrapWizard } from './useCameraTrapWizard';
 export type { CameraTrapWizardState, ImageFile, Classification } from './useCameraTrapWizard';
+export { useSurveyorLookup } from './useSurveyorLookup';

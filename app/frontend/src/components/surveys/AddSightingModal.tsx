@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Autocomplete, Stack, Box, Typography, IconButton } from '@mui/material';
 import { Close, PhotoCamera, CloudUpload } from '@mui/icons-material';
 import type { Species, BreedingStatusCode, LocationWithBoundary, Location, Device } from '../../services/api';
-import { imagesAPI } from '../../services/api';
+import { imagesAPI, locationDisplayName } from '../../services/api';
 import { getSpeciesIcon } from '../../config';
 import MultiLocationMapPicker, { type DraftIndividualLocation } from './MultiLocationMapPicker';
 
@@ -402,7 +402,7 @@ export function AddSightingModal({
           {!allowSightingDeviceSelection && locationAtSightingLevel && (
             <Autocomplete
               options={locations}
-              getOptionLabel={(option) => option.name}
+              getOptionLabel={locationDisplayName}
               value={selectedLocation || null}
               onChange={(_, newValue) => setSelectedLocationId(newValue?.id || null)}
               renderInput={(params) => (

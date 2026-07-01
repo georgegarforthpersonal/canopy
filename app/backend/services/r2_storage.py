@@ -20,12 +20,14 @@ class MediaType(str, Enum):
     """Supported media types for R2 storage."""
     AUDIO = "audio"
     IMAGE = "images"
+    REFERENCE = "reference"
 
 
 # Default content types for each media type
 DEFAULT_CONTENT_TYPES = {
     MediaType.AUDIO: "audio/wav",
     MediaType.IMAGE: "image/jpeg",
+    MediaType.REFERENCE: "application/octet-stream",
 }
 
 

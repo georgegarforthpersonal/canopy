@@ -56,3 +56,14 @@ body,
   color: #333 !important;
   border-radius: 4px !important;
 }
+
+/* Area polygons are only selectable on their outline, not the filled interior,
+   so clicking inside a field doesn't grab the click. SVG-renderer only. */
+.location-outline-only {
+  pointer-events: stroke !important;
+}
+
+/* Clicking a vector shape shouldn't leave the browser's focus outline box. */
+.leaflet-interactive:focus {
+  outline: none;
+}

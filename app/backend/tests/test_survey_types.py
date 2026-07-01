@@ -82,6 +82,15 @@ class TestGetSurveyTypeById:
         response = client.get("/api/survey-types/99999", headers=auth_headers)
         assert response.status_code == 404
 
+    def test_get_survey_type_returns_schedule_cadence(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """The detail response must reflect the stored cadence, not the default."""
+        weekly = create_survey_type(name="Butterfly", schedule_cadence="weekly")
+
+        data = client.get(f"/api/survey-types/{weekly.id}", headers=auth_headers).json()
+        assert data["schedule_cadence"] == "weekly"
+
 
 class TestCreateSurveyType:
     """Tests for POST /api/survey-types"""

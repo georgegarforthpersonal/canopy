@@ -142,6 +142,15 @@ LINESTRING_GEOMETRY = {
 }
 POINT_GEOMETRY = {"type": "Point", "coordinates": [-2.38, 51.15]}
 
+SECTOR_1_GEOMETRY = {
+    "type": "LineString",
+    "coordinates": [[-2.38, 51.15], [-2.375, 51.155]],
+}
+SECTOR_2_GEOMETRY = {
+    "type": "LineString",
+    "coordinates": [[-2.375, 51.155], [-2.37, 51.16]],
+}
+
 
 class TestLocationGeometry:
     """Tests for typed geometry (area / route / point / none)."""
@@ -317,3 +326,113 @@ class TestLocationGeometry:
         match = next(r for r in boundaries if r["id"] == created["id"])
         assert match["name"] == "Renamed Reserve"
         assert match["geometry"]["type"] == "Polygon"
+
+
+class TestRouteSectors:
+    """Tests for sectors — sub-segments of a route stored as child locations."""
+
+    def _create_route_with_sectors(self, client: TestClient, auth_headers: dict):
+        return client.post(
+            "/api/locations",
+            json={
+                "name": "Transect",
+                "location_type": "route",
+                "geometry": LINESTRING_GEOMETRY,
+                "sectors": [
+                    {"name": "Woodland ride", "geometry": SECTOR_1_GEOMETRY},
+                    {"name": "Open meadow", "geometry": SECTOR_2_GEOMETRY},
+                ],
+            },
+            headers=auth_headers,
+        )
+
+    def test_create_route_with_sectors_nests_them(self, client: TestClient, auth_headers: dict):
+        """Sectors sent on create are returned nested under the route, in order."""
+        resp = self._create_route_with_sectors(client, auth_headers)
+        assert resp.status_code == 201
+        route_id = resp.json()["id"]
+
+        boundaries = client.get("/api/locations/with-boundaries", headers=auth_headers).json()
+        route = next(r for r in boundaries if r["id"] == route_id)
+        sectors = route["sectors"]
+        assert [s["name"] for s in sectors] == ["Woodland ride", "Open meadow"]
+        assert [s["ordinal"] for s in sectors] == [1, 2]
+        assert sectors[0]["geometry"]["type"] == "LineString"
+
+    def test_sectors_are_selectable_locations(self, client: TestClient, auth_headers: dict):
+        """Sectors are ordinary selectable locations in GET /locations..."""
+        self._create_route_with_sectors(client, auth_headers)
+
+        flat = client.get("/api/locations", headers=auth_headers).json()
+        names = {loc["name"] for loc in flat}
+        assert "Transect" in names
+        assert {"Woodland ride", "Open meadow"} <= names
+
+        # ...but on the map they remain nested under their route, not top-level rows.
+        boundaries = client.get("/api/locations/with-boundaries", headers=auth_headers).json()
+        assert [r["name"] for r in boundaries] == ["Transect"]
+
+    def test_update_replaces_sector_set(self, client: TestClient, auth_headers: dict):
+        """An explicit sectors list on update replaces the full set (add/remove)."""
+        route_id = self._create_route_with_sectors(client, auth_headers).json()["id"]
+        existing = client.get("/api/locations/with-boundaries", headers=auth_headers).json()
+        first_sector = next(r for r in existing if r["id"] == route_id)["sectors"][0]
+
+        resp = client.put(
+            f"/api/locations/{route_id}",
+            json={
+                "sectors": [
+                    # keep the first (by id), drop the second, add a third
+                    {"id": first_sector["id"], "name": "Woodland ride", "geometry": SECTOR_1_GEOMETRY},
+                    {"name": "New end", "geometry": SECTOR_2_GEOMETRY},
+                ]
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+
+        route = next(
+            r for r in client.get("/api/locations/with-boundaries", headers=auth_headers).json()
+            if r["id"] == route_id
+        )
+        assert [s["name"] for s in route["sectors"]] == ["Woodland ride", "New end"]
+        # The kept sector retained its id
+        assert route["sectors"][0]["id"] == first_sector["id"]
+
+    def test_switching_route_to_non_route_drops_sectors(self, client: TestClient, auth_headers: dict):
+        """A route that becomes an area/point/none sheds its sectors."""
+        route_id = self._create_route_with_sectors(client, auth_headers).json()["id"]
+
+        client.put(
+            f"/api/locations/{route_id}",
+            json={"location_type": "none"},
+            headers=auth_headers,
+        )
+
+        flat = client.get("/api/locations", headers=auth_headers).json()
+        # Only the (now none-type) parent remains; sectors are gone.
+        assert len(flat) == 1
+
+    def test_deleting_route_cascades_to_sectors(self, client: TestClient, auth_headers: dict):
+        """Deleting a route removes its sectors too."""
+        route_id = self._create_route_with_sectors(client, auth_headers).json()["id"]
+
+        resp = client.delete(f"/api/locations/{route_id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        boundaries = client.get("/api/locations/with-boundaries", headers=auth_headers).json()
+        assert boundaries == []
+
+    def test_sectors_rejected_for_non_route(self, client: TestClient, auth_headers: dict):
+        """Only routes may carry sectors."""
+        resp = client.post(
+            "/api/locations",
+            json={
+                "name": "Reserve",
+                "location_type": "area",
+                "geometry": POLYGON_GEOMETRY,
+                "sectors": [{"name": "Nope", "geometry": SECTOR_1_GEOMETRY}],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422

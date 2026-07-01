@@ -33,6 +33,7 @@ import { Add, Delete, RestoreFromTrash, Edit, Lock, Download } from '@mui/icons-
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import SurveyTypeFilesManager from '../components/admin/SurveyTypeFilesManager';
 import { SPACING } from '../config/responsive';
 import { useResponsive } from '../hooks/useResponsive';
 import { useRowHighlight } from '../hooks';
@@ -41,6 +42,8 @@ import {
   surveyTypesAPI,
   locationsAPI,
   exportAPI,
+  getOrgSlug,
+  locationDisplayName,
   type Surveyor,
   type SurveyType,
   type SurveyTypeWithDetails,
@@ -49,9 +52,11 @@ import {
   type SpeciesTypeRef,
   type Location,
   type DeviceType,
+  type ScheduleCadence,
 } from '../services/api';
 import LocationsDevicesManager from '../components/admin/LocationsDevicesManager';
 import RecordsExportPanel from '../components/admin/RecordsExportPanel';
+import ScheduledSurveysPanel from '../components/admin/ScheduledSurveysPanel';
 import { SurveyTypeColorSelector, SurveyTypeChip } from '../components/SurveyTypeColors';
 import { brandColors } from '../theme';
 
@@ -83,6 +88,9 @@ export function AdminPage() {
   const toast = useToast();
   const surveyorHighlight = useRowHighlight();
   const surveyTypeHighlight = useRowHighlight();
+  // Survey scheduling is a Heal-only admin facility for now, matching the
+  // Heal-only Spaces tab where scheduled surveys surface.
+  const showScheduling = getOrgSlug() === 'heal';
   const [tabValue, setTabValue] = useState(0);
   const [dataTabValue, setDataTabValue] = useState(0);
 
@@ -131,6 +139,7 @@ export function AdminPage() {
   const [formAllowShowDescription, setFormAllowShowDescription] = useState(false);
   const [formAllowSightingDeviceSelection, setFormAllowSightingDeviceSelection] = useState(false);
   const [formSightingDeviceType, setFormSightingDeviceType] = useState<DeviceType | null>(null);
+  const [formScheduleCadence, setFormScheduleCadence] = useState<ScheduleCadence>('date');
   const [formColor, setFormColor] = useState<string | null>(null);
   const [formSelectedLocations, setFormSelectedLocations] = useState<Location[]>([]);
   const [formSelectedSpeciesTypes, setFormSelectedSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
@@ -311,6 +320,7 @@ export function AdminPage() {
       setFormAllowShowDescription(details.allow_show_description);
       setFormAllowSightingDeviceSelection(details.allow_sighting_device_selection);
       setFormSightingDeviceType(details.sighting_device_type);
+      setFormScheduleCadence(details.schedule_cadence);
       setFormColor(details.color);
       setFormSelectedLocations(details.locations);
       setFormSelectedSpeciesTypes(details.species_types);
@@ -335,6 +345,7 @@ export function AdminPage() {
     setFormAllowShowDescription(false);
     setFormAllowSightingDeviceSelection(false);
     setFormSightingDeviceType(null);
+    setFormScheduleCadence('date');
     setFormColor(null);
     setFormSelectedLocations([]);
     setFormSelectedSpeciesTypes([]);
@@ -376,6 +387,7 @@ export function AdminPage() {
         allow_show_description: formAllowShowDescription,
         allow_sighting_device_selection: formAllowSightingDeviceSelection,
         sighting_device_type: formAllowSightingDeviceSelection ? formSightingDeviceType : null,
+        schedule_cadence: formScheduleCadence,
         color: formColor || undefined,
         location_ids: formSelectedLocations.map((l) => l.id),
         species_type_ids: formSelectedSpeciesTypes.map((st) => st.id),
@@ -470,6 +482,7 @@ export function AdminPage() {
           <Tab label="Survey Types" />
           <Tab label="Locations & Devices" />
           <Tab label="Data" />
+          {showScheduling && <Tab label="Scheduled" />}
         </Tabs>
       </Box>
 
@@ -773,6 +786,13 @@ export function AdminPage() {
         )}
       </TabPanel>
 
+      {/* Scheduled Tab (Heal-only) */}
+      {showScheduling && (
+        <TabPanel value={tabValue} index={4}>
+          <ScheduledSurveysPanel surveyors={surveyors} surveyTypes={surveyTypes} />
+        </TabPanel>
+      )}
+
       {/* Add/Edit Surveyor Dialog */}
       <Dialog
         open={surveyorDialogOpen}
@@ -1043,6 +1063,26 @@ export function AdminPage() {
             </Typography>
           </Box>
           <Box sx={{ mt: 2 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="schedule-cadence-label">Scheduling cadence</InputLabel>
+              <Select
+                labelId="schedule-cadence-label"
+                label="Scheduling cadence"
+                value={formScheduleCadence}
+                onChange={(e) => setFormScheduleCadence(e.target.value as ScheduleCadence)}
+                disabled={savingSurveyType}
+              >
+                <MenuItem value="date">Specific day</MenuItem>
+                <MenuItem value="weekly">Weekly</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+              {formScheduleCadence === 'weekly'
+                ? 'Surveys are scheduled for a whole week and can be carried out on any day within it'
+                : 'Surveys are scheduled for a specific day'}
+            </Typography>
+          </Box>
+          <Box sx={{ mt: 2 }}>
             <FormControlLabel
               control={
                 <Switch
@@ -1114,7 +1154,7 @@ export function AdminPage() {
             <Autocomplete
               multiple
               options={allLocations}
-              getOptionLabel={(option) => option.name}
+              getOptionLabel={locationDisplayName}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               value={formSelectedLocations}
               onChange={(_, newValue) => setFormSelectedLocations(newValue)}
@@ -1143,6 +1183,9 @@ export function AdminPage() {
             )}
             sx={{ mt: 2 }}
           />
+          {surveyTypeDialogMode === 'edit' && editingSurveyType && (
+            <SurveyTypeFilesManager surveyTypeId={editingSurveyType.id} />
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSurveyTypeDialogOpen(false)} disabled={savingSurveyType}>

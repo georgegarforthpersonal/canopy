@@ -258,11 +258,13 @@ def create_survey_type(db_session: Session, test_org: Organisation):
     def _create_survey_type(
         name: str = "Test Survey Type",
         is_active: bool = True,
+        schedule_cadence: str = "date",
     ) -> SurveyType:
         survey_type = SurveyType(
             name=name,
             organisation_id=test_org.id,
             is_active=is_active,
+            schedule_cadence=schedule_cadence,
         )
         db_session.add(survey_type)
         db_session.commit()
