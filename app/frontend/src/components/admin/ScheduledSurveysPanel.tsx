@@ -18,6 +18,7 @@ import {
   DialogTitle,
   IconButton,
   Paper,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -46,6 +47,8 @@ import {
 } from '../../pages/spaces/surveyState';
 import SurveyorAvatars from '../spaces/SurveyorAvatars';
 import ScheduleSurveyDialog from './ScheduleSurveyDialog';
+import EntityCard from './EntityCard';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface ScheduledSurveysPanelProps {
   /** All surveyors (active + inactive); used to resolve assigned ids to names. */
@@ -70,6 +73,7 @@ export default function ScheduledSurveysPanel({
   surveyTypes,
 }: ScheduledSurveysPanelProps) {
   const toast = useToast();
+  const { isMobile } = useResponsive();
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,11 +127,34 @@ export default function ScheduledSurveysPanel({
     }
   };
 
+  // Cancel/delete icon buttons, shared between the desktop table and mobile cards.
+  const surveyActions = (survey: Survey) => (
+    <>
+      <IconButton
+        size="small"
+        onClick={() => setPending({ survey, action: 'cancel' })}
+        sx={{ color: 'warning.main' }}
+        title="Cancel"
+      >
+        <EventBusy />
+      </IconButton>
+      <IconButton
+        size="small"
+        onClick={() => setPending({ survey, action: 'delete' })}
+        sx={{ color: 'error.main' }}
+        title="Delete"
+      >
+        <Delete />
+      </IconButton>
+    </>
+  );
+
   return (
     <Box>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+      <Box sx={{ mb: { xs: 2, md: 3 }, display: 'flex', justifyContent: 'flex-end' }}>
         <Button
           variant="contained"
+          fullWidth={isMobile}
           startIcon={<Add />}
           onClick={() => setDialogOpen(true)}
           sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
@@ -142,86 +169,125 @@ export default function ScheduledSurveysPanel({
         </Alert>
       )}
 
-      <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Date</TableCell>
-              <TableCell>Survey type</TableCell>
-              <TableCell>Location</TableCell>
-              <TableCell>Surveyors</TableCell>
-              <TableCell>State</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
-                  <CircularProgress />
-                </TableCell>
-              </TableRow>
-            ) : surveys.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 8, color: 'text.secondary' }}>
-                  No scheduled surveys. Use “Schedule surveys” to plan a series.
-                </TableCell>
-              </TableRow>
-            ) : (
-              surveys.map((s) => {
-                const state = deriveSurveyState(s);
-                const chip = STATE_CHIP[state] ?? STATE_CHIP.upcoming;
-                const weekly = hasWindow(s);
-                const assigned = s.surveyor_ids
-                  .map((id) => surveyorById.get(id))
-                  .filter((x): x is Surveyor => x !== undefined);
-                return (
-                  <TableRow key={s.id} sx={{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }}>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {weekly
-                          ? formatWeekRange(s.scheduled_window_start!, s.scheduled_window_end!)
-                          : dayjs(s.date).format('ddd D MMM YYYY')}
-                      </Typography>
+      {isMobile ? (
+        loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress />
+          </Box>
+        ) : surveys.length === 0 ? (
+          <Paper variant="outlined" sx={{ py: 6, px: 2, textAlign: 'center', color: 'text.secondary' }}>
+            No scheduled surveys. Use “Schedule surveys” to plan a series.
+          </Paper>
+        ) : (
+          <Stack spacing={1.5}>
+            {surveys.map((s) => {
+              const state = deriveSurveyState(s);
+              const chip = STATE_CHIP[state] ?? STATE_CHIP.upcoming;
+              const weekly = hasWindow(s);
+              const assigned = s.surveyor_ids
+                .map((id) => surveyorById.get(id))
+                .filter((x): x is Surveyor => x !== undefined);
+              return (
+                <EntityCard
+                  key={s.id}
+                  title={
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {weekly
+                        ? formatWeekRange(s.scheduled_window_start!, s.scheduled_window_end!)
+                        : dayjs(s.date).format('ddd D MMM YYYY')}
                       {weekly && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
                           Week window
                         </Typography>
                       )}
-                    </TableCell>
-                    <TableCell>{s.survey_type_name ?? '—'}</TableCell>
-                    <TableCell>{s.location_name ?? '—'}</TableCell>
-                    <TableCell>
-                      <SurveyorAvatars surveyors={assigned} emptyLabel="No surveyors yet" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={chip.label} size="small" color={chip.color} />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => setPending({ survey: s, action: 'cancel' })}
-                        sx={{ color: 'warning.main', mr: 1 }}
-                        title="Cancel"
-                      >
-                        <EventBusy />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => setPending({ survey: s, action: 'delete' })}
-                        sx={{ color: 'error.main' }}
-                        title="Delete"
-                      >
-                        <Delete />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                    </Typography>
+                  }
+                  subtitle={
+                    <>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {[s.survey_type_name, s.location_name].filter(Boolean).join(' · ') || '—'}
+                      </Typography>
+                      <Box sx={{ mt: 1 }}>
+                        <SurveyorAvatars surveyors={assigned} emptyLabel="No surveyors yet" />
+                      </Box>
+                    </>
+                  }
+                  chips={<Chip label={chip.label} size="small" color={chip.color} />}
+                  actions={surveyActions(s)}
+                />
+              );
+            })}
+          </Stack>
+        )
+      ) : (
+        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Date</TableCell>
+                <TableCell>Survey type</TableCell>
+                <TableCell>Location</TableCell>
+                <TableCell>Surveyors</TableCell>
+                <TableCell>State</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
+                    <CircularProgress />
+                  </TableCell>
+                </TableRow>
+              ) : surveys.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 8, color: 'text.secondary' }}>
+                    No scheduled surveys. Use “Schedule surveys” to plan a series.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                surveys.map((s) => {
+                  const state = deriveSurveyState(s);
+                  const chip = STATE_CHIP[state] ?? STATE_CHIP.upcoming;
+                  const weekly = hasWindow(s);
+                  const assigned = s.surveyor_ids
+                    .map((id) => surveyorById.get(id))
+                    .filter((x): x is Surveyor => x !== undefined);
+                  return (
+                    <TableRow key={s.id} sx={{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }}>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {weekly
+                            ? formatWeekRange(s.scheduled_window_start!, s.scheduled_window_end!)
+                            : dayjs(s.date).format('ddd D MMM YYYY')}
+                        </Typography>
+                        {weekly && (
+                          <Typography variant="caption" color="text.secondary">
+                            Week window
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>{s.survey_type_name ?? '—'}</TableCell>
+                      <TableCell>{s.location_name ?? '—'}</TableCell>
+                      <TableCell>
+                        <SurveyorAvatars surveyors={assigned} emptyLabel="No surveyors yet" />
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={chip.label} size="small" color={chip.color} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          {surveyActions(s)}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       <ScheduleSurveyDialog
         open={dialogOpen}

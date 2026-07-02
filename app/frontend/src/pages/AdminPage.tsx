@@ -28,9 +28,10 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Divider,
 } from '@mui/material';
 import { Add, Delete, RestoreFromTrash, Edit, Lock, Download } from '@mui/icons-material';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode, type Ref } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import SurveyTypeFilesManager from '../components/admin/SurveyTypeFilesManager';
@@ -57,6 +58,7 @@ import {
 import LocationsDevicesManager from '../components/admin/LocationsDevicesManager';
 import RecordsExportPanel from '../components/admin/RecordsExportPanel';
 import ScheduledSurveysPanel from '../components/admin/ScheduledSurveysPanel';
+import EntityCard from '../components/admin/EntityCard';
 import { SurveyTypeColorSelector, SurveyTypeChip } from '../components/SurveyTypeColors';
 import { brandColors } from '../theme';
 
@@ -70,8 +72,25 @@ function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
   return (
     <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: { xs: 2, md: 3 } }}>{children}</Box>}
     </div>
+  );
+}
+
+/** Labelled group of related fields inside the survey type dialog. */
+function FormSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Box sx={{ mt: 3, '&:first-of-type': { mt: 1 } }}>
+      <Typography
+        variant="overline"
+        color="text.secondary"
+        sx={{ letterSpacing: 1, lineHeight: 2 }}
+      >
+        {title}
+      </Typography>
+      <Divider sx={{ mb: 1 }} />
+      {children}
+    </Box>
   );
 }
 
@@ -92,7 +111,6 @@ export function AdminPage() {
   // Heal-only Spaces tab where scheduled surveys surface.
   const showScheduling = getOrgSlug() === 'heal';
   const [tabValue, setTabValue] = useState(0);
-  const [dataTabValue, setDataTabValue] = useState(0);
 
   // Surveyors state
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
@@ -443,6 +461,116 @@ export function AdminPage() {
     }
   };
 
+  // Rendering helpers shared between the desktop tables and mobile card lists
+  const statusChip = (isActive: boolean) => (
+    <Chip
+      label={isActive ? 'Active' : 'Inactive'}
+      size="small"
+      color={isActive ? 'success' : 'default'}
+      sx={{ minWidth: 70 }}
+    />
+  );
+
+  const surveyorActions = (surveyor: Surveyor) => (
+    <>
+      <IconButton
+        size="small"
+        onClick={() => handleOpenEditSurveyor(surveyor)}
+        sx={{ color: 'primary.main' }}
+        title="Edit"
+      >
+        <Edit />
+      </IconButton>
+      {surveyor.is_active ? (
+        <IconButton
+          size="small"
+          onClick={() => {
+            setSurveyorToDeactivate(surveyor);
+            setDeactivateSurveyorDialogOpen(true);
+          }}
+          sx={{ color: 'error.main' }}
+          title="Deactivate"
+        >
+          <Delete />
+        </IconButton>
+      ) : (
+        <IconButton
+          size="small"
+          onClick={() => handleReactivateSurveyor(surveyor)}
+          sx={{ color: 'success.main' }}
+          title="Reactivate"
+        >
+          <RestoreFromTrash />
+        </IconButton>
+      )}
+    </>
+  );
+
+  const surveyTypeActions = (surveyType: SurveyType) => (
+    <>
+      <IconButton
+        size="small"
+        onClick={() => handleOpenEditSurveyType(surveyType)}
+        sx={{ color: 'primary.main' }}
+        title="Edit"
+      >
+        <Edit />
+      </IconButton>
+      {surveyType.is_active ? (
+        <IconButton
+          size="small"
+          onClick={() => {
+            setSurveyTypeToDeactivate(surveyType);
+            setDeactivateSurveyTypeDialogOpen(true);
+          }}
+          sx={{ color: 'error.main' }}
+          title="Deactivate"
+        >
+          <Delete />
+        </IconButton>
+      ) : (
+        <IconButton
+          size="small"
+          onClick={() => handleReactivateSurveyType(surveyType)}
+          sx={{ color: 'success.main' }}
+          title="Reactivate"
+        >
+          <RestoreFromTrash />
+        </IconButton>
+      )}
+    </>
+  );
+
+  /** Chips for the optional features a survey type has enabled (shown instead of six Enabled/Disabled columns). */
+  const surveyTypeFeatureChips = (surveyType: SurveyType) => {
+    const enabled = [
+      surveyType.allow_geolocation && 'GPS',
+      surveyType.allow_sighting_notes && 'Notes',
+      surveyType.allow_audio_upload && 'Audio',
+      surveyType.allow_image_upload && 'Images',
+    ].filter((label): label is string => Boolean(label));
+    if (enabled.length === 0) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          —
+        </Typography>
+      );
+    }
+    return enabled.map((label) => <Chip key={label} label={label} size="small" variant="outlined" />);
+  };
+
+  const listLoading = (
+    <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+      <CircularProgress />
+    </Box>
+  );
+
+  const listEmpty = (message: string) => (
+    <Paper variant="outlined" sx={{ py: 6, px: 2, textAlign: 'center', color: 'text.secondary' }}>
+      {message}
+    </Paper>
+  );
+
   // Show auth gate if not authenticated
   if (authLoading) {
     return (
@@ -475,9 +603,14 @@ export function AdminPage() {
 
   return (
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
-      {/* Tabs */}
+      {/* Tabs — scrollable on mobile so all five fit without clipping */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
+        <Tabs
+          value={tabValue}
+          onChange={(_, newValue) => setTabValue(newValue)}
+          variant={isMobile ? 'scrollable' : 'standard'}
+          allowScrollButtonsMobile
+        >
           <Tab label="Surveyors" />
           <Tab label="Survey Types" />
           <Tab label="Locations & Devices" />
@@ -488,9 +621,10 @@ export function AdminPage() {
 
       {/* Surveyors Tab */}
       <TabPanel value={tabValue} index={0}>
-        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+        <Box sx={{ mb: { xs: 2, md: 3 }, display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
+            fullWidth={isMobile}
             startIcon={<Add />}
             onClick={handleOpenAddSurveyor}
             sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
@@ -505,93 +639,85 @@ export function AdminPage() {
           </Alert>
         )}
 
-        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {surveyorsLoading ? (
+        {isMobile ? (
+          surveyorsLoading ? (
+            listLoading
+          ) : surveyors.length === 0 ? (
+            listEmpty('No surveyors found')
+          ) : (
+            <Stack spacing={1.5}>
+              {surveyors.map((surveyor) => (
+                <EntityCard
+                  key={surveyor.id}
+                  ref={surveyorHighlight.rowRef(surveyor.id) as Ref<HTMLDivElement>}
+                  sx={surveyorHighlight.rowSx(surveyor.id)}
+                  title={
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {surveyor.first_name}{surveyor.last_name ? ` ${surveyor.last_name}` : ''}
+                    </Typography>
+                  }
+                  chips={statusChip(surveyor.is_active)}
+                  actions={surveyorActions(surveyor)}
+                />
+              ))}
+            </Stack>
+          )
+        ) : (
+          <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+            <Table>
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={3} align="center" sx={{ py: 8 }}>
-                    <CircularProgress />
-                  </TableCell>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
-              ) : surveyors.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} align="center" sx={{ py: 8, color: 'text.secondary' }}>
-                    No surveyors found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                surveyors.map((surveyor) => (
-                  <TableRow
-                    key={surveyor.id}
-                    ref={surveyorHighlight.rowRef(surveyor.id)}
-                    sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, surveyorHighlight.rowSx(surveyor.id)]}
-                  >
-                    <TableCell>
-                      <Typography variant="body1">
-                        {surveyor.first_name}{surveyor.last_name ? ` ${surveyor.last_name}` : ''}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={surveyor.is_active ? 'Active' : 'Inactive'}
-                        size="small"
-                        color={surveyor.is_active ? 'success' : 'default'}
-                        sx={{ minWidth: 70 }}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenEditSurveyor(surveyor)}
-                        sx={{ color: 'primary.main', mr: 1 }}
-                        title="Edit"
-                      >
-                        <Edit />
-                      </IconButton>
-                      {surveyor.is_active ? (
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setSurveyorToDeactivate(surveyor);
-                            setDeactivateSurveyorDialogOpen(true);
-                          }}
-                          sx={{ color: 'error.main' }}
-                          title="Deactivate"
-                        >
-                          <Delete />
-                        </IconButton>
-                      ) : (
-                        <IconButton
-                          size="small"
-                          onClick={() => handleReactivateSurveyor(surveyor)}
-                          sx={{ color: 'success.main' }}
-                          title="Reactivate"
-                        >
-                          <RestoreFromTrash />
-                        </IconButton>
-                      )}
+              </TableHead>
+              <TableBody>
+                {surveyorsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center" sx={{ py: 8 }}>
+                      <CircularProgress />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                ) : surveyors.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center" sx={{ py: 8, color: 'text.secondary' }}>
+                      No surveyors found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  surveyors.map((surveyor) => (
+                    <TableRow
+                      key={surveyor.id}
+                      ref={surveyorHighlight.rowRef(surveyor.id)}
+                      sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, surveyorHighlight.rowSx(surveyor.id)]}
+                    >
+                      <TableCell>
+                        <Typography variant="body1">
+                          {surveyor.first_name}{surveyor.last_name ? ` ${surveyor.last_name}` : ''}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{statusChip(surveyor.is_active)}</TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          {surveyorActions(surveyor)}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </TabPanel>
 
       {/* Survey Types Tab */}
       <TabPanel value={tabValue} index={1}>
-        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
+        <Box sx={{ mb: { xs: 2, md: 3 }, display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
+            fullWidth={isMobile}
             startIcon={<Add />}
             onClick={handleOpenAddSurveyType}
             sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
@@ -606,137 +732,107 @@ export function AdminPage() {
           </Alert>
         )}
 
-        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
-          {/* minWidth lets TableContainer scroll horizontally on phones
-              instead of crushing the eight columns to unreadable widths */}
-          <Table sx={{ minWidth: 720 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Location Level</TableCell>
-                <TableCell>Geolocation</TableCell>
-                <TableCell>Sighting Notes</TableCell>
-                <TableCell>Audio</TableCell>
-                <TableCell>Images</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {surveyTypesLoading ? (
-                <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                    <CircularProgress />
-                  </TableCell>
-                </TableRow>
-              ) : surveyTypes.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 8, color: 'text.secondary' }}>
-                    No survey types found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                surveyTypes.map((surveyType) => (
-                  <TableRow
-                    key={surveyType.id}
-                    ref={surveyTypeHighlight.rowRef(surveyType.id)}
-                    sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, surveyTypeHighlight.rowSx(surveyType.id)]}
-                  >
-                    <TableCell>
-                      <Stack direction="row" alignItems="center" spacing={1.5}>
-                        <SurveyTypeChip name={surveyType.name} color={surveyType.color} />
-                        {surveyType.description && (
-                          <Typography variant="body2" color="text.secondary">
-                            {surveyType.description}
-                          </Typography>
-                        )}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>
+        {isMobile ? (
+          surveyTypesLoading ? (
+            listLoading
+          ) : surveyTypes.length === 0 ? (
+            listEmpty('No survey types found')
+          ) : (
+            <Stack spacing={1.5}>
+              {surveyTypes.map((surveyType) => (
+                <EntityCard
+                  key={surveyType.id}
+                  ref={surveyTypeHighlight.rowRef(surveyType.id) as Ref<HTMLDivElement>}
+                  sx={surveyTypeHighlight.rowSx(surveyType.id)}
+                  title={<SurveyTypeChip name={surveyType.name} color={surveyType.color} />}
+                  subtitle={
+                    surveyType.description ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                        {surveyType.description}
+                      </Typography>
+                    ) : undefined
+                  }
+                  chips={
+                    <>
+                      {statusChip(surveyType.is_active)}
                       <Chip
                         label={surveyType.location_at_sighting_level ? 'Per Sighting' : 'Per Survey'}
                         size="small"
                         variant="outlined"
                       />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={surveyType.allow_geolocation ? 'Enabled' : 'Disabled'}
-                        size="small"
-                        color={surveyType.allow_geolocation ? 'info' : 'default'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={surveyType.allow_sighting_notes ? 'Enabled' : 'Disabled'}
-                        size="small"
-                        color={surveyType.allow_sighting_notes ? 'warning' : 'default'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={surveyType.allow_audio_upload ? 'Enabled' : 'Disabled'}
-                        size="small"
-                        color={surveyType.allow_audio_upload ? 'secondary' : 'default'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={surveyType.allow_image_upload ? 'Enabled' : 'Disabled'}
-                        size="small"
-                        color={surveyType.allow_image_upload ? 'primary' : 'default'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={surveyType.is_active ? 'Active' : 'Inactive'}
-                        size="small"
-                        color={surveyType.is_active ? 'success' : 'default'}
-                        sx={{ minWidth: 70 }}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenEditSurveyType(surveyType)}
-                        sx={{ color: 'primary.main', mr: 1 }}
-                        title="Edit"
-                      >
-                        <Edit />
-                      </IconButton>
-                      {surveyType.is_active ? (
-                        <IconButton
-                          size="small"
-                          onClick={() => {
-                            setSurveyTypeToDeactivate(surveyType);
-                            setDeactivateSurveyTypeDialogOpen(true);
-                          }}
-                          sx={{ color: 'error.main' }}
-                          title="Deactivate"
-                        >
-                          <Delete />
-                        </IconButton>
-                      ) : (
-                        <IconButton
-                          size="small"
-                          onClick={() => handleReactivateSurveyType(surveyType)}
-                          sx={{ color: 'success.main' }}
-                          title="Reactivate"
-                        >
-                          <RestoreFromTrash />
-                        </IconButton>
-                      )}
+                      {surveyTypeFeatureChips(surveyType)}
+                    </>
+                  }
+                  actions={surveyTypeActions(surveyType)}
+                />
+              ))}
+            </Stack>
+          )
+        ) : (
+          <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
+            <Table sx={{ minWidth: 640 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Location Level</TableCell>
+                  <TableCell>Features</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {surveyTypesLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
+                      <CircularProgress />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                ) : surveyTypes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 8, color: 'text.secondary' }}>
+                      No survey types found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  surveyTypes.map((surveyType) => (
+                    <TableRow
+                      key={surveyType.id}
+                      ref={surveyTypeHighlight.rowRef(surveyType.id)}
+                      sx={[{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }, surveyTypeHighlight.rowSx(surveyType.id)]}
+                    >
+                      <TableCell>
+                        <SurveyTypeChip name={surveyType.name} color={surveyType.color} />
+                        {surveyType.description && (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            {surveyType.description}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={surveyType.location_at_sighting_level ? 'Per Sighting' : 'Per Survey'}
+                          size="small"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                          {surveyTypeFeatureChips(surveyType)}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>{statusChip(surveyType.is_active)}</TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          {surveyTypeActions(surveyType)}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </TabPanel>
 
       {/* Locations & Devices Tab */}
@@ -744,21 +840,14 @@ export function AdminPage() {
         <LocationsDevicesManager />
       </TabPanel>
 
-      {/* Data Tab */}
+      {/* Data Tab — export sections stacked instead of a second row of nested tabs */}
       <TabPanel value={tabValue} index={3}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs value={dataTabValue} onChange={(_, newValue) => setDataTabValue(newValue)}>
-            <Tab label="Export records" />
-            <Tab label="Database" />
-          </Tabs>
-        </Box>
+        <Stack spacing={{ xs: 2, md: 3 }} sx={{ maxWidth: 600 }}>
+          <RecordsExportPanel />
 
-        {dataTabValue === 0 && <RecordsExportPanel />}
-
-        {dataTabValue === 1 && (
-          <Paper sx={{ p: 3, maxWidth: 600 }}>
+          <Paper sx={{ p: { xs: 2, md: 3 } }}>
             <Typography variant="h6" gutterBottom>
-              Export Data
+              Database snapshot
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Download a snapshot of all your organisation's data as a SQLite database file.
@@ -775,6 +864,7 @@ export function AdminPage() {
             )}
             <Button
               variant="contained"
+              fullWidth={isMobile}
               startIcon={exporting ? <CircularProgress size={20} color="inherit" /> : <Download />}
               onClick={handleExportSqlite}
               disabled={exporting}
@@ -783,7 +873,7 @@ export function AdminPage() {
               {exporting ? 'Exporting...' : 'Download SQLite Database'}
             </Button>
           </Paper>
-        )}
+        </Stack>
       </TabPanel>
 
       {/* Scheduled Tab (Heal-only) */}
@@ -886,303 +976,312 @@ export function AdminPage() {
               {surveyTypeFormError}
             </Alert>
           )}
-          <TextField
-            autoFocus
-            margin="normal"
-            label="Name"
-            fullWidth
-            required
-            value={formName}
-            onChange={(e) => setFormName(e.target.value)}
-            disabled={savingSurveyType}
-          />
-          <TextField
-            margin="normal"
-            label="Description"
-            fullWidth
-            multiline
-            rows={2}
-            value={formDescription}
-            onChange={(e) => setFormDescription(e.target.value)}
-            disabled={savingSurveyType}
-          />
-          <Box sx={{ mt: 2 }}>
-            <SurveyTypeColorSelector
-              value={formColor}
-              onChange={setFormColor}
+          <FormSection title="Basics">
+            <TextField
+              autoFocus
+              margin="normal"
+              label="Name"
+              fullWidth
+              required
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              disabled={savingSurveyType}
             />
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formLocationAtSightingLevel}
-                  onChange={(e) => setFormLocationAtSightingLevel(e.target.checked)}
-                  disabled={savingSurveyType || formAllowSightingDeviceSelection}
-                />
-              }
-              label="Location at sighting level"
+            <TextField
+              margin="normal"
+              label="Description"
+              fullWidth
+              multiline
+              rows={2}
+              value={formDescription}
+              onChange={(e) => setFormDescription(e.target.value)}
+              disabled={savingSurveyType}
             />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowSightingDeviceSelection
-                ? 'Disabled — the device supplies the location for each sighting'
-                : formLocationAtSightingLevel
-                ? 'Each sighting can have its own location'
-                : 'Location is set once for the entire survey'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowGeolocation}
-                  onChange={(e) => setFormAllowGeolocation(e.target.checked)}
-                  disabled={savingSurveyType || formAllowSightingDeviceSelection}
-                />
-              }
-              label="Allow geolocation"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowSightingDeviceSelection
-                ? 'Disabled — the device supplies the location for each sighting'
-                : formAllowGeolocation
-                ? 'Users can add GPS coordinates to sightings'
-                : 'GPS coordinates are disabled for this survey type'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowSightingDeviceSelection}
-                  onChange={(e) => {
-                    const enabled = e.target.checked;
-                    setFormAllowSightingDeviceSelection(enabled);
-                    if (enabled) {
-                      setFormLocationAtSightingLevel(false);
-                      setFormAllowGeolocation(false);
-                    } else {
-                      setFormSightingDeviceType(null);
-                    }
-                  }}
-                  disabled={savingSurveyType}
-                />
-              }
-              label="Attach device to sighting"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowSightingDeviceSelection
-                ? 'Each sighting is attached to a device and inherits its location'
-                : 'Sightings are not attached to a specific device'}
-            </Typography>
-            {formAllowSightingDeviceSelection && (
-              <FormControl fullWidth margin="normal" sx={{ ml: 4, width: 'calc(100% - 32px)' }} size="small">
-                <InputLabel>Device Type</InputLabel>
+            <Box sx={{ mt: 1 }}>
+              <SurveyTypeColorSelector value={formColor} onChange={setFormColor} />
+            </Box>
+          </FormSection>
+          <FormSection title="Location & devices">
+            <Box sx={{ mt: 1 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formLocationAtSightingLevel}
+                    onChange={(e) => setFormLocationAtSightingLevel(e.target.checked)}
+                    disabled={savingSurveyType || formAllowSightingDeviceSelection}
+                  />
+                }
+                label="Location at sighting level"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowSightingDeviceSelection
+                  ? 'Disabled — the device supplies the location for each sighting'
+                  : formLocationAtSightingLevel
+                  ? 'Each sighting can have its own location'
+                  : 'Location is set once for the entire survey'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowGeolocation}
+                    onChange={(e) => setFormAllowGeolocation(e.target.checked)}
+                    disabled={savingSurveyType || formAllowSightingDeviceSelection}
+                  />
+                }
+                label="Allow geolocation"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowSightingDeviceSelection
+                  ? 'Disabled — the device supplies the location for each sighting'
+                  : formAllowGeolocation
+                  ? 'Users can add GPS coordinates to sightings'
+                  : 'GPS coordinates are disabled for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowSightingDeviceSelection}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      setFormAllowSightingDeviceSelection(enabled);
+                      if (enabled) {
+                        setFormLocationAtSightingLevel(false);
+                        setFormAllowGeolocation(false);
+                      } else {
+                        setFormSightingDeviceType(null);
+                      }
+                    }}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Attach device to sighting"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowSightingDeviceSelection
+                  ? 'Each sighting is attached to a device and inherits its location'
+                  : 'Sightings are not attached to a specific device'}
+              </Typography>
+              {formAllowSightingDeviceSelection && (
+                <FormControl fullWidth margin="normal" sx={{ ml: 4, width: 'calc(100% - 32px)' }} size="small">
+                  <InputLabel>Device Type</InputLabel>
+                  <Select
+                    value={formSightingDeviceType ?? ''}
+                    label="Device Type"
+                    onChange={(e) => setFormSightingDeviceType((e.target.value || null) as DeviceType | null)}
+                    disabled={savingSurveyType}
+                  >
+                    <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
+                    <MenuItem value="camera_trap">Camera Trap</MenuItem>
+                    <MenuItem value="refugia">Refugia</MenuItem>
+                    <MenuItem value="moth_light_trap">Moth Light Trap</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
+            </Box>
+          </FormSection>
+          <FormSection title="Sightings">
+            <Box sx={{ mt: 1 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowSightingNotes}
+                    onChange={(e) => setFormAllowSightingNotes(e.target.checked)}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Allow sighting notes"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowSightingNotes
+                  ? 'Users can add notes to individual sightings'
+                  : 'Sighting notes are disabled for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowAudioUpload}
+                    onChange={(e) => setFormAllowAudioUpload(e.target.checked)}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Allow audio upload"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowAudioUpload
+                  ? 'Users can upload audio files for analysis'
+                  : 'Audio upload is disabled for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowImageUpload}
+                    onChange={(e) => setFormAllowImageUpload(e.target.checked)}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Allow image upload"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowImageUpload
+                  ? 'Users can upload camera trap images for analysis'
+                  : 'Image upload is disabled for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowSightingPhotoUpload}
+                    onChange={(e) => setFormAllowSightingPhotoUpload(e.target.checked)}
+                    disabled={savingSurveyType || formAllowImageUpload}
+                  />
+                }
+                label="Allow sighting photo upload"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowImageUpload
+                  ? 'Not available for camera trap survey types'
+                  : formAllowSightingPhotoUpload
+                  ? 'Users can attach photos to individual sightings for documentation'
+                  : 'Sighting photo upload is disabled for this survey type'}
+              </Typography>
+            </Box>
+          </FormSection>
+          <FormSection title="Survey fields">
+            <Box sx={{ mt: 1 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowStartEndTime}
+                    onChange={(e) => setFormAllowStartEndTime(e.target.checked)}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Allow start/end time"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowStartEndTime
+                  ? 'Surveyors can record start and end times'
+                  : 'Start/end time fields are hidden for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowSunPercentage}
+                    onChange={(e) => setFormAllowSunPercentage(e.target.checked)}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Allow sun percentage"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowSunPercentage
+                  ? 'Surveyors can record sun percentage conditions'
+                  : 'Sun percentage field is hidden for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowTemperature}
+                    onChange={(e) => setFormAllowTemperature(e.target.checked)}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Allow temperature"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowTemperature
+                  ? 'Surveyors can record temperature in Celsius'
+                  : 'Temperature field is hidden for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowShowDescription}
+                    onChange={(e) => setFormAllowShowDescription(e.target.checked)}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Show description to surveyors"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowShowDescription
+                  ? 'Survey type description is displayed at the top of the survey form'
+                  : 'Description is only visible in admin settings'}
+              </Typography>
+            </Box>
+          </FormSection>
+          <FormSection title="Scheduling">
+            <Box sx={{ mt: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel id="schedule-cadence-label">Scheduling cadence</InputLabel>
                 <Select
-                  value={formSightingDeviceType ?? ''}
-                  label="Device Type"
-                  onChange={(e) => setFormSightingDeviceType((e.target.value || null) as DeviceType | null)}
+                  labelId="schedule-cadence-label"
+                  label="Scheduling cadence"
+                  value={formScheduleCadence}
+                  onChange={(e) => setFormScheduleCadence(e.target.value as ScheduleCadence)}
                   disabled={savingSurveyType}
                 >
-                  <MenuItem value="audio_recorder">Audio Recorder</MenuItem>
-                  <MenuItem value="camera_trap">Camera Trap</MenuItem>
-                  <MenuItem value="refugia">Refugia</MenuItem>
-                  <MenuItem value="moth_light_trap">Moth Light Trap</MenuItem>
+                  <MenuItem value="date">Specific day</MenuItem>
+                  <MenuItem value="weekly">Weekly</MenuItem>
                 </Select>
               </FormControl>
-            )}
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowSightingNotes}
-                  onChange={(e) => setFormAllowSightingNotes(e.target.checked)}
-                  disabled={savingSurveyType}
-                />
-              }
-              label="Allow sighting notes"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowSightingNotes
-                ? 'Users can add notes to individual sightings'
-                : 'Sighting notes are disabled for this survey type'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowAudioUpload}
-                  onChange={(e) => setFormAllowAudioUpload(e.target.checked)}
-                  disabled={savingSurveyType}
-                />
-              }
-              label="Allow audio upload"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowAudioUpload
-                ? 'Users can upload audio files for analysis'
-                : 'Audio upload is disabled for this survey type'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowImageUpload}
-                  onChange={(e) => setFormAllowImageUpload(e.target.checked)}
-                  disabled={savingSurveyType}
-                />
-              }
-              label="Allow image upload"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowImageUpload
-                ? 'Users can upload camera trap images for analysis'
-                : 'Image upload is disabled for this survey type'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowSightingPhotoUpload}
-                  onChange={(e) => setFormAllowSightingPhotoUpload(e.target.checked)}
-                  disabled={savingSurveyType || formAllowImageUpload}
-                />
-              }
-              label="Allow sighting photo upload"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowImageUpload
-                ? 'Not available for camera trap survey types'
-                : formAllowSightingPhotoUpload
-                ? 'Users can attach photos to individual sightings for documentation'
-                : 'Sighting photo upload is disabled for this survey type'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="schedule-cadence-label">Scheduling cadence</InputLabel>
-              <Select
-                labelId="schedule-cadence-label"
-                label="Scheduling cadence"
-                value={formScheduleCadence}
-                onChange={(e) => setFormScheduleCadence(e.target.value as ScheduleCadence)}
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                {formScheduleCadence === 'weekly'
+                  ? 'Surveys are scheduled for a whole week and can be carried out on any day within it'
+                  : 'Surveys are scheduled for a specific day'}
+              </Typography>
+            </Box>
+          </FormSection>
+          <FormSection title="Availability">
+            {!formAllowImageUpload && (
+              <Autocomplete
+                multiple
+                options={allLocations}
+                getOptionLabel={locationDisplayName}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                value={formSelectedLocations}
+                onChange={(_, newValue) => setFormSelectedLocations(newValue)}
                 disabled={savingSurveyType}
-              >
-                <MenuItem value="date">Specific day</MenuItem>
-                <MenuItem value="weekly">Weekly</MenuItem>
-              </Select>
-            </FormControl>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-              {formScheduleCadence === 'weekly'
-                ? 'Surveys are scheduled for a whole week and can be carried out on any day within it'
-                : 'Surveys are scheduled for a specific day'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowStartEndTime}
-                  onChange={(e) => setFormAllowStartEndTime(e.target.checked)}
-                  disabled={savingSurveyType}
-                />
-              }
-              label="Allow start/end time"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowStartEndTime
-                ? 'Surveyors can record start and end times'
-                : 'Start/end time fields are hidden for this survey type'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowSunPercentage}
-                  onChange={(e) => setFormAllowSunPercentage(e.target.checked)}
-                  disabled={savingSurveyType}
-                />
-              }
-              label="Allow sun percentage"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowSunPercentage
-                ? 'Surveyors can record sun percentage conditions'
-                : 'Sun percentage field is hidden for this survey type'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowTemperature}
-                  onChange={(e) => setFormAllowTemperature(e.target.checked)}
-                  disabled={savingSurveyType}
-                />
-              }
-              label="Allow temperature"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowTemperature
-                ? 'Surveyors can record temperature in Celsius'
-                : 'Temperature field is hidden for this survey type'}
-            </Typography>
-          </Box>
-          <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formAllowShowDescription}
-                  onChange={(e) => setFormAllowShowDescription(e.target.checked)}
-                  disabled={savingSurveyType}
-                />
-              }
-              label="Show description to surveyors"
-            />
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
-              {formAllowShowDescription
-                ? 'Survey type description is displayed at the top of the survey form'
-                : 'Description is only visible in admin settings'}
-            </Typography>
-          </Box>
-          {!formAllowImageUpload && (
+                renderInput={(params) => (
+                  <TextField {...params} margin="normal" label="Available Locations" placeholder="Select locations (leave empty to omit the location field from surveys)" />
+                )}
+                sx={{ mt: 1 }}
+              />
+            )}
+            {formAllowImageUpload && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Camera trap survey types use devices instead of locations. Devices can be managed in the Locations &amp; Devices tab.
+              </Typography>
+            )}
             <Autocomplete
               multiple
-              options={allLocations}
-              getOptionLabel={locationDisplayName}
+              options={allSpeciesTypes}
+              getOptionLabel={(option) => option.display_name}
               isOptionEqualToValue={(option, value) => option.id === value.id}
-              value={formSelectedLocations}
-              onChange={(_, newValue) => setFormSelectedLocations(newValue)}
+              value={formSelectedSpeciesTypes}
+              onChange={(_, newValue) => setFormSelectedSpeciesTypes(newValue)}
               disabled={savingSurveyType}
               renderInput={(params) => (
-                <TextField {...params} margin="normal" label="Available Locations" placeholder="Select locations (leave empty to omit the location field from surveys)" />
+                <TextField {...params} margin="normal" label="Species Types" placeholder="Select species types" required />
               )}
               sx={{ mt: 2 }}
             />
-          )}
-          {formAllowImageUpload && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Camera trap survey types use devices instead of locations. Devices can be managed in the Locations &amp; Devices tab.
-            </Typography>
-          )}
-          <Autocomplete
-            multiple
-            options={allSpeciesTypes}
-            getOptionLabel={(option) => option.display_name}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            value={formSelectedSpeciesTypes}
-            onChange={(_, newValue) => setFormSelectedSpeciesTypes(newValue)}
-            disabled={savingSurveyType}
-            renderInput={(params) => (
-              <TextField {...params} margin="normal" label="Species Types" placeholder="Select species types" required />
-            )}
-            sx={{ mt: 2 }}
-          />
+          </FormSection>
           {surveyTypeDialogMode === 'edit' && editingSurveyType && (
             <SurveyTypeFilesManager surveyTypeId={editingSurveyType.id} />
           )}

@@ -8,7 +8,7 @@
  * successful mutation this calls `onReload` to refresh.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type Ref } from 'react';
 import {
   Box,
   Button,
@@ -44,10 +44,12 @@ import type { Location, LocationType, LocationWithBoundary, Device } from '../..
 import { brandColors } from '../../theme';
 import { useToast } from '../../context/ToastContext';
 import { useRowHighlight } from '../../hooks';
+import { useResponsive } from '../../hooks/useResponsive';
 import { DEVICE_TYPE_LABELS, DEVICE_CHIP_COLORS } from '../../utils/deviceIcon';
 import DeviceMap from './DeviceMap';
 import LocationDeviceEditorDialog, { type EditorKind } from './LocationDeviceEditorDialog';
 import ViewModeToggle, { type ViewMode } from '../ViewModeToggle';
+import EntityCard from './EntityCard';
 
 const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
   area: 'Area',
@@ -113,6 +115,7 @@ export default function LocationsDevicesView({
   const [crudError, setCrudError] = useState<string | null>(null);
 
   const toast = useToast();
+  const { isMobile } = useResponsive();
   const locationHighlight = useRowHighlight();
   const deviceHighlight = useRowHighlight();
 
@@ -241,6 +244,74 @@ export default function LocationsDevicesView({
   const error = loadError ?? crudError;
   const colSpan = 5;
 
+  // Rendering helpers shared between the desktop table and mobile card list
+  const locationActions = (location: Location) => (
+    <>
+      <IconButton
+        size="small"
+        onClick={() => handleEditLocation(location)}
+        sx={{ color: 'primary.main' }}
+        title="Edit"
+      >
+        <Edit />
+      </IconButton>
+      <IconButton
+        size="small"
+        onClick={() => setDeleteLocationTarget(location)}
+        sx={{ color: 'error.main' }}
+        title="Delete"
+      >
+        <Delete />
+      </IconButton>
+    </>
+  );
+
+  const deviceActions = (device: Device) => (
+    <>
+      <IconButton
+        size="small"
+        onClick={() => handleEditDevice(device)}
+        sx={{ color: 'primary.main' }}
+        title="Edit"
+      >
+        <Edit />
+      </IconButton>
+      {device.is_active ? (
+        <IconButton
+          size="small"
+          onClick={() => setDeactivateDeviceTarget(device)}
+          sx={{ color: 'error.main' }}
+          title="Deactivate"
+        >
+          <Delete />
+        </IconButton>
+      ) : (
+        <IconButton
+          size="small"
+          onClick={() => handleReactivateDevice(device)}
+          sx={{ color: 'success.main' }}
+          title="Reactivate"
+        >
+          <RestoreFromTrash />
+        </IconButton>
+      )}
+    </>
+  );
+
+  const locationTypeChip = (location: Location) => {
+    const type = location.location_type ?? 'none';
+    return (
+      <Chip
+        label={LOCATION_TYPE_LABELS[type]}
+        size="small"
+        color={LOCATION_TYPE_COLORS[type]}
+        sx={{ minWidth: 70 }}
+      />
+    );
+  };
+
+  const emptyMessage = search || kinds.length < 2 ? 'No matches' : 'No locations or devices yet';
+
   return (
     <Box>
       {error && (
@@ -310,6 +381,68 @@ export default function LocationsDevicesView({
           onEditLocation={handleEditLocation}
           onDeleteLocation={(loc) => setDeleteLocationTarget(loc)}
         />
+      ) : isMobile ? (
+        loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress />
+          </Box>
+        ) : rows.length === 0 ? (
+          <Paper variant="outlined" sx={{ py: 6, px: 2, textAlign: 'center', color: 'text.secondary' }}>
+            {emptyMessage}
+          </Paper>
+        ) : (
+          <Stack spacing={1.5}>
+            {rows.map((row) =>
+              row.kind === 'location' ? (
+                <EntityCard
+                  key={`location-${row.location.id}`}
+                  ref={locationHighlight.rowRef(row.location.id) as Ref<HTMLDivElement>}
+                  sx={locationHighlight.rowSx(row.location.id)}
+                  title={
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {row.location.name}
+                    </Typography>
+                  }
+                  chips={
+                    <>
+                      <Chip icon={<PlaceIcon />} label="Location" size="small" variant="outlined" />
+                      {locationTypeChip(row.location)}
+                    </>
+                  }
+                  actions={locationActions(row.location)}
+                />
+              ) : (
+                <EntityCard
+                  key={`device-${row.device.id}`}
+                  ref={deviceHighlight.rowRef(row.device.id) as Ref<HTMLDivElement>}
+                  sx={deviceHighlight.rowSx(row.device.id)}
+                  title={
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {row.device.name}
+                    </Typography>
+                  }
+                  chips={
+                    <>
+                      <Chip icon={<SensorsIcon />} label="Device" size="small" variant="outlined" />
+                      <Chip
+                        label={DEVICE_TYPE_LABELS[row.device.device_type]}
+                        size="small"
+                        color={DEVICE_CHIP_COLORS[row.device.device_type]}
+                        variant="outlined"
+                      />
+                      <Chip
+                        label={row.device.is_active ? 'Active' : 'Inactive'}
+                        size="small"
+                        color={row.device.is_active ? 'success' : 'default'}
+                      />
+                    </>
+                  }
+                  actions={deviceActions(row.device)}
+                />
+              ),
+            )}
+          </Stack>
+        )
       ) : (
         <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider' }}>
           <Table sx={{ minWidth: 640 }}>
@@ -332,7 +465,7 @@ export default function LocationsDevicesView({
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={colSpan} align="center" sx={{ py: 8, color: 'text.secondary' }}>
-                    {search || kinds.length < 2 ? 'No matches' : 'No locations or devices yet'}
+                    {emptyMessage}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -358,41 +491,16 @@ export default function LocationsDevicesView({
                           sx={{ minWidth: 96 }}
                         />
                       </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const type = row.location.location_type ?? 'none';
-                          return (
-                            <Chip
-                              label={LOCATION_TYPE_LABELS[type]}
-                              size="small"
-                              color={LOCATION_TYPE_COLORS[type]}
-                              sx={{ minWidth: 70 }}
-                            />
-                          );
-                        })()}
-                      </TableCell>
+                      <TableCell>{locationTypeChip(row.location)}</TableCell>
                       <TableCell>
                         <Typography variant="body2" color="text.secondary">
                           —
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditLocation(row.location)}
-                          sx={{ color: 'primary.main', mr: 1 }}
-                          title="Edit"
-                        >
-                          <Edit />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => setDeleteLocationTarget(row.location)}
-                          sx={{ color: 'error.main' }}
-                          title="Delete"
-                        >
-                          <Delete />
-                        </IconButton>
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          {locationActions(row.location)}
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -433,33 +541,9 @@ export default function LocationsDevicesView({
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditDevice(row.device)}
-                          sx={{ color: 'primary.main', mr: 1 }}
-                          title="Edit"
-                        >
-                          <Edit />
-                        </IconButton>
-                        {row.device.is_active ? (
-                          <IconButton
-                            size="small"
-                            onClick={() => setDeactivateDeviceTarget(row.device)}
-                            sx={{ color: 'error.main' }}
-                            title="Deactivate"
-                          >
-                            <Delete />
-                          </IconButton>
-                        ) : (
-                          <IconButton
-                            size="small"
-                            onClick={() => handleReactivateDevice(row.device)}
-                            sx={{ color: 'success.main' }}
-                            title="Reactivate"
-                          >
-                            <RestoreFromTrash />
-                          </IconButton>
-                        )}
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          {deviceActions(row.device)}
+                        </Stack>
                       </TableCell>
                     </TableRow>
                   ),

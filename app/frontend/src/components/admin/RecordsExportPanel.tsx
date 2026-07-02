@@ -113,7 +113,7 @@ function RecordsExportPanel() {
   }
 
   return (
-    <Paper sx={{ p: 3, maxWidth: 600 }}>
+    <Paper sx={{ p: { xs: 2, md: 3 }, maxWidth: 600 }}>
       <Typography variant="h6" gutterBottom>
         Export records
       </Typography>
