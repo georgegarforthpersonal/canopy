@@ -4,6 +4,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { Dayjs } from 'dayjs';
 import type { Location, Surveyor } from '../../services/api';
+import { locationDisplayName } from '../../services/api';
 
 interface SurveyFormFieldsProps {
   // Form values
@@ -117,7 +118,7 @@ export function SurveyFormFields({
       {!hideLocation && (
         <Autocomplete
           options={locations}
-          getOptionLabel={(option) => option.name}
+          getOptionLabel={locationDisplayName}
           value={locations.find((l) => l.id === locationId) || null}
           onChange={(_, newValue) => onLocationChange(newValue?.id || null)}
           renderInput={(params) => (

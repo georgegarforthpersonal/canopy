@@ -96,9 +96,11 @@ export function SurveysPage() {
         setError(null);
 
         // Build query parameters
-        const queryParams: { page: number; limit: number; survey_type_id?: number } = {
+        // Only show completed surveys on this page (scheduled/cancelled are managed elsewhere)
+        const queryParams: { page: number; limit: number; survey_type_id?: number; survey_status: 'completed' } = {
           page,
-          limit
+          limit,
+          survey_status: 'completed'
         };
 
         // Add survey type filter if selected

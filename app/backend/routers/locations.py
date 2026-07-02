@@ -28,6 +28,7 @@ from models import (
     LocationUpdate,
     LocationWithBoundary,
     LocationType,
+    SectorInput,
     GEOMETRY_TYPES_BY_LOCATION_TYPE,
     Organisation,
 )
@@ -112,6 +113,86 @@ def _location_read(loc: Location) -> Dict[str, Any]:
     return {"id": loc.id, "name": loc.name, "location_type": loc.location_type}
 
 
+def _write_sectors(
+    db: Session,
+    org_id: int,
+    route_id: int,
+    sectors: List[SectorInput],
+) -> None:
+    """Replace the full set of sectors (child locations) for a route.
+
+    Sectors are persisted as child ``Location`` rows (type == "sector") pointing
+    at ``route_id`` via ``parent_location_id``. Incoming sectors are matched by id
+    where supplied: existing ones are updated in place (so references survive),
+    new ones are inserted, and any existing sector not present is deleted. Ordinal
+    is assigned 1-based from the array order.
+    """
+    existing = db.query(Location).filter(
+        Location.parent_location_id == route_id,
+        Location.organisation_id == org_id,
+    ).all()
+    existing_by_id = {loc.id: loc for loc in existing}
+
+    kept_ids: set[int] = set()
+    for ordinal, sector in enumerate(sectors, start=1):
+        _validate_geometry(LocationType.sector, sector.geometry)
+        child = existing_by_id.get(sector.id) if sector.id is not None else None
+        if child is None:
+            child = Location(
+                name=sector.name,
+                location_type=LocationType.sector,
+                organisation_id=org_id,
+                parent_location_id=route_id,
+                ordinal=ordinal,
+            )
+            db.add(child)
+            db.flush()  # assign id before writing geometry
+        else:
+            child.name = sector.name
+            child.ordinal = ordinal
+            db.flush()
+        assert child.id is not None
+        kept_ids.add(child.id)
+        _write_geometry(db, child.id, sector.geometry)
+
+    for loc in existing:
+        if loc.id not in kept_ids:
+            db.delete(loc)
+
+
+def _delete_sectors(db: Session, org_id: int, route_id: int) -> None:
+    """Delete all sectors belonging to a route (used when a route stops being one)."""
+    children = db.query(Location).filter(
+        Location.parent_location_id == route_id,
+        Location.organisation_id == org_id,
+    ).all()
+    for child in children:
+        db.delete(child)
+
+
+def _sectors_for(db: Session, org_id: int) -> Dict[int, List[Dict[str, Any]]]:
+    """Fetch all sectors with geometry for an org, grouped by parent route id."""
+    rows = db.execute(text("""
+        SELECT id, name, ordinal, parent_location_id,
+               ST_AsGeoJSON(boundary_geometry)::json AS geometry
+        FROM location
+        WHERE parent_location_id IS NOT NULL
+          AND organisation_id = :org_id
+          AND boundary_geometry IS NOT NULL
+        ORDER BY parent_location_id, ordinal
+    """).bindparams(org_id=org_id)).fetchall()
+
+    grouped: Dict[int, List[Dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(row[3], []).append({
+            "id": row[0],
+            "name": row[1],
+            "ordinal": row[2],
+            "geometry": row[4],
+        })
+    return grouped
+
+
 # ---------------------------------------------------------------------------
 # Read endpoints
 # ---------------------------------------------------------------------------
@@ -121,13 +202,24 @@ async def get_locations(
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db)
 ) -> List[dict[str, Any]]:
-    """Get all locations for the current organisation."""
+    """Get all locations for the current organisation, including route sectors.
+
+    Sectors are ordinary selectable locations (they can be assigned to survey
+    types and picked per sighting); they are still also surfaced nested under
+    their route via ``/with-boundaries`` for map display.
+    """
     locations = db.query(Location).filter(
-        Location.organisation_id == org.id
+        Location.organisation_id == org.id,
     ).order_by(Location.name).all()
 
+    names_by_id = {loc.id: loc.name for loc in locations}
     return [
-        {"id": loc.id, "name": loc.name, "location_type": loc.location_type}
+        {
+            "id": loc.id,
+            "name": loc.name,
+            "location_type": loc.location_type,
+            "parent_name": names_by_id.get(loc.parent_location_id) if loc.parent_location_id else None,
+        }
         for loc in locations
     ]
 
@@ -140,15 +232,19 @@ async def get_locations_by_survey_type(
 ) -> List[dict[str, Any]]:
     """Get locations available for a specific survey type."""
     result = db.execute(text("""
-        SELECT l.id, l.name, l.location_type
+        SELECT l.id, l.name, l.location_type, p.name AS parent_name
         FROM location l
         INNER JOIN survey_type_location stl ON stl.location_id = l.id
+        LEFT JOIN location p ON p.id = l.parent_location_id
         WHERE stl.survey_type_id = :survey_type_id
           AND l.organisation_id = :org_id
         ORDER BY l.name
     """).bindparams(survey_type_id=survey_type_id, org_id=org.id)).fetchall()
 
-    return [{"id": row[0], "name": row[1], "location_type": row[2]} for row in result]
+    return [
+        {"id": row[0], "name": row[1], "location_type": row[2], "parent_name": row[3]}
+        for row in result
+    ]
 
 
 @router.get("/with-boundaries", response_model=List[LocationWithBoundary])
@@ -174,8 +270,12 @@ async def get_locations_with_boundaries(
         FROM location
         WHERE boundary_geometry IS NOT NULL
           AND organisation_id = :org_id
+          AND parent_location_id IS NULL
         ORDER BY name
     """).bindparams(org_id=org.id)).fetchall()
+
+    assert org.id is not None
+    sectors_by_route = _sectors_for(db, org.id)
 
     return [{
         "id": row[0],
@@ -183,6 +283,7 @@ async def get_locations_with_boundaries(
         "location_type": row[2],
         "geometry": row[3],
         "boundary_geometry": row[4],
+        "sectors": sectors_by_route.get(row[0]) or None,
     } for row in result]
 
 
@@ -228,6 +329,15 @@ async def create_location(
 
     if location.geometry is not None:
         _write_geometry(db, db_location.id, location.geometry)
+
+    if location.sectors is not None:
+        if location.location_type != LocationType.route:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Only route locations can have sectors",
+            )
+        assert org.id is not None
+        _write_sectors(db, org.id, db_location.id, location.sectors)
 
     db.commit()
     db.refresh(db_location)
@@ -285,6 +395,14 @@ async def update_location(
         db.flush()
         _write_geometry(db, location_id, None)
 
+    # Sectors: an explicit list replaces the full set; a route that stops being
+    # a route sheds any sectors it had.
+    assert org.id is not None
+    if effective_type != LocationType.route:
+        _delete_sectors(db, org.id, location_id)
+    elif "sectors" in fields_set:
+        _write_sectors(db, org.id, location_id, location.sectors or [])
+
     db.commit()
     db.refresh(db_location)
 
@@ -306,6 +424,7 @@ async def delete_location(
     if not db_location:
         raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
 
+    # Sectors are removed by the ON DELETE CASCADE on parent_location_id.
     db.delete(db_location)
     db.commit()
     return None

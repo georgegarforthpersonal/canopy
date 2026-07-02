@@ -264,6 +264,50 @@ async function uploadMediaFiles<T>(endpoint: string, files: File[]): Promise<T> 
   }
 }
 
+/**
+ * Upload a single file under the form field name `file`.
+ * Used for endpoints that accept one file per request (e.g. survey-type files).
+ */
+async function uploadSingleFile<T>(endpoint: string, file: File): Promise<T> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'X-Org-Slug': ORG_SLUG,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let errorMessage = `Upload failed: ${response.status}`;
+      try {
+        const error = await response.json();
+        if (error.detail) {
+          errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+        }
+      } catch {
+        // Ignore parse errors
+      }
+      throw new ApiError(errorMessage, response.status);
+    }
+
+    return response.json();
+  } catch (error) {
+    reportApiError(error, { endpoint, method: 'POST', status: statusOf(error) });
+    throw error;
+  }
+}
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -286,13 +330,38 @@ export interface Species {
 }
 
 /** Spatial representation of a location. */
-export type LocationType = 'area' | 'route' | 'point' | 'none';
+// 'sector' is a sub-segment of a route; sectors are never top-level locations,
+// they are only returned nested under their parent route.
+export type LocationType = 'area' | 'route' | 'point' | 'none' | 'sector';
 
 export interface Location {
   id: number;
   name: string;
   // Optional because some legacy responses (e.g. survey-type details) may omit it.
   location_type?: LocationType;
+  // Parent route name for a sector (null/absent for top-level locations). Used to
+  // display children as "<parent> - child".
+  parent_name?: string | null;
+}
+
+/** Display label for a location: "<parent> - child" for sectors, else the name. */
+export function locationDisplayName(loc: Location): string {
+  return loc.parent_name ? `${loc.parent_name} - ${loc.name}` : loc.name;
+}
+
+/** A sector (sub-segment) of a route, nested under its parent route. */
+export interface Sector {
+  id: number;
+  name: string;
+  ordinal: number; // 1-based order within the route
+  geometry: GeoJsonGeometry | null; // GeoJSON LineString
+}
+
+/** A sector as sent to the API when creating/updating a route. */
+export interface SectorInput {
+  id?: number; // present when updating an existing sector in place
+  name: string;
+  geometry: GeoJsonGeometry; // GeoJSON LineString
 }
 
 /**
@@ -303,17 +372,21 @@ export interface LocationWithBoundary extends Location {
   geometry: GeoJsonGeometry | null;
   // Polygon outer ring as [lng, lat] pairs — kept for backward-compatible overlays; null for non-areas.
   boundary_geometry: [number, number][] | null;
+  // Ordered sub-segments of a route; null/absent for non-routes.
+  sectors?: Sector[] | null;
 }
 
 /**
  * Payload for creating/updating a location with optional geometry.
  * `geometry` is GeoJSON ([lng, lat]); omit it on update to leave the shape
- * unchanged, or send `null` to clear it.
+ * unchanged, or send `null` to clear it. `sectors` behaves the same: omit to
+ * leave untouched, send a list to replace the full set.
  */
 export interface LocationInput {
   name: string;
   location_type: LocationType;
   geometry?: GeoJsonGeometry | null;
+  sectors?: SectorInput[] | null;
 }
 
 /**
@@ -325,9 +398,17 @@ export interface SpeciesTypeCount {
   count: number; // Number of sightings of this type
 }
 
+/** Survey lifecycle status. */
+export type SurveyStatus = 'scheduled' | 'completed' | 'cancelled';
+
 export interface Survey {
   id: number;
   date: string;
+  status: SurveyStatus;
+  // Weekly-cadence surveys carry an inclusive window they may be carried out in;
+  // null for day-precise schedules (where `date` is the scheduled day).
+  scheduled_window_start: string | null;
+  scheduled_window_end: string | null;
   start_time: string | null;
   end_time: string | null;
   sun_percentage: number | null;
@@ -376,6 +457,19 @@ export interface SurveyQueryParams {
   start_date?: string; // YYYY-MM-DD format
   end_date?: string; // YYYY-MM-DD format
   survey_type_id?: number; // Filter by survey type ID
+  survey_status?: SurveyStatus; // Filter by lifecycle status
+}
+
+/**
+ * Request body for bulk-scheduling a recurring series of surveys.
+ * The frontend expands the recurrence rule into explicit `dates`.
+ */
+export interface SurveyScheduleRequest {
+  survey_type_id?: number | null;
+  location_id?: number | null;
+  surveyor_ids: number[];
+  notes?: string | null;
+  dates: string[]; // YYYY-MM-DD, one survey created per date
 }
 
 export interface SurveyDetail extends Omit<Survey, 'sightings_count'> {
@@ -532,12 +626,19 @@ export interface SpeciesTypeRef {
 }
 
 /**
+ * How surveys of a type are scheduled: for a specific day, or a whole week
+ * (any day within the window).
+ */
+export type ScheduleCadence = 'date' | 'weekly';
+
+/**
  * Survey type configuration
  */
 export interface SurveyType {
   id: number;
   name: string;
   description: string | null;
+  schedule_cadence: ScheduleCadence;
   location_at_sighting_level: boolean;
   allow_geolocation: boolean;
   allow_sighting_notes: boolean;
@@ -564,6 +665,18 @@ export interface SurveyTypeWithDetails extends SurveyType {
 }
 
 /**
+ * A reference file attached to a survey type (methodology PDF, recording form, etc.)
+ */
+export interface SurveyTypeFile {
+  id: number;
+  survey_type_id: number;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
+}
+
+/**
  * Request body for creating a survey type
  */
 export interface SurveyTypeCreate {
@@ -583,6 +696,7 @@ export interface SurveyTypeCreate {
   sighting_device_type?: DeviceType | null;
   icon?: string;
   color?: string;
+  schedule_cadence?: ScheduleCadence;
   location_ids: number[];
   species_type_ids: number[];
 }
@@ -607,6 +721,7 @@ export interface SurveyTypeUpdate {
   sighting_device_type?: DeviceType | null;
   icon?: string;
   color?: string;
+  schedule_cadence?: ScheduleCadence;
   is_active?: boolean;
   location_ids?: number[];
   species_type_ids?: number[];
@@ -628,11 +743,30 @@ export const surveysAPI = {
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     if (params?.survey_type_id) queryParams.append('survey_type_id', params.survey_type_id.toString());
+    if (params?.survey_status) queryParams.append('survey_status', params.survey_status);
 
     const queryString = queryParams.toString();
     const endpoint = queryString ? `/surveys?${queryString}` : '/surveys';
 
     return fetchAPI(endpoint);
+  },
+
+  /**
+   * Get every survey matching the filters, paging past the backend's
+   * 100-per-page cap. Used where truncation would corrupt derived state
+   * (e.g. the scheduled-surveys worklist, where the overdue rows sort last).
+   */
+  getAllPages: async (
+    params?: Omit<SurveyQueryParams, 'page' | 'limit'>,
+  ): Promise<Survey[]> => {
+    const limit = 100;
+    const first = await surveysAPI.getAll({ ...params, page: 1, limit });
+    const surveys = [...first.data];
+    for (let page = 2; page <= first.total_pages; page++) {
+      const next = await surveysAPI.getAll({ ...params, page, limit });
+      surveys.push(...next.data);
+    }
+    return surveys;
   },
 
   /**
@@ -649,6 +783,17 @@ export const surveysAPI = {
     return fetchAPI('/surveys', {
       method: 'POST',
       body: JSON.stringify(survey),
+    });
+  },
+
+  /**
+   * Bulk-schedule a recurring series of surveys (one per date), each created
+   * with status 'scheduled'. Used by the admin scheduling UI.
+   */
+  bulkSchedule: (payload: SurveyScheduleRequest): Promise<Survey[]> => {
+    return fetchAPI('/surveys/schedule', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 
@@ -1160,6 +1305,39 @@ export const surveyTypesAPI = {
    */
   getSpeciesTypes: (): Promise<SpeciesTypeRef[]> => {
     return fetchAPI('/survey-types/species-types');
+  },
+
+  /**
+   * List reference files attached to a survey type (most recent first)
+   */
+  getFiles: (surveyTypeId: number): Promise<SurveyTypeFile[]> => {
+    return fetchAPI(`/survey-types/${surveyTypeId}/files`);
+  },
+
+  /**
+   * Upload a reference file to a survey type
+   */
+  uploadFile: (surveyTypeId: number, file: File): Promise<SurveyTypeFile> => {
+    return uploadSingleFile(`/survey-types/${surveyTypeId}/files`, file);
+  },
+
+  /**
+   * Get a presigned download URL for a survey type file
+   */
+  getFileDownloadUrl: (
+    surveyTypeId: number,
+    fileId: number,
+  ): Promise<{ download_url: string; expires_in: number; filename: string }> => {
+    return fetchAPI(`/survey-types/${surveyTypeId}/files/${fileId}/download`);
+  },
+
+  /**
+   * Delete a reference file from a survey type
+   */
+  deleteFile: (surveyTypeId: number, fileId: number): Promise<void> => {
+    return fetchAPI(`/survey-types/${surveyTypeId}/files/${fileId}`, {
+      method: 'DELETE',
+    });
   },
 };
 

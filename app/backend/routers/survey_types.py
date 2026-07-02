@@ -10,8 +10,9 @@ Endpoints:
   GET    /api/survey-types/species-types      - List all species types
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File
 from typing import List, Union
+from sqlmodel import col
 from sqlalchemy.orm import Session
 from database.connection import get_db
 from auth import require_admin
@@ -19,12 +20,33 @@ from dependencies import get_current_organisation
 from models import (
     SurveyType, SurveyTypeRead, SurveyTypeCreate, SurveyTypeUpdate, SurveyTypeWithDetails,
     SurveyTypeLocationLink, SurveyTypeSpeciesTypeLink,
+    SurveyTypeFile, SurveyTypeFileRead,
     SpeciesType, SpeciesTypeRead,
     Location, LocationRead,
     Organisation
 )
+from services.r2_storage import (
+    MediaType,
+    upload_media_file,
+    delete_media_file,
+    generate_media_presigned_url,
+)
 
 router = APIRouter()
+
+# Maximum reference file size: 25 MB
+MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024
+
+
+def _get_owned_survey_type(survey_type_id: int, org: Organisation, db: Session) -> SurveyType:
+    """Fetch a survey type that belongs to the org, or raise 404."""
+    survey_type = db.query(SurveyType).filter(
+        SurveyType.id == survey_type_id,
+        SurveyType.organisation_id == org.id,
+    ).first()
+    if not survey_type:
+        raise HTTPException(status_code=404, detail=f"Survey type {survey_type_id} not found")
+    return survey_type  # type: ignore[no-any-return]
 
 
 def _validate_sighting_device_selection(payload: Union[SurveyType, SurveyTypeCreate]) -> None:
@@ -138,6 +160,7 @@ async def get_survey_type(
         sighting_device_type=survey_type.sighting_device_type,
         icon=survey_type.icon,
         color=survey_type.color,
+        schedule_cadence=survey_type.schedule_cadence,
         is_active=survey_type.is_active,
         locations=[LocationRead.model_validate(loc) for loc in locations],
         species_types=[SpeciesTypeRead.model_validate(st) for st in species_types]
@@ -198,6 +221,7 @@ async def create_survey_type(
         sighting_device_type=survey_type.sighting_device_type,
         icon=survey_type.icon,
         color=survey_type.color,
+        schedule_cadence=survey_type.schedule_cadence,
         organisation_id=org.id
     )
     db.add(db_survey_type)
@@ -335,3 +359,146 @@ async def reactivate_survey_type(
     db.commit()
     db.refresh(db_survey_type)
     return db_survey_type  # type: ignore[no-any-return]
+
+
+# ============================================================================
+# Survey Type Files (reference files: methodology PDFs, recording forms, etc.)
+# ============================================================================
+
+@router.get("/{survey_type_id}/files", response_model=List[SurveyTypeFileRead])
+async def list_survey_type_files(
+    survey_type_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> List[SurveyTypeFile]:
+    """List reference files for a survey type (most recent first)."""
+    _get_owned_survey_type(survey_type_id, org, db)
+    files = (
+        db.query(SurveyTypeFile)
+        .filter(SurveyTypeFile.survey_type_id == survey_type_id)
+        .order_by(col(SurveyTypeFile.created_at).desc())
+        .all()
+    )
+    return files  # type: ignore[no-any-return]
+
+
+@router.post(
+    "/{survey_type_id}/files",
+    response_model=SurveyTypeFileRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
+async def upload_survey_type_file(
+    survey_type_id: int,
+    file: UploadFile = File(...),
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> SurveyTypeFile:
+    """Upload a reference file to a survey type. Stored in R2."""
+    _get_owned_survey_type(survey_type_id, org, db)
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
+    # Determine file size (reject empty or oversized files)
+    file.file.seek(0, 2)
+    size_bytes = file.file.tell()
+    file.file.seek(0)
+    if size_bytes == 0:
+        raise HTTPException(status_code=400, detail="File is empty")
+    if size_bytes > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File exceeds maximum size of {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB",
+        )
+
+    # Check for duplicate before touching R2: the key is derived from the
+    # filename, so a re-upload would overwrite the existing object and then
+    # fail the unique constraint on r2_key.
+    existing = (
+        db.query(SurveyTypeFile)
+        .filter(
+            SurveyTypeFile.survey_type_id == survey_type_id,
+            SurveyTypeFile.filename == file.filename,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400, detail=f"File already exists: {file.filename}"
+        )
+
+    content_type = file.content_type or "application/octet-stream"
+    # Scope the R2 key by survey type so filenames can't collide across types
+    scoped_filename = f"survey_type_{survey_type_id}/{file.filename}"
+    r2_key = upload_media_file(
+        file.file, scoped_filename, org.slug, MediaType.REFERENCE, content_type
+    )
+
+    db_file = SurveyTypeFile(
+        survey_type_id=survey_type_id,
+        organisation_id=org.id,
+        filename=file.filename,
+        content_type=content_type,
+        size_bytes=size_bytes,
+        r2_key=r2_key,
+    )
+    db.add(db_file)
+    db.commit()
+    db.refresh(db_file)
+    return db_file
+
+
+@router.get("/{survey_type_id}/files/{file_id}/download")
+async def get_survey_type_file_download_url(
+    survey_type_id: int,
+    file_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Get a presigned URL to download a reference file."""
+    db_file = (
+        db.query(SurveyTypeFile)
+        .filter(
+            SurveyTypeFile.id == file_id,
+            SurveyTypeFile.survey_type_id == survey_type_id,
+            SurveyTypeFile.organisation_id == org.id,
+        )
+        .first()
+    )
+    if not db_file:
+        raise HTTPException(status_code=404, detail=f"File {file_id} not found")
+
+    url = generate_media_presigned_url(db_file.r2_key, expires_in=3600)
+    return {"download_url": url, "expires_in": 3600, "filename": db_file.filename}
+
+
+@router.delete(
+    "/{survey_type_id}/files/{file_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_admin)],
+)
+async def delete_survey_type_file(
+    survey_type_id: int,
+    file_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete a reference file from a survey type (removes R2 object and row)."""
+    db_file = (
+        db.query(SurveyTypeFile)
+        .filter(
+            SurveyTypeFile.id == file_id,
+            SurveyTypeFile.survey_type_id == survey_type_id,
+            SurveyTypeFile.organisation_id == org.id,
+        )
+        .first()
+    )
+    if not db_file:
+        raise HTTPException(status_code=404, detail=f"File {file_id} not found")
+
+    # Best-effort R2 cleanup; always remove the DB row
+    delete_media_file(db_file.r2_key)
+    db.delete(db_file)
+    db.commit()
+    return None

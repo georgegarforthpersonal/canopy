@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Snackbar, Alert, type AlertColor } from '@mui/material';
 
@@ -24,8 +24,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const success = useCallback((msg: string) => show(msg, 'success'), [show]);
   const error = useCallback((msg: string) => show(msg, 'error'), [show]);
 
+  // Stable identity: consumers list `toast` in effect deps, so a fresh object
+  // per render would retrigger their fetches on every toast open/close.
+  const value = useMemo(() => ({ success, error }), [success, error]);
+
   return (
-    <ToastContext.Provider value={{ success, error }}>
+    <ToastContext.Provider value={value}>
       {children}
       <Snackbar
         open={open}

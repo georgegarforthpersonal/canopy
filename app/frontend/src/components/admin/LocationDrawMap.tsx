@@ -33,8 +33,8 @@ import {
 import type { LocationType, LocationWithBoundary } from '../../services/api';
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
 
-/** Drawable location types (everything except 'none'). */
-export type DrawableLocationType = Exclude<LocationType, 'none'>;
+/** Drawable location types (everything except 'none' and 'sector'). */
+export type DrawableLocationType = Exclude<LocationType, 'none' | 'sector'>;
 
 const PM_SHAPE: Record<DrawableLocationType, 'Polygon' | 'Line' | 'Marker'> = {
   area: 'Polygon',
@@ -152,14 +152,56 @@ function GeomanController({ locationType, value, onChange }: GeomanControllerPro
       map.pm.enableDraw(PM_SHAPE[locationType], { snappable: true, snapDistance: 20 });
     }
 
+    // Backspace/Delete removes the last vertex while a line/area is being
+    // drawn (before it's finished). Guarded so it never hijacks typing in a
+    // form field, and only acts while a draw is in progress (no layer yet).
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return;
+      }
+      if (layerRef.current) return; // a finished shape is edited via right-click
+      const shape = PM_SHAPE[locationType];
+      if (shape !== 'Line' && shape !== 'Polygon') return;
+      // geoman's own "remove last vertex" action calls this internal method on
+      // the active draw instance (map.pm.Draw.Line/_Polygon._removeLastVertex).
+      const draw = map.pm.Draw as unknown as Record<string, { _removeLastVertex?: () => void } | undefined>;
+      const handler = draw[shape];
+      if (handler?._removeLastVertex) {
+        event.preventDefault();
+        try {
+          handler._removeLastVertex();
+        } catch {
+          /* nothing left to remove */
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
     return () => {
+      document.removeEventListener('keydown', handleKeyDown);
       map.off('pm:create', handleCreate as L.LeafletEventHandlerFn);
       try {
         map.pm.disableDraw();
+        // Global edit mode owns the vertex/helper markers; disable it so they
+        // aren't orphaned on the map when the layer is removed.
+        map.pm.disableGlobalEditMode();
       } catch {
         /* map already torn down */
       }
       if (layerRef.current) {
+        // Disable geoman edit on the layer first: this removes its vertex
+        // markers, which map.removeLayer alone leaves behind (e.g. on Clear).
+        const pm = (layerRef.current as L.Layer & { pm?: { disable?: () => void } }).pm;
+        try {
+          pm?.disable?.();
+        } catch {
+          /* layer already detached */
+        }
         layerRef.current.off();
         map.removeLayer(layerRef.current);
         layerRef.current = null;
@@ -217,10 +259,18 @@ export default function LocationDrawMap({
 
   const instruction =
     locationType === 'area'
-      ? 'Click to add points; click the first point to finish the area.'
+      ? 'Click to add points; click the first point to finish. Backspace undoes the last point.'
       : locationType === 'route'
-        ? 'Click to add points along the route; double-click to finish.'
+        ? 'Click to add points along the route; double-click to finish. Backspace undoes the last point.'
         : 'Click on the map to place the point.';
+
+  // Once a shape exists its vertices are editable: drag to move, right-click to
+  // remove (points have no vertices, so no removal hint).
+  const chipLabel = value
+    ? [measurement || 'Shape drawn', locationType !== 'point' ? 'right-click a point to remove' : null]
+        .filter(Boolean)
+        .join('  ·  ')
+    : instruction;
 
   return (
     <Paper
@@ -254,17 +304,24 @@ export default function LocationDrawMap({
         </Tooltip>
       </Stack>
 
-      {/* Top-left: instruction / measurement + clear */}
+      {/* Top-left: instruction / measurement + clear.
+          Offset past the Leaflet zoom control (top-left) so they don't overlap. */}
       <Stack
         direction="row"
         spacing={1}
         alignItems="center"
-        sx={{ position: 'absolute', top: 10, left: 10, zIndex: 1000 }}
+        sx={{ position: 'absolute', top: 10, left: 52, right: 96, zIndex: 1000 }}
       >
         <Chip
           size="small"
-          label={value ? measurement || 'Shape drawn' : instruction}
-          sx={{ bgcolor: 'white', boxShadow: 2, maxWidth: 320 }}
+          label={chipLabel}
+          sx={{
+            bgcolor: 'white',
+            boxShadow: 2,
+            maxWidth: 360,
+            height: 'auto',
+            '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5, lineHeight: 1.3 },
+          }}
         />
         {value && (
           <Button

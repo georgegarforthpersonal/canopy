@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,8 @@ import { getSurveyorName, formatDate } from '../utils/formatters';
 import { ImageViewerModal, type ImageViewerItem } from '../components/ImageViewerModal';
 import ViewModeToggle from '../components/ViewModeToggle';
 import { SPACING } from '../config/responsive';
+import { useToast } from '../context/ToastContext';
+import { readReturnTo, returnAfterAction } from '../utils/returnTo';
 
 /**
  * Small thumbnail component that lazily loads a presigned URL for a camera trap image
@@ -59,8 +61,14 @@ function SightingImageThumbnail({ imageId }: { imageId: number }) {
 export function SurveyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { requireAuth } = useAuth();
+  const toast = useToast();
+
+  // Where the back button and post-save/delete navigation should return to.
+  // Defaults to the main surveys list when reached via a deep link.
+  const returnTo = readReturnTo(location);
 
   // Check if we should start in edit mode (from URL param)
   const startInEditMode = searchParams.get('edit') === 'true';
@@ -144,6 +152,7 @@ export function SurveyDetailPage() {
     );
     return devices.filter((d) => d.is_active || referencedIds.has(d.id));
   }, [surveyType?.allow_sighting_device_selection, devices, sightings]);
+
 
   // ============================================================================
   // Data Fetching
@@ -255,8 +264,8 @@ export function SurveyDetailPage() {
         <Alert severity="error" sx={{ mb: 2 }}>
           {error || 'Survey not found'}
         </Alert>
-        <Button variant="contained" onClick={() => navigate('/surveys')}>
-          Back to Surveys
+        <Button variant="contained" onClick={() => navigate(returnTo.pathname)}>
+          Back to {returnTo.label}
         </Button>
       </Box>
     );
@@ -605,8 +614,10 @@ export function SurveyDetailPage() {
         }
       }
 
-      // Success - navigate back to surveys list with edited parameter
-      navigate(`/surveys?edited=${id}`);
+      // Success - return to the origin (surveys list, or the space we came from)
+      const { to, toastHere } = returnAfterAction(returnTo, 'edited', Number(id));
+      if (toastHere) toast.success('Survey updated successfully');
+      navigate(to);
     } catch (err) {
       // Persist the reconciled draft: sightings created before the failure now
       // carry their server ids, uploaded photos are no longer pending, etc.
@@ -662,8 +673,10 @@ export function SurveyDetailPage() {
     try {
       await surveysAPI.delete(Number(id));
 
-      // Success - navigate back to surveys list with deleted parameter
-      navigate(`/surveys?deleted=${id}`);
+      // Success - return to the origin (surveys list, or the space we came from)
+      const { to, toastHere } = returnAfterAction(returnTo, 'deleted', Number(id));
+      if (toastHere) toast.error('Survey deleted successfully');
+      navigate(to);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete survey');
       console.error('Error deleting survey:', err);
@@ -689,7 +702,7 @@ export function SurveyDetailPage() {
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
       {/* Page Header */}
       <PageHeader
-        backButton={{ href: '/surveys' }}
+        backButton={{ label: `Back to ${returnTo.label}`, href: returnTo.pathname }}
         actions={
           <>
             {isEditMode ? (
@@ -1256,8 +1269,6 @@ export function SurveyDetailPage() {
             </>
           )}
         </Paper>
-
-
 
         {/* Delete Confirmation Dialog */}
         <Dialog
