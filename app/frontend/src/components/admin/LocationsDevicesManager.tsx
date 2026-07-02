@@ -1,6 +1,6 @@
 /**
  * Admin "Locations & devices" tab: loads all locations and devices for the org
- * and renders the shared, fully-editable LocationsDevicesView.
+ * and renders LocationsDevicesView.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -48,7 +48,6 @@ export default function LocationsDevicesManager() {
       devices={devices}
       loading={loading}
       loadError={error}
-      editable
       onReload={load}
     />
   );

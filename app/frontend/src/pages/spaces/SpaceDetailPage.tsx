@@ -6,8 +6,9 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, Typography } from '@mui/material';
 import {
+  ApiError,
   surveyTypesAPI,
   surveysAPI,
   surveyorsAPI,
@@ -45,8 +46,8 @@ export default function SpaceDetailPage() {
   const [files, setFiles] = useState<SurveyTypeFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [filesLoading, setFilesLoading] = useState(true);
-  const [locationsLoading, setLocationsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState(false);
 
   // Surveyor assignment picker state
   const [assignSurvey, setAssignSurvey] = useState<Survey | null>(null);
@@ -68,10 +69,11 @@ export default function SpaceDetailPage() {
 
         const typeLocationIds = new Set(details.locations.map((l) => l.id));
 
-        // The worklist is built from scheduled surveys (upcoming + overdue);
+        // The worklist is built from ALL scheduled surveys (upcoming + overdue;
+        // truncation would drop exactly the overdue rows, which sort last);
         // the "All surveys" door shows the total across every status.
-        const [scheduledPage, totalPage, surveyorList, withBoundaries, deviceList] = await Promise.all([
-          surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'scheduled', page: 1, limit: 100 }),
+        const [scheduled, totalPage, surveyorList, withBoundaries, deviceList] = await Promise.all([
+          surveysAPI.getAllPages({ survey_type_id: surveyTypeId, survey_status: 'scheduled' }),
           surveysAPI.getAll({ survey_type_id: surveyTypeId, page: 1, limit: 1 }),
           surveyorsAPI.getAll(),
           locationsAPI.getAllWithBoundaries(),
@@ -79,7 +81,7 @@ export default function SpaceDetailPage() {
         ]);
         if (!active) return;
 
-        setSurveys(scheduledPage.data);
+        setSurveys(scheduled);
         setTotalSurveys(totalPage.total);
         setSurveyors(surveyorList);
 
@@ -102,9 +104,12 @@ export default function SpaceDetailPage() {
           }),
         );
         setDevices(deviceList.filter((d) => d.location_id != null && typeLocationIds.has(d.location_id)));
-        setLocationsLoading(false);
-      } catch {
-        if (active) setNotFound(true);
+      } catch (err) {
+        // Only a 404 means the space doesn't exist; anything else is a fault.
+        if (active) {
+          if (err instanceof ApiError && err.status === 404) setNotFound(true);
+          else setError(true);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -129,6 +134,15 @@ export default function SpaceDetailPage() {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <SpaceBreadcrumb crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: 'Error' }]} />
+        <Alert severity="error">Failed to load this survey space. Please try again.</Alert>
       </Box>
     );
   }
@@ -201,11 +215,7 @@ export default function SpaceDetailPage() {
           {/* Right column */}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25, flex: 1, width: '100%', minWidth: 0 }}>
             <FilesPanel surveyTypeId={surveyTypeId} files={files} loading={filesLoading} />
-            <LocationsDevicesPanel
-              locations={locations}
-              devices={devices}
-              loading={locationsLoading}
-            />
+            <LocationsDevicesPanel locations={locations} devices={devices} />
           </Box>
         </Box>
       </Box>

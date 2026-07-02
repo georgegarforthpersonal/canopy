@@ -89,8 +89,8 @@ export default function ScheduledSurveysPanel({
     try {
       setLoading(true);
       setError(null);
-      const res = await surveysAPI.getAll({ survey_status: 'scheduled', page: 1, limit: 100 });
-      const sorted = [...res.data].sort((a, b) => a.date.localeCompare(b.date));
+      const res = await surveysAPI.getAllPages({ survey_status: 'scheduled' });
+      const sorted = [...res].sort((a, b) => a.date.localeCompare(b.date));
       setSurveys(sorted);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load scheduled surveys');

@@ -1,8 +1,8 @@
 /**
- * Admin "Schedule surveys" dialog: pick a survey type, optional location and
- * pre-assigned surveyors, then a recurrence rule (start date, frequency, number
- * of occurrences). The rule is expanded into explicit dates and bulk-created as
- * `scheduled` surveys — these are what surface in the Spaces worklist for
+ * Admin "Schedule surveys" dialog: pick a survey type and optional location,
+ * then a recurrence rule (start date, frequency, number of occurrences). The
+ * rule is expanded into explicit dates and bulk-created as `scheduled` surveys
+ * with no surveyors — these are what surface in the Spaces worklist for
  * volunteers to sign up to.
  */
 import { useEffect, useMemo, useState } from 'react';

@@ -3,8 +3,7 @@
  *
  * Self-contained: fetches the occurrence series for a species id and renders
  * bars positioned ordinally with a year label at each year's first survey.
- * Shared by the Dashboards page and the Survey Spaces "Species abundance"
- * panel; the caller owns the species picker and passes the chosen id.
+ * The caller owns the species picker and passes the chosen id.
  */
 import { useEffect, useState } from 'react';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
@@ -16,20 +15,14 @@ import { brandColors } from '../../theme';
 
 interface SpeciesOccurrenceChartProps {
   speciesId: number | null;
-  color?: string;
   height?: number;
-  emptyMessage?: string;
-  placeholderMessage?: string;
 }
 
 const CHART_MARGIN = { top: 10, right: 10, left: 0, bottom: 0 };
 
 export default function SpeciesOccurrenceChart({
   speciesId,
-  color = brandColors.main,
   height = 300,
-  emptyMessage = 'No occurrence data available',
-  placeholderMessage = 'Select a species to view occurrences',
 }: SpeciesOccurrenceChartProps) {
   const [data, setData] = useState<SpeciesOccurrenceResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +52,7 @@ export default function SpeciesOccurrenceChart({
     return (
       <Box sx={centeredSx}>
         <Typography variant="body2" color="text.secondary">
-          {placeholderMessage}
+          Select a species to view occurrences
         </Typography>
       </Box>
     );
@@ -84,7 +77,7 @@ export default function SpeciesOccurrenceChart({
     return (
       <Box sx={centeredSx}>
         <Typography variant="body2" color="text.secondary">
-          {emptyMessage}
+          No occurrence data available
         </Typography>
       </Box>
     );
@@ -139,7 +132,7 @@ export default function SpeciesOccurrenceChart({
             );
           }}
         />
-        <Bar dataKey="count" fill={color} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+        <Bar dataKey="count" fill={brandColors.main} radius={[4, 4, 0, 0]} isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -163,7 +163,8 @@ async def get_surveys(
 
         # Get paginated surveys
         surveys_query = (
-            query.order_by(col(Survey.date).desc())
+            # id tiebreaker keeps pagination stable when many surveys share a date
+            query.order_by(col(Survey.date).desc(), col(Survey.id).desc())
             .offset(offset)
             .limit(limit)
             .all()
@@ -423,17 +424,19 @@ async def schedule_surveys(
     a 'date' type schedules a specific day, a 'weekly' type schedules the whole
     week beginning on that date (the survey may be carried out any day within it).
     """
-    try:
-        # The cadence is a property of the survey type; look it up once.
-        cadence = ScheduleCadence.date
-        if schedule.survey_type_id is not None:
-            survey_type = db.query(SurveyType).filter(
-                SurveyType.id == schedule.survey_type_id,
-                SurveyType.organisation_id == org.id,
-            ).first()
-            if survey_type is not None:
-                cadence = survey_type.schedule_cadence
+    # The cadence is a property of the survey type; look it up once. Outside
+    # the try block so the 404 isn't rewrapped as a 500.
+    cadence = ScheduleCadence.date
+    if schedule.survey_type_id is not None:
+        survey_type = db.query(SurveyType).filter(
+            SurveyType.id == schedule.survey_type_id,
+            SurveyType.organisation_id == org.id,
+        ).first()
+        if survey_type is None:
+            raise HTTPException(status_code=404, detail="Survey type not found")
+        cadence = survey_type.schedule_cadence
 
+    try:
         created: list[Survey] = []
         for survey_date in schedule.dates:
             if cadence == ScheduleCadence.weekly:

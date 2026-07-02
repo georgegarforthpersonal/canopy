@@ -15,6 +15,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { formatLength, geometryLengthM, type GeoJsonGeometry, type Position } from '../../utils/geometry';
+import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import { splitLine, pointAtFraction, nearestFractionOnLine } from '../../utils/sectorGeometry';
 
 // Alternating red shades so adjacent sectors are distinguishable.
@@ -41,7 +42,10 @@ function FitToLine({ line }: { line: Position[] }) {
   const map = useMap();
   useEffect(() => {
     const bounds = L.latLngBounds(line.map(toLatLng));
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+    // animate: false + stopMapAnimation cleanup: an in-flight fit animation
+    // firing after the dialog unmounts crashes Leaflet (see stopMapAnimation).
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30], animate: false });
+    return () => { stopMapAnimation(map); };
     // Fit once on mount; the route doesn't change while sectoring.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

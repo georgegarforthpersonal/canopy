@@ -84,6 +84,20 @@ class TestUploadSurveyTypeFile:
         resp = _upload(client, auth_headers, st.id, content=b"")
         assert resp.status_code == 400
 
+    def test_upload_duplicate_filename_rejected(
+        self, client, auth_headers, create_survey_type, patch_r2
+    ):
+        """A re-upload of the same filename is rejected before touching R2."""
+        st = create_survey_type(name="Butterfly")
+        assert _upload(client, auth_headers, st.id).status_code == 201
+        first_upload = dict(patch_r2["uploaded"])
+
+        resp = _upload(client, auth_headers, st.id, content=b"different content")
+        assert resp.status_code == 400
+        assert "already exists" in resp.json()["detail"]
+        # The original R2 object was not overwritten
+        assert patch_r2["uploaded"] == first_upload
+
     def test_upload_missing_survey_type(self, client, auth_headers, patch_r2):
         resp = _upload(client, auth_headers, 99999)
         assert resp.status_code == 404

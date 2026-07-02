@@ -397,8 +397,7 @@ class Location(LocationBase, table=True):  # type: ignore[call-arg]
     organisation_id: int = Field(foreign_key="organisation.id", index=True, description="Organisation this location belongs to")
     # For sectors (location_type == "sector"): the parent route this sector
     # belongs to. NULL for all top-level locations. Deleting a route removes
-    # its sectors (CASCADE); the router also deletes them explicitly so the
-    # cascade holds on backends where FK enforcement is off.
+    # its sectors via the FK's ON DELETE CASCADE.
     parent_location_id: Optional[int] = Field(
         default=None,
         sa_column=sa.Column(

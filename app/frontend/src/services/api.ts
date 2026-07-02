@@ -752,6 +752,24 @@ export const surveysAPI = {
   },
 
   /**
+   * Get every survey matching the filters, paging past the backend's
+   * 100-per-page cap. Used where truncation would corrupt derived state
+   * (e.g. the scheduled-surveys worklist, where the overdue rows sort last).
+   */
+  getAllPages: async (
+    params?: Omit<SurveyQueryParams, 'page' | 'limit'>,
+  ): Promise<Survey[]> => {
+    const limit = 100;
+    const first = await surveysAPI.getAll({ ...params, page: 1, limit });
+    const surveys = [...first.data];
+    for (let page = 2; page <= first.total_pages; page++) {
+      const next = await surveysAPI.getAll({ ...params, page, limit });
+      surveys.push(...next.data);
+    }
+    return surveys;
+  },
+
+  /**
    * Get a specific survey by ID
    */
   getById: (id: number): Promise<SurveyDetail> => {

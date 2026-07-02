@@ -1,12 +1,11 @@
 /**
- * Shared locations + devices view: a map (device markers over location
- * boundaries) or a filterable table listing both kinds, driven entirely by the
- * data passed in. Editing (add / edit / delete / (de)activate) is enabled with
- * `editable`; a read-only view (e.g. a survey space) omits all mutation UI while
- * keeping hover names on the map.
+ * Admin locations + devices view: a map (device markers over location
+ * boundaries) or a filterable table listing both kinds, with full editing
+ * (add / edit / delete / (de)activate). The read-only space panel uses
+ * DeviceMap directly instead.
  *
- * Data loading lives in the caller; after a successful mutation this calls
- * `onReload` to refresh.
+ * Data loading lives in the caller (LocationsDevicesManager); after a
+ * successful mutation this calls `onReload` to refresh.
  */
 
 import { useMemo, useState } from 'react';
@@ -74,7 +73,6 @@ type Row =
   | { kind: 'device'; sortName: string; device: Device };
 
 const LOCATION_DEFAULTS = { geometry: null, boundary_geometry: null };
-const noop = async () => {};
 
 interface LocationsDevicesViewProps {
   /** Top-level locations to list (Location or LocationWithBoundary). */
@@ -84,16 +82,8 @@ interface LocationsDevicesViewProps {
   devices: Device[];
   loading: boolean;
   loadError?: string | null;
-  /** Enable add / edit / delete / (de)activate. Read-only when false. */
-  editable?: boolean;
   /** Called after a successful mutation so the caller can refresh its data. */
-  onReload?: () => Promise<void> | void;
-  /** Locations shown faintly on the editor maps for context; defaults to `boundaries`. */
-  referenceLocations?: LocationWithBoundary[];
-  /** Show the search box + kind filter. Defaults to `editable`. */
-  showSearch?: boolean;
-  mapHeight?: number | string;
-  defaultView?: ViewMode;
+  onReload: () => Promise<void> | void;
 }
 
 export default function LocationsDevicesView({
@@ -102,17 +92,9 @@ export default function LocationsDevicesView({
   devices,
   loading,
   loadError = null,
-  editable = false,
   onReload,
-  referenceLocations,
-  showSearch = editable,
-  mapHeight = 'calc(100vh - 330px)',
-  defaultView = 'list',
 }: LocationsDevicesViewProps) {
-  const reload = onReload ?? noop;
-  const reference = referenceLocations ?? boundaries;
-
-  const [viewMode, setViewMode] = useState<ViewMode>(defaultView);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [search, setSearch] = useState('');
   const [kinds, setKinds] = useState<EntityKind[]>(['location', 'device']);
 
@@ -177,13 +159,13 @@ export default function LocationsDevicesView({
 
   const handleSavedLocation = async (saved: Location, created: boolean) => {
     toast.success(`Location ${created ? 'created' : 'updated'} successfully`);
-    await reload();
+    await onReload();
     locationHighlight.highlight(saved.id);
   };
 
   const handleSavedDevice = async (saved: Device, created: boolean) => {
     toast.success(`Device ${created ? 'created' : 'updated'} successfully`);
-    await reload();
+    await onReload();
     deviceHighlight.highlight(saved.id);
   };
 
@@ -193,7 +175,7 @@ export default function LocationsDevicesView({
     try {
       await locationsAPI.delete(deleteLocationTarget.id);
       setDeleteLocationTarget(null);
-      await reload();
+      await onReload();
       toast.error('Location deleted successfully');
     } catch (err) {
       setCrudError(err instanceof Error ? err.message : 'Failed to delete location');
@@ -208,7 +190,7 @@ export default function LocationsDevicesView({
     try {
       await devicesAPI.deactivate(deactivateDeviceTarget.id);
       setDeactivateDeviceTarget(null);
-      await reload();
+      await onReload();
       toast.error('Device deactivated');
     } catch (err) {
       setCrudError(err instanceof Error ? err.message : 'Failed to deactivate device');
@@ -220,7 +202,7 @@ export default function LocationsDevicesView({
   const handleReactivateDevice = async (device: Device) => {
     try {
       await devicesAPI.reactivate(device.id);
-      await reload();
+      await onReload();
       toast.success('Device reactivated');
       deviceHighlight.highlight(device.id);
     } catch (err) {
@@ -257,7 +239,7 @@ export default function LocationsDevicesView({
   }, [locations, devices, boundaries, search, kinds]);
 
   const error = loadError ?? crudError;
-  const colSpan = editable ? 5 : 4;
+  const colSpan = 5;
 
   return (
     <Box>
@@ -276,49 +258,43 @@ export default function LocationsDevicesView({
         sx={{ mb: 2 }}
       >
         <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} gap={1.5}>
-          {showSearch && (
-            <>
-              <TextField
-                size="small"
-                placeholder="Search by name…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Search fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                sx={{ minWidth: { sm: 260 } }}
-              />
-              <ToggleButtonGroup
-                value={kinds}
-                onChange={(_, next: EntityKind[]) => setKinds(next)}
-                size="small"
-                aria-label="filter by kind"
-              >
-                <ToggleButton value="location">Locations</ToggleButton>
-                <ToggleButton value="device">Devices</ToggleButton>
-              </ToggleButtonGroup>
-            </>
-          )}
+          <TextField
+            size="small"
+            placeholder="Search by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ minWidth: { sm: 260 } }}
+          />
+          <ToggleButtonGroup
+            value={kinds}
+            onChange={(_, next: EntityKind[]) => setKinds(next)}
+            size="small"
+            aria-label="filter by kind"
+          >
+            <ToggleButton value="location">Locations</ToggleButton>
+            <ToggleButton value="device">Devices</ToggleButton>
+          </ToggleButtonGroup>
         </Stack>
 
         <Stack direction="row" alignItems="center" justifyContent="flex-end" gap={1.5}>
           <ViewModeToggle value={viewMode} onChange={setViewMode} />
-          {editable && (
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={handleAdd}
-              sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
-            >
-              Add
-            </Button>
-          )}
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={handleAdd}
+            sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
+          >
+            Add
+          </Button>
         </Stack>
       </Stack>
 
@@ -327,8 +303,7 @@ export default function LocationsDevicesView({
           devices={filteredDevices}
           locationsWithBoundaries={filteredBoundaries}
           loading={loading}
-          height={mapHeight}
-          readOnly={!editable}
+          height="calc(100vh - 330px)"
           onEditDevice={handleEditDevice}
           onDeactivateDevice={(device) => setDeactivateDeviceTarget(device)}
           onReactivateDevice={handleReactivateDevice}
@@ -344,7 +319,7 @@ export default function LocationsDevicesView({
                 <TableCell>Kind</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell>Status</TableCell>
-                {editable && <TableCell align="right">Actions</TableCell>}
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -401,26 +376,24 @@ export default function LocationsDevicesView({
                           —
                         </Typography>
                       </TableCell>
-                      {editable && (
-                        <TableCell align="right">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditLocation(row.location)}
-                            sx={{ color: 'primary.main', mr: 1 }}
-                            title="Edit"
-                          >
-                            <Edit />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => setDeleteLocationTarget(row.location)}
-                            sx={{ color: 'error.main' }}
-                            title="Delete"
-                          >
-                            <Delete />
-                          </IconButton>
-                        </TableCell>
-                      )}
+                      <TableCell align="right">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditLocation(row.location)}
+                          sx={{ color: 'primary.main', mr: 1 }}
+                          title="Edit"
+                        >
+                          <Edit />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => setDeleteLocationTarget(row.location)}
+                          sx={{ color: 'error.main' }}
+                          title="Delete"
+                        >
+                          <Delete />
+                        </IconButton>
+                      </TableCell>
                     </TableRow>
                   ) : (
                     <TableRow
@@ -459,37 +432,35 @@ export default function LocationsDevicesView({
                           sx={{ minWidth: 70 }}
                         />
                       </TableCell>
-                      {editable && (
-                        <TableCell align="right">
+                      <TableCell align="right">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditDevice(row.device)}
+                          sx={{ color: 'primary.main', mr: 1 }}
+                          title="Edit"
+                        >
+                          <Edit />
+                        </IconButton>
+                        {row.device.is_active ? (
                           <IconButton
                             size="small"
-                            onClick={() => handleEditDevice(row.device)}
-                            sx={{ color: 'primary.main', mr: 1 }}
-                            title="Edit"
+                            onClick={() => setDeactivateDeviceTarget(row.device)}
+                            sx={{ color: 'error.main' }}
+                            title="Deactivate"
                           >
-                            <Edit />
+                            <Delete />
                           </IconButton>
-                          {row.device.is_active ? (
-                            <IconButton
-                              size="small"
-                              onClick={() => setDeactivateDeviceTarget(row.device)}
-                              sx={{ color: 'error.main' }}
-                              title="Deactivate"
-                            >
-                              <Delete />
-                            </IconButton>
-                          ) : (
-                            <IconButton
-                              size="small"
-                              onClick={() => handleReactivateDevice(row.device)}
-                              sx={{ color: 'success.main' }}
-                              title="Reactivate"
-                            >
-                              <RestoreFromTrash />
-                            </IconButton>
-                          )}
-                        </TableCell>
-                      )}
+                        ) : (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleReactivateDevice(row.device)}
+                            sx={{ color: 'success.main' }}
+                            title="Reactivate"
+                          >
+                            <RestoreFromTrash />
+                          </IconButton>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ),
                 )
@@ -499,67 +470,63 @@ export default function LocationsDevicesView({
         </TableContainer>
       )}
 
-      {editable && (
-        <>
-          <LocationDeviceEditorDialog
-            open={editorOpen}
-            mode={editorMode}
-            editKind={editorKind}
-            location={editLocation}
-            device={editDevice}
-            referenceLocations={reference}
-            onClose={() => setEditorOpen(false)}
-            onSavedLocation={handleSavedLocation}
-            onSavedDevice={handleSavedDevice}
-          />
+      <LocationDeviceEditorDialog
+        open={editorOpen}
+        mode={editorMode}
+        editKind={editorKind}
+        location={editLocation}
+        device={editDevice}
+        referenceLocations={boundaries}
+        onClose={() => setEditorOpen(false)}
+        onSavedLocation={handleSavedLocation}
+        onSavedDevice={handleSavedDevice}
+      />
 
-          <Dialog open={deleteLocationTarget !== null} onClose={() => setDeleteLocationTarget(null)}>
-            <DialogTitle>Delete location?</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                Delete &ldquo;{deleteLocationTarget?.name}&rdquo;? This cannot be undone. Surveys and sightings
-                linked to this location will keep their records but lose the association.
-              </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDeleteLocationTarget(null)} disabled={deletingLocation}>
-                Cancel
-              </Button>
-              <Button
-                color="error"
-                variant="contained"
-                onClick={handleConfirmDeleteLocation}
-                disabled={deletingLocation}
-              >
-                {deletingLocation ? 'Deleting…' : 'Delete'}
-              </Button>
-            </DialogActions>
-          </Dialog>
+      <Dialog open={deleteLocationTarget !== null} onClose={() => setDeleteLocationTarget(null)}>
+        <DialogTitle>Delete location?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Delete &ldquo;{deleteLocationTarget?.name}&rdquo;? This cannot be undone. Surveys and sightings
+            linked to this location will keep their records but lose the association.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteLocationTarget(null)} disabled={deletingLocation}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleConfirmDeleteLocation}
+            disabled={deletingLocation}
+          >
+            {deletingLocation ? 'Deleting…' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
-          <Dialog open={deactivateDeviceTarget !== null} onClose={() => setDeactivateDeviceTarget(null)}>
-            <DialogTitle>Deactivate device?</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                Deactivate <strong>{deactivateDeviceTarget?.name}</strong>? It will no longer appear in
-                active lists, but historical data is preserved.
-              </DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setDeactivateDeviceTarget(null)} disabled={deactivatingDevice}>
-                Cancel
-              </Button>
-              <Button
-                color="error"
-                variant="contained"
-                onClick={handleConfirmDeactivateDevice}
-                disabled={deactivatingDevice}
-              >
-                {deactivatingDevice ? 'Deactivating…' : 'Deactivate'}
-              </Button>
-            </DialogActions>
-          </Dialog>
-        </>
-      )}
+      <Dialog open={deactivateDeviceTarget !== null} onClose={() => setDeactivateDeviceTarget(null)}>
+        <DialogTitle>Deactivate device?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Deactivate <strong>{deactivateDeviceTarget?.name}</strong>? It will no longer appear in
+            active lists, but historical data is preserved.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeactivateDeviceTarget(null)} disabled={deactivatingDevice}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleConfirmDeactivateDevice}
+            disabled={deactivatingDevice}
+          >
+            {deactivatingDevice ? 'Deactivating…' : 'Deactivate'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

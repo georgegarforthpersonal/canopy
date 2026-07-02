@@ -412,6 +412,22 @@ async def upload_survey_type_file(
             detail=f"File exceeds maximum size of {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB",
         )
 
+    # Check for duplicate before touching R2: the key is derived from the
+    # filename, so a re-upload would overwrite the existing object and then
+    # fail the unique constraint on r2_key.
+    existing = (
+        db.query(SurveyTypeFile)
+        .filter(
+            SurveyTypeFile.survey_type_id == survey_type_id,
+            SurveyTypeFile.filename == file.filename,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400, detail=f"File already exists: {file.filename}"
+        )
+
     content_type = file.content_type or "application/octet-stream"
     # Scope the R2 key by survey type so filenames can't collide across types
     scoped_filename = f"survey_type_{survey_type_id}/{file.filename}"

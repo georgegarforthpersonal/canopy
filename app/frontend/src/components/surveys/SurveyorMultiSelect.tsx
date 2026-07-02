@@ -1,8 +1,8 @@
 /**
- * Shared surveyor multi-select: type-to-search Autocomplete with deletable
- * chips for the chosen surveyors. Extracted from the inline Autocompletes in
- * SurveyFormFields / SetupStep / ScheduleSurveyDialog so every surface picks
- * surveyors the same way.
+ * Surveyor multi-select: type-to-search Autocomplete with deletable chips for
+ * the chosen surveyors. Currently used by the Spaces surveyor picker; the
+ * older inline Autocompletes (SurveyFormFields, the wizard SetupSteps) could
+ * adopt it so every surface picks surveyors the same way.
  */
 import { Autocomplete, TextField, Chip } from '@mui/material';
 import type { Surveyor } from '../../services/api';

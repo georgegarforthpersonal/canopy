@@ -6,9 +6,10 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Box, Paper, Typography, Button, CircularProgress } from '@mui/material';
+import { Alert, Box, Paper, Typography, Button, CircularProgress } from '@mui/material';
 import { Add, PersonAddAlt1 } from '@mui/icons-material';
 import {
+  ApiError,
   surveyTypesAPI,
   surveysAPI,
   surveyorsAPI,
@@ -21,6 +22,7 @@ import { primarySpeciesType } from './spaceMeta';
 import { deriveSurveyState, formatSurveyDate, type SurveyState } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSurveyorLookup } from '../../hooks';
+import { useToast } from '../../context/ToastContext';
 import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
 import SurveyorAvatars from '../../components/spaces/SurveyorAvatars';
 import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
@@ -66,11 +68,15 @@ export default function AllSurveysPage() {
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState(false);
   const [assignSurvey, setAssignSurvey] = useState<Survey | null>(null);
   const [greenIds, setGreenIds] = useState<Set<number>>(new Set());
+  const toast = useToast();
 
   useEffect(() => {
     if (!Number.isFinite(surveyTypeId)) {
+      setNotFound(true);
       setLoading(false);
       return;
     }
@@ -87,8 +93,12 @@ export default function AllSurveysPage() {
         setSurveys(page.data);
         setTotal(page.total);
         setSurveyors(surveyorList);
-      } catch {
-        if (active) setSurveyType(null);
+      } catch (err) {
+        // Only a 404 means the space doesn't exist; anything else is a fault.
+        if (active) {
+          if (err instanceof ApiError && err.status === 404) setNotFound(true);
+          else setError(true);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -108,7 +118,27 @@ export default function AllSurveysPage() {
     );
   }
 
-  const speciesType = surveyType ? primarySpeciesType(surveyType) : 'butterfly';
+  if (error) {
+    return (
+      <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <SpaceBreadcrumb crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: 'Error' }]} />
+        <Alert severity="error">Failed to load surveys. Please try again.</Alert>
+      </Box>
+    );
+  }
+
+  if (notFound || !surveyType) {
+    return (
+      <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <SpaceBreadcrumb crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: 'Not found' }]} />
+        <Typography sx={{ color: spaceColors.textSecondary }}>
+          This survey space could not be found.
+        </Typography>
+      </Box>
+    );
+  }
+
+  const speciesType = primarySpeciesType(surveyType);
   const SpeciesIcon = getSpeciesIcon(speciesType);
 
   const loadMore = async () => {
@@ -118,6 +148,8 @@ export default function AllSurveysPage() {
       const page = await surveysAPI.getAll({ survey_type_id: surveyTypeId, page: nextPage, limit: PAGE_SIZE });
       setSurveys((prev) => [...prev, ...page.data]);
       setTotal(page.total);
+    } catch {
+      toast.error('Failed to load more surveys');
     } finally {
       setLoadingMore(false);
     }

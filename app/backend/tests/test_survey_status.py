@@ -175,6 +175,22 @@ class TestScheduleSurveys:
         assert len(created) == 1
         assert created[0]["surveyor_ids"] == []
 
+    def test_schedule_rejects_unknown_survey_type(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """An invalid survey_type_id is a 404, not a silent cadence fallback."""
+        resp = client.post(
+            "/api/surveys/schedule",
+            json={"survey_type_id": 99999, "dates": ["2026-12-01"]},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 404
+        # Nothing was created
+        scheduled = client.get(
+            "/api/surveys?survey_status=scheduled", headers=auth_headers
+        ).json()
+        assert scheduled["total"] == 0
+
     def test_schedule_rejects_empty_dates(self, client: TestClient, auth_headers: dict):
         resp = client.post(
             "/api/surveys/schedule",

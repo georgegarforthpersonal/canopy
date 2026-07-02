@@ -11,7 +11,6 @@ import {
   Typography,
   ToggleButtonGroup,
   ToggleButton,
-  CircularProgress,
 } from '@mui/material';
 import { Map as MapIcon, ViewList, Place as PlaceIcon } from '@mui/icons-material';
 import type { Device, LocationWithBoundary } from '../../services/api';
@@ -27,7 +26,6 @@ import DeviceMap from '../admin/DeviceMap';
 interface LocationsDevicesPanelProps {
   locations: LocationWithBoundary[];
   devices: Device[];
-  loading: boolean;
 }
 
 
@@ -70,7 +68,6 @@ function TypeChip({ label, color, bg }: { label: string; color: string; bg: stri
 export default function LocationsDevicesPanel({
   locations,
   devices,
-  loading,
 }: LocationsDevicesPanelProps) {
   const [view, setView] = useState<'map' | 'list'>('map');
 
@@ -127,11 +124,7 @@ export default function LocationsDevicesPanel({
         </ToggleButtonGroup>
       </Box>
 
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress size={20} />
-        </Box>
-      ) : isEmpty ? (
+      {isEmpty ? (
         <Box sx={{ px: 2.25, py: 3 }}>
           <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
             No locations or devices assigned to this survey type yet.

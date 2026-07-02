@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { Alert, Box, Typography, Button, CircularProgress } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { surveyTypesAPI, surveysAPI, dashboardAPI, type Survey, type SurveyTypeWithDetails } from '../../services/api';
 import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
@@ -26,6 +26,7 @@ export default function SpacesPage() {
   const navigate = useNavigate();
   const [cards, setCards] = useState<CardData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -44,9 +45,9 @@ export default function SpacesPage() {
         // cumulative total); "Next survey" is the soonest scheduled future one.
         const details = await surveyTypesAPI.getById(butterfly.id);
         const speciesType = primarySpeciesType(details);
-        const [totalPage, scheduledPage, cumulative] = await Promise.all([
+        const [totalPage, scheduled, cumulative] = await Promise.all([
           surveysAPI.getAll({ survey_type_id: butterfly.id, page: 1, limit: 1 }),
-          surveysAPI.getAll({ survey_type_id: butterfly.id, survey_status: 'scheduled', page: 1, limit: 100 }),
+          surveysAPI.getAllPages({ survey_type_id: butterfly.id, survey_status: 'scheduled' }),
           dashboardAPI.getCumulativeSpecies([speciesType]),
         ]);
         if (!active) return;
@@ -58,11 +59,11 @@ export default function SpacesPage() {
             surveyType: details,
             surveyCount: totalPage.total,
             speciesCount,
-            nextSurvey: nextScheduledSurvey(scheduledPage.data),
+            nextSurvey: nextScheduledSurvey(scheduled),
           },
         ]);
       } catch {
-        if (active) setCards([]);
+        if (active) setError(true);
       } finally {
         if (active) setLoading(false);
       }
@@ -115,6 +116,8 @@ export default function SpacesPage() {
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
           </Box>
+        ) : error ? (
+          <Alert severity="error">Failed to load survey spaces. Please try again.</Alert>
         ) : cards.length === 0 ? (
           <Typography sx={{ fontSize: 14, color: spaceColors.textMuted }}>
             No survey spaces are available yet.
