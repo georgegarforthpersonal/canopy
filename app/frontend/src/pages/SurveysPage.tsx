@@ -2,7 +2,7 @@ import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, Ta
 import type { SelectChangeEvent } from '@mui/material';
 import { CalendarToday, Person, Visibility, Category, FilterList } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useRowHighlight } from '../hooks';
 import { getSpeciesIcon, formatSpeciesCount } from '../config';
@@ -44,7 +44,7 @@ import { SPACING } from '../config/responsive';
 export function SurveysPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { requireAuth } = useAuth();
+  const { canEditSurveys } = usePermissions();
 
   // ============================================================================
   // State Management
@@ -180,7 +180,7 @@ export function SurveysPage() {
   };
 
   const handleCreateClick = () => {
-    requireAuth(() => navigate('/surveys/new'));
+    navigate('/surveys/new');
   };
 
   const handlePageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
@@ -253,19 +253,21 @@ export function SurveysPage() {
             </Select>
           </FormControl>
         </Stack>
-        <Button
-          variant="contained"
-          size="medium"
-          onClick={handleCreateClick}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 600,
-            boxShadow: 'none',
-            '&:hover': { boxShadow: 'none' }
-          }}
-        >
-          New
-        </Button>
+        {canEditSurveys && (
+          <Button
+            variant="contained"
+            size="medium"
+            onClick={handleCreateClick}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              boxShadow: 'none',
+              '&:hover': { boxShadow: 'none' }
+            }}
+          >
+            New
+          </Button>
+        )}
       </Stack>
 
       {/* Surveys Table */}

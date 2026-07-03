@@ -3,7 +3,7 @@ import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
-import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/AuthContext';
 import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI, devicesAPI, ApiError } from '../services/api';
 import type { SurveyDetail, Sighting, SightingAudioClip, Surveyor, Location, Species, Survey, BreedingStatusCode, LocationWithBoundary, SurveyType, Device } from '../services/api';
 import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/SurveyFormFields';
@@ -63,7 +63,7 @@ export function SurveyDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { requireAuth } = useAuth();
+  const { canEditSurveys } = usePermissions();
   const toast = useToast();
 
   // Where the back button and post-save/delete navigation should return to.
@@ -764,12 +764,12 @@ export function SurveyDetailPage() {
                   )}
                 </Button>
               </Stack>
-            ) : (
+            ) : canEditSurveys ? (
               <Stack direction="row" spacing={1}>
                 <Button
                   variant="contained"
                   startIcon={<Edit />}
-                  onClick={() => requireAuth(handleEditClick)}
+                  onClick={handleEditClick}
                   sx={{
                     textTransform: 'none',
                     fontWeight: 600,
@@ -783,7 +783,7 @@ export function SurveyDetailPage() {
                   variant="outlined"
                   color="error"
                   startIcon={<Delete />}
-                  onClick={() => requireAuth(handleDeleteClick)}
+                  onClick={handleDeleteClick}
                   sx={{
                     textTransform: 'none',
                     fontWeight: 600,
@@ -793,7 +793,7 @@ export function SurveyDetailPage() {
                   Delete
                 </Button>
               </Stack>
-            )}
+            ) : null}
           </>
         }
       />
