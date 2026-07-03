@@ -96,7 +96,7 @@ function stackRank(geometry: GeoJsonGeometry): number {
  * end. Non-interactive so they never steal hover/click from the sector lines.
  */
 function sectorEndpointMarkers(
-  locId: number,
+  locId: number | string,
   sectors: (Sector & { geometry: GeoJsonGeometry })[],
 ): ReactElement[] {
   const markers: ReactElement[] = [];
@@ -235,6 +235,17 @@ export default function FieldBoundaryOverlay({
     return null;
   }
 
+  // Endpoint/divider markers for standalone sectors, grouped by parent route
+  // and ordered by ordinal, mirroring how a sectored route renders.
+  const standaloneSectorGroups = new Map<string, (Sector & { geometry: GeoJsonGeometry })[]>();
+  for (const { loc, geometry } of renderable) {
+    if (loc.location_type !== 'sector' || geometry.type !== 'LineString') continue;
+    const key = loc.parent_name ?? `sector-${loc.id}`;
+    const group = standaloneSectorGroups.get(key) ?? [];
+    group.push({ id: loc.id, name: loc.name, ordinal: loc.ordinal ?? 0, geometry });
+    standaloneSectorGroups.set(key, group);
+  }
+
   return (
     <>
       {renderable.map(({ loc, geometry }) => {
@@ -318,6 +329,38 @@ export default function FieldBoundaryOverlay({
             );
           }
 
+          // A standalone sector (rendered without its parent route) draws like
+          // a segment of a sectored route: per-sector hover highlight and a
+          // "<route> · <sector>" label. Its endpoint markers render per group
+          // below, so a fully-assigned route reads the same as in admin.
+          if (loc.location_type === 'sector' && geometry.type === 'LineString') {
+            const hovered = isInteractive && hoveredSectorId === loc.id;
+            const label = loc.parent_name ? `${loc.parent_name} · ${loc.name}` : loc.name;
+            return (
+              <Polyline
+                key={loc.id}
+                positions={ringToLatLngs(geometry.coordinates as Position[]) as LatLngExpression[]}
+                pathOptions={{
+                  color: hovered ? SECTOR_HOVER_STROKE : style.stroke,
+                  weight: hovered ? style.weight + 3 : style.weight,
+                }}
+                interactive={isInteractive}
+                eventHandlers={
+                  isInteractive
+                    ? {
+                        mouseover: () => setHoveredSectorId(loc.id),
+                        mouseout: () =>
+                          setHoveredSectorId((prev) => (prev === loc.id ? null : prev)),
+                      }
+                    : undefined
+                }
+              >
+                {nameLabel(label, isInteractive)}
+                {renderPopup(loc, geometry)}
+              </Polyline>
+            );
+          }
+
           const lines: Position[][] =
             geometry.type === 'LineString'
               ? [geometry.coordinates as Position[]]
@@ -356,6 +399,9 @@ export default function FieldBoundaryOverlay({
 
         return null;
       })}
+      {Array.from(standaloneSectorGroups.entries()).flatMap(([key, sectors]) =>
+        sectorEndpointMarkers(`standalone-${key}`, sectors.sort((a, b) => a.ordinal - b.ordinal)),
+      )}
     </>
   );
 }

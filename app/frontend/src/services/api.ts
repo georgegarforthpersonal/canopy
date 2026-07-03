@@ -342,6 +342,8 @@ export interface Location {
   // Parent route name for a sector (null/absent for top-level locations). Used to
   // display children as "<parent> - child".
   parent_name?: string | null;
+  // Sector order within its parent route (null/absent for top-level locations).
+  ordinal?: number | null;
 }
 
 /** Display label for a location: "<parent> - child" for sectors, else the name. */

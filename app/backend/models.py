@@ -492,6 +492,9 @@ class LocationRead(LocationBase):
     # Name of the parent route for a sector (null for top-level locations), so
     # clients can display children as "<parent> - child".
     parent_name: Optional[str] = None
+    # Sector order within its parent route (null for top-level locations), so
+    # clients can render standalone sectors in route order.
+    ordinal: Optional[int] = None
 
 
 class LocationWithBoundary(LocationRead):

@@ -106,6 +106,7 @@ export default function SpaceDetailPage() {
               id: loc.id,
               name: loc.name,
               parent_name: loc.parent_name ?? nested?.routeName ?? null,
+              ordinal: loc.ordinal ?? nested?.sector.ordinal ?? null,
               location_type: loc.location_type ?? geo?.location_type,
               geometry: geo?.geometry ?? nested?.sector.geometry ?? null,
               boundary_geometry: geo?.boundary_geometry ?? null,
