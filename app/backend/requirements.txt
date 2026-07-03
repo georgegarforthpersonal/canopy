@@ -17,6 +17,11 @@ pydantic-settings>=2.0.0
 # Error monitoring
 sentry-sdk[fastapi]>=2.0.0
 
+# Password hashing for user accounts
+argon2-cffi>=23.1.0
+# EmailStr validation for account/invite endpoints
+email-validator>=2.0.0
+
 # Testing
 requests>=2.31.0  # For testing API endpoints
 pytest>=8.0.0
