@@ -74,6 +74,21 @@ const TYPE_LABEL: Record<LocationType, string> = {
 const toLatLng = ([lng, lat]: Position): [number, number] => [lat, lng];
 const ringToLatLngs = (ring: Position[]) => ring.map(toLatLng);
 
+// Shapes share Leaflet's overlayPane where later renders stack on top; draw
+// largest first so smaller shapes stay clickable (area → route → point).
+function stackRank(geometry: GeoJsonGeometry): number {
+  switch (geometry.type) {
+    case 'Polygon':
+    case 'MultiPolygon':
+      return 0;
+    case 'LineString':
+    case 'MultiLineString':
+      return 1;
+    default: // Point
+      return 2;
+  }
+}
+
 /**
  * Endpoint + sector-boundary markers for a sectored route: a filled circle at
  * the route start, a hollow circle at each sector change, and a square at the
@@ -201,7 +216,8 @@ export default function FieldBoundaryOverlay({
 
   const renderable = locations
     .map((loc) => ({ loc, geometry: loc.geometry }))
-    .filter((entry): entry is { loc: LocationWithBoundary; geometry: GeoJsonGeometry } => entry.geometry !== null);
+    .filter((entry): entry is { loc: LocationWithBoundary; geometry: GeoJsonGeometry } => entry.geometry !== null)
+    .sort((a, b) => stackRank(a.geometry) - stackRank(b.geometry));
 
   if (renderable.length === 0) {
     return null;
