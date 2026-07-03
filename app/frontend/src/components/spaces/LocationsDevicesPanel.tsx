@@ -13,6 +13,7 @@ import {
   ToggleButton,
 } from '@mui/material';
 import { Map as MapIcon, ViewList, Place as PlaceIcon } from '@mui/icons-material';
+import { locationDisplayName } from '../../services/api';
 import type { Device, LocationWithBoundary } from '../../services/api';
 import {
   geometryLengthM,
@@ -41,6 +42,10 @@ function locationDetail(loc: LocationWithBoundary): string {
   if (loc.location_type === 'area') {
     const area = geometryAreaSqm(loc.geometry);
     return area > 0 ? `Area · ${formatArea(area)}` : 'Area';
+  }
+  if (loc.location_type === 'sector') {
+    const len = geometryLengthM(loc.geometry);
+    return len > 0 ? `Transect sector · ${formatLength(len)}` : 'Transect sector';
   }
   if (loc.location_type === 'point') return 'Point';
   return '';
@@ -168,7 +173,7 @@ export default function LocationsDevicesPanel({
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: spaceColors.textPrimary }} noWrap>
-                  {location.name}
+                  {locationDisplayName(location)}
                 </Typography>
                 <Typography sx={{ fontSize: 11.5, color: spaceColors.textMuted }}>
                   {locationDetail(location)}

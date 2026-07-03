@@ -39,7 +39,7 @@ import { Add, Edit, Delete, RestoreFromTrash, Search } from '@mui/icons-material
 import PlaceIcon from '@mui/icons-material/Place';
 import SensorsIcon from '@mui/icons-material/Sensors';
 
-import { locationsAPI, devicesAPI } from '../../services/api';
+import { locationsAPI, devicesAPI, locationDisplayName } from '../../services/api';
 import type { Location, LocationType, LocationWithBoundary, Device } from '../../services/api';
 import { brandColors } from '../../theme';
 import { useToast } from '../../context/ToastContext';
@@ -56,7 +56,6 @@ const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
   route: 'Route',
   point: 'Point',
   none: 'No coordinates',
-  // Sectors are never shown as top-level locations, but the map must be total.
   sector: 'Sector',
 };
 
@@ -145,9 +144,14 @@ export default function LocationsDevicesView({
   };
 
   const handleEditLocation = (location: Location) => {
+    // Sectors are drawn and named inside their parent route's editor.
+    const target =
+      location.location_type === 'sector'
+        ? boundaries.find((b) => b.sectors?.some((s) => s.id === location.id))
+        : undefined;
     setEditorMode('edit');
     setEditorKind('location');
-    setEditLocation(toLocationEditTarget(location));
+    setEditLocation(target ?? toLocationEditTarget(location));
     setEditDevice(null);
     setEditorOpen(true);
   };
@@ -220,7 +224,7 @@ export default function LocationsDevicesView({
     const showDevices = kinds.includes('device');
 
     const fLocations = showLocations
-      ? locations.filter((l) => !query || l.name.toLowerCase().includes(query))
+      ? locations.filter((l) => !query || locationDisplayName(l).toLowerCase().includes(query))
       : [];
     const fDevices = showDevices
       ? devices.filter((d) => !query || d.name.toLowerCase().includes(query))
@@ -231,7 +235,8 @@ export default function LocationsDevicesView({
 
     const out: Row[] = [];
     for (const location of fLocations) {
-      out.push({ kind: 'location', sortName: location.name.toLowerCase(), location });
+      // Sectors sort by "<parent> - name" so they group under their route.
+      out.push({ kind: 'location', sortName: locationDisplayName(location).toLowerCase(), location });
     }
     for (const device of fDevices) {
       out.push({ kind: 'device', sortName: device.name.toLowerCase(), device });
@@ -251,18 +256,21 @@ export default function LocationsDevicesView({
         size="small"
         onClick={() => handleEditLocation(location)}
         sx={{ color: 'primary.main' }}
-        title="Edit"
+        title={location.location_type === 'sector' ? 'Edit route' : 'Edit'}
       >
         <Edit />
       </IconButton>
-      <IconButton
-        size="small"
-        onClick={() => setDeleteLocationTarget(location)}
-        sx={{ color: 'error.main' }}
-        title="Delete"
-      >
-        <Delete />
-      </IconButton>
+      {/* Sectors are added/removed inside their route's editor, not deleted directly. */}
+      {location.location_type !== 'sector' && (
+        <IconButton
+          size="small"
+          onClick={() => setDeleteLocationTarget(location)}
+          sx={{ color: 'error.main' }}
+          title="Delete"
+        >
+          <Delete />
+        </IconButton>
+      )}
     </>
   );
 
@@ -400,7 +408,7 @@ export default function LocationsDevicesView({
                   sx={locationHighlight.rowSx(row.location.id)}
                   title={
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {row.location.name}
+                      {locationDisplayName(row.location)}
                     </Typography>
                   }
                   chips={
@@ -480,7 +488,7 @@ export default function LocationsDevicesView({
                       ]}
                     >
                       <TableCell>
-                        <Typography variant="body1">{row.location.name}</Typography>
+                        <Typography variant="body1">{locationDisplayName(row.location)}</Typography>
                       </TableCell>
                       <TableCell>
                         <Chip

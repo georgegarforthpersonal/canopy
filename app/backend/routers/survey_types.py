@@ -132,6 +132,18 @@ async def get_survey_type(
         .all()
     )
 
+    # Parent route names, so sector locations read as "<parent> - child".
+    parent_ids = {loc.parent_location_id for loc in locations if loc.parent_location_id}
+    parent_names: dict[int, str] = (
+        dict(
+            db.query(Location.id, Location.name)
+            .filter(Location.id.in_(parent_ids), Location.organisation_id == org.id)  # type: ignore[union-attr]
+            .all()
+        )
+        if parent_ids
+        else {}
+    )
+
     # Get associated species types (global data, no org filter)
     species_types = (
         db.query(SpeciesType)
@@ -162,7 +174,17 @@ async def get_survey_type(
         color=survey_type.color,
         schedule_cadence=survey_type.schedule_cadence,
         is_active=survey_type.is_active,
-        locations=[LocationRead.model_validate(loc) for loc in locations],
+        locations=[
+            LocationRead.model_validate(
+                loc,
+                update={
+                    "parent_name": parent_names.get(loc.parent_location_id)
+                    if loc.parent_location_id
+                    else None
+                },
+            )
+            for loc in locations
+        ],
         species_types=[SpeciesTypeRead.model_validate(st) for st in species_types]
     )
 

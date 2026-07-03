@@ -17,6 +17,7 @@ import L, { type LatLngExpression } from 'leaflet';
 import { Button, Chip, Typography } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { locationDisplayName } from '../../services/api';
 import type { LocationWithBoundary, Sector, LocationType } from '../../services/api';
 import {
   geometryAreaSqm,
@@ -170,7 +171,7 @@ export default function FieldBoundaryOverlay({
     return (
       <Popup>
         <MapEntityPopup
-          title={loc.name}
+          title={locationDisplayName(loc)}
           chips={
             <Chip
               label={TYPE_LABEL[loc.location_type ?? 'none']}
@@ -265,11 +266,7 @@ export default function FieldBoundaryOverlay({
             const sectorLines = sectors.map((sector, idx) => {
               const sectorPositions = ringToLatLngs(sector.geometry.coordinates as Position[]);
               const hovered = isInteractive && hoveredSectorId === sector.id;
-              // Don't repeat the ordinal when the sector still has its default name.
-              const isDefaultName = !sector.name || sector.name === `Sector ${sector.ordinal}`;
-              const sectorLabel = isDefaultName
-                ? `${loc.name} · Sector ${sector.ordinal}`
-                : `${loc.name} · Sector ${sector.ordinal} — ${sector.name}`;
+              const sectorLabel = `${loc.name} · ${sector.name || `Sector ${sector.ordinal}`}`;
               return (
                 <Polyline
                   key={`${loc.id}-sector-${sector.id}`}
@@ -322,7 +319,8 @@ export default function FieldBoundaryOverlay({
               pathOptions={{ color: style.stroke, weight: style.weight }}
               interactive={isInteractive}
             >
-              {nameLabel(loc.name, isInteractive)}
+              {/* A sector shown as its own location is named after its route. */}
+              {nameLabel(locationDisplayName(loc), isInteractive)}
               {renderPopup(loc, geometry)}
             </Polyline>
           );
