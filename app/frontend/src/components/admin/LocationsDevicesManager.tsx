@@ -25,9 +25,7 @@ export default function LocationsDevicesManager() {
         locationsAPI.getAllWithBoundaries(),
         devicesAPI.getAll(true),
       ]);
-      // Sectors are selectable locations elsewhere, but the admin list manages
-      // top-level locations only (sectors are drawn/edited via their route).
-      setLocations(list.filter((l) => l.location_type !== 'sector'));
+      setLocations(list);
       setBoundaries(withBoundaries);
       setDevices(deviceList);
     } catch (err) {

@@ -91,6 +91,55 @@ class TestGetSurveyTypeById:
         data = client.get(f"/api/survey-types/{weekly.id}", headers=auth_headers).json()
         assert data["schedule_cadence"] == "weekly"
 
+    def test_get_survey_type_sector_locations_carry_parent_name(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """Sector locations assigned to a type must include their route's name,
+        so clients can render them as "<route> - <sector>"."""
+        route = client.post(
+            "/api/locations",
+            json={
+                "name": "Transect",
+                "location_type": "route",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[-2.38, 51.15], [-2.375, 51.155], [-2.37, 51.16]],
+                },
+                "sectors": [
+                    {
+                        "name": "Woodland ride",
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[-2.38, 51.15], [-2.375, 51.155]],
+                        },
+                    },
+                ],
+            },
+            headers=auth_headers,
+        )
+        assert route.status_code == 201
+
+        flat = client.get("/api/locations", headers=auth_headers).json()
+        sector = next(loc for loc in flat if loc["name"] == "Woodland ride")
+
+        created = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Butterfly",
+                "location_ids": [sector["id"]],
+                "species_type_ids": [],
+            },
+            headers=auth_headers,
+        )
+        assert created.status_code == 201
+
+        data = client.get(
+            f"/api/survey-types/{created.json()['id']}", headers=auth_headers
+        ).json()
+        assert [
+            (loc["name"], loc["parent_name"]) for loc in data["locations"]
+        ] == [("Woodland ride", "Transect")]
+
 
 class TestCreateSurveyType:
     """Tests for POST /api/survey-types"""

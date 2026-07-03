@@ -91,14 +91,23 @@ export default function SpaceDetailPage() {
         // that HAVE geometry, so use it just to enrich the map markers — never
         // to decide which locations exist.
         const geometryById = new Map(withBoundaries.map((l) => [l.id, l]));
+        // Sector geometry is only served nested under the parent route, so
+        // index it by sector id for sector locations assigned to the type.
+        const sectorById = new Map(
+          withBoundaries.flatMap((route) =>
+            (route.sectors ?? []).map((s) => [s.id, { sector: s, routeName: route.name }] as const),
+          ),
+        );
         setLocations(
           details.locations.map((loc) => {
             const geo = geometryById.get(loc.id);
+            const nested = sectorById.get(loc.id);
             return {
               id: loc.id,
               name: loc.name,
+              parent_name: loc.parent_name ?? nested?.routeName ?? null,
               location_type: loc.location_type ?? geo?.location_type,
-              geometry: geo?.geometry ?? null,
+              geometry: geo?.geometry ?? nested?.sector.geometry ?? null,
               boundary_geometry: geo?.boundary_geometry ?? null,
               sectors: geo?.sectors ?? null,
             };
