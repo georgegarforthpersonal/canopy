@@ -78,27 +78,46 @@ export function formatWeekRange(startIso: string, endIso: string): string {
 }
 
 /**
- * Build the worklist for the Surveys panel: every row that needs doing (overdue
- * and due-this-week, most recent first — the actionable backlog is never hidden)
- * followed by the next 3 upcoming rows (soonest first; future weeks are
- * effectively endless, so they stay capped). `upcomingTotal` carries the true
- * upcoming count so the panel can say how many the cap hid. A due-this-week
- * (weekly, in-window) survey is actionable now, so it sits with needs-survey
- * rather than being filtered out as upcoming.
+ * Build the worklist for the Surveys panel, split by section: the current
+ * week's still-due rows (`dueThisWeek` — the panel pins these at the top so
+ * this week always has an anchor), every overdue row (`overdue`, most recent
+ * first — the actionable backlog is never hidden), then the next 3 upcoming
+ * rows (soonest first; future weeks are effectively endless, so they stay
+ * capped). `upcomingTotal` carries the true upcoming count so the panel can
+ * say how many the cap hid.
  */
 export function buildWorklist(surveys: Survey[], today: string = todayIso()) {
-  const needsSurvey = surveys
-    .filter((s) => {
-      const state = deriveSurveyState(s, today);
-      return state === 'needs-survey' || state === 'due-this-week';
-    })
+  const dueThisWeek = surveys
+    .filter((s) => deriveSurveyState(s, today) === 'due-this-week')
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const overdue = surveys
+    .filter((s) => deriveSurveyState(s, today) === 'needs-survey')
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const allUpcoming = surveys
     .filter((s) => deriveSurveyState(s, today) === 'upcoming')
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  return { needsSurvey, upcoming: allUpcoming.slice(0, 3), upcomingTotal: allUpcoming.length };
+  return { dueThisWeek, overdue, upcoming: allUpcoming.slice(0, 3), upcomingTotal: allUpcoming.length };
+}
+
+/**
+ * The completed surveys that belong to the current week, so the panel can keep
+ * showing this week's survey after it has been recorded rather than letting it
+ * vanish from the worklist. Weekly-cadence rows keep their scheduled window
+ * after recording, so membership is "window contains today"; day-precise rows
+ * count only when they were recorded for today.
+ */
+export function recordedThisWeek(surveys: Survey[], today: string = todayIso()): Survey[] {
+  return surveys
+    .filter((s) => {
+      if (s.status !== 'completed') return false;
+      const { scheduled_window_start: windowStart, scheduled_window_end: windowEnd } = s;
+      if (windowStart && windowEnd) return today >= windowStart && today <= windowEnd;
+      return s.date === today;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** Soonest upcoming survey, or null if none scheduled. */

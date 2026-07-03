@@ -22,7 +22,8 @@ import {
   type SurveyTypeFile,
 } from '../../services/api';
 import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
-import { primarySpeciesType } from './spaceMeta';
+import { primarySpeciesType, resolveSpaceTypeId } from './spaceMeta';
+import { recordedThisWeek } from './surveyState';
 import { useSurveyorLookup } from '../../hooks';
 import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
 import SpaceHero from '../../components/spaces/SpaceHero';
@@ -35,10 +36,10 @@ import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
 export default function SpaceDetailPage() {
   const { typeId } = useParams<{ typeId: string }>();
   const navigate = useNavigate();
-  const surveyTypeId = Number(typeId);
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
   const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [recentCompleted, setRecentCompleted] = useState<Survey[]>([]);
   const [recordedCount, setRecordedCount] = useState(0);
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [locations, setLocations] = useState<LocationWithBoundary[]>([]);
@@ -54,15 +55,33 @@ export default function SpaceDetailPage() {
   const [greenIds, setGreenIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    if (!Number.isFinite(surveyTypeId)) {
+    if (!typeId) {
       setNotFound(true);
       setLoading(false);
       return;
     }
     let active = true;
+    setFilesLoading(true);
 
     (async () => {
       try {
+        // The route param is a name slug (or a legacy numeric id) — resolve it
+        // to the survey type id before anything else can be fetched.
+        const surveyTypeId = await resolveSpaceTypeId(typeId);
+        if (!active) return;
+        if (surveyTypeId == null) {
+          setNotFound(true);
+          setFilesLoading(false);
+          return;
+        }
+
+        // Files load independently so a slow/empty files call doesn't block the page.
+        surveyTypesAPI
+          .getFiles(surveyTypeId)
+          .then((f) => active && setFiles(f))
+          .catch(() => active && setFiles([]))
+          .finally(() => active && setFilesLoading(false));
+
         const details = await surveyTypesAPI.getById(surveyTypeId);
         if (!active) return;
         setSurveyType(details);
@@ -72,10 +91,12 @@ export default function SpaceDetailPage() {
         // The worklist is built from ALL scheduled surveys (upcoming + overdue;
         // truncation would drop exactly the overdue rows, which sort last);
         // the "All surveys" door shows a recorded/scheduled split, so the
-        // recorded side needs the completed-only total.
+        // recorded side needs the completed-only total. The first completed
+        // page (date-descending) is kept so the panel can pin any survey
+        // already recorded for the current week.
         const [scheduled, completedPage, surveyorList, withBoundaries, deviceList] = await Promise.all([
           surveysAPI.getAllPages({ survey_type_id: surveyTypeId, survey_status: 'scheduled' }),
-          surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'completed', page: 1, limit: 1 }),
+          surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'completed', page: 1, limit: 25 }),
           surveyorsAPI.getAll(),
           locationsAPI.getAllWithBoundaries(),
           devicesAPI.getAll(),
@@ -83,6 +104,7 @@ export default function SpaceDetailPage() {
         if (!active) return;
 
         setSurveys(scheduled);
+        setRecentCompleted(completedPage.data);
         setRecordedCount(completedPage.total);
         setSurveyors(surveyorList);
 
@@ -126,18 +148,10 @@ export default function SpaceDetailPage() {
       }
     })();
 
-    // Files load independently so a slow/empty files call doesn't block the page.
-    setFilesLoading(true);
-    surveyTypesAPI
-      .getFiles(surveyTypeId)
-      .then((f) => active && setFiles(f))
-      .catch(() => active && setFiles([]))
-      .finally(() => active && setFilesLoading(false));
-
     return () => {
       active = false;
     };
-  }, [surveyTypeId]);
+  }, [typeId]);
 
   const resolveSurveyors = useSurveyorLookup(surveyors);
 
@@ -170,9 +184,9 @@ export default function SpaceDetailPage() {
   }
 
   const speciesType = primarySpeciesType(surveyType);
-  const goToSurvey = (s: Survey) =>
-    navigate(`/surveys/${s.id}`, {
-      state: { returnTo: { pathname: `/spaces/${surveyTypeId}`, label: surveyType.name } },
+  const goToSurvey = (s: Survey, opts?: { edit?: boolean }) =>
+    navigate(`/surveys/${s.id}${opts?.edit ? '?edit=true' : ''}`, {
+      state: { returnTo: { pathname: `/spaces/${typeId}`, label: surveyType.name } },
     });
 
   const handleAssignSaved = (surveyId: number, surveyorIds: number[]) => {
@@ -217,12 +231,14 @@ export default function SpaceDetailPage() {
             <Box sx={{ order: 2, minWidth: 0 }}>
               <SurveysPanel
                 surveys={surveys}
+                recordedThisWeek={recordedThisWeek(recentCompleted)}
                 resolveSurveyors={resolveSurveyors}
                 recordedCount={recordedCount}
                 greenIds={greenIds}
-                onAddSurvey={goToSurvey}
+                onAddSurvey={(s) => goToSurvey(s, { edit: true })}
                 onAssign={setAssignSurvey}
-                onViewAll={() => navigate(`/spaces/${surveyTypeId}/all`)}
+                onOpenSurvey={goToSurvey}
+                onViewAll={() => navigate(`/spaces/${typeId}/all`)}
               />
             </Box>
             <Box sx={{ order: 4, minWidth: 0 }}>
@@ -233,7 +249,7 @@ export default function SpaceDetailPage() {
           {/* Right column */}
           <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2.25, flex: 1, minWidth: 0 }}>
             <Box sx={{ order: 1, minWidth: 0 }}>
-              <FilesPanel surveyTypeId={surveyTypeId} files={files} loading={filesLoading} />
+              <FilesPanel surveyTypeId={surveyType.id} files={files} loading={filesLoading} />
             </Box>
             <Box sx={{ order: 3, minWidth: 0 }}>
               <LocationsDevicesPanel locations={locations} devices={devices} />

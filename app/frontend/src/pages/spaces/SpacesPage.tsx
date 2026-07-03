@@ -9,7 +9,7 @@ import { Add } from '@mui/icons-material';
 import { surveyTypesAPI, surveysAPI, dashboardAPI, type Survey, type SurveyTypeWithDetails } from '../../services/api';
 import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
 import { nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType } from './spaceMeta';
+import { primarySpeciesType, spacePath } from './spaceMeta';
 import SpaceCard from '../../components/spaces/SpaceCard';
 
 // The survey type the beta surfaces. Matched case-insensitively by name.
@@ -137,7 +137,7 @@ export default function SpacesPage() {
                 surveyCount={c.surveyCount}
                 speciesCount={c.speciesCount}
                 nextSurvey={c.nextSurvey}
-                onOpen={() => navigate(`/spaces/${c.surveyType.id}`)}
+                onOpen={() => navigate(spacePath(c.surveyType))}
               />
             ))}
           </Box>

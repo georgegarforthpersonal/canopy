@@ -1,26 +1,33 @@
 /**
- * The Surveys worklist panel, split into two labelled sections so the three
- * situations read at a glance: "To record" (every overdue / due-this-week row —
- * the actionable backlog is never hidden), "Upcoming" (the next 3 scheduled
- * rows), and an "All surveys" door whose recorded/scheduled split says exactly
- * what's behind it. Sections hide when empty.
+ * The Surveys worklist panel, split into labelled sections so the situations
+ * read at a glance: "This week" (the current week's survey always has an
+ * anchor here — still due or already recorded, it never vanishes), "To record"
+ * (every overdue row — the actionable backlog is never hidden), "Upcoming"
+ * (the next 3 scheduled rows), and an "All surveys" door whose
+ * recorded/scheduled split says exactly what's behind it. To record and
+ * Upcoming hide when empty; This week hides only when the panel has nothing
+ * at all to show.
  */
 import { Box, Paper, Typography, ButtonBase } from '@mui/material';
 import { AssignmentTurnedIn, ChevronRight } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
 import { spaceCardSx, spaceColors } from '../../pages/spaces/spacesTokens';
-import { buildWorklist, deriveSurveyState } from '../../pages/spaces/surveyState';
+import { buildWorklist } from '../../pages/spaces/surveyState';
 import SurveyWorklistRow from './SurveyWorklistRow';
 
 interface SurveysPanelProps {
   /** All scheduled (not yet recorded) surveys for this space. */
   surveys: Survey[];
+  /** This week's already-recorded surveys — pinned so the week stays visible. */
+  recordedThisWeek: Survey[];
   resolveSurveyors: (ids: number[]) => Surveyor[];
   /** Completed surveys only — shown alongside the scheduled count on the door. */
   recordedCount: number;
   greenIds?: Set<number>;
   onAddSurvey: (survey: Survey) => void;
   onAssign: (survey: Survey) => void;
+  /** Open a recorded survey read-only. */
+  onOpenSurvey: (survey: Survey) => void;
   onViewAll: () => void;
 }
 
@@ -49,15 +56,18 @@ function SectionHeader({ label, color, suffix }: { label: string; color: string;
 
 export default function SurveysPanel({
   surveys,
+  recordedThisWeek,
   resolveSurveyors,
   recordedCount,
   greenIds,
   onAddSurvey,
   onAssign,
+  onOpenSurvey,
   onViewAll,
 }: SurveysPanelProps) {
-  const { needsSurvey, upcoming, upcomingTotal } = buildWorklist(surveys);
-  const empty = needsSurvey.length === 0 && upcoming.length === 0;
+  const { dueThisWeek, overdue, upcoming, upcomingTotal } = buildWorklist(surveys);
+  const thisWeekCount = dueThisWeek.length + recordedThisWeek.length;
+  const empty = thisWeekCount === 0 && overdue.length === 0 && upcoming.length === 0;
 
   return (
     <Paper sx={spaceCardSx}>
@@ -75,14 +85,47 @@ export default function SurveysPanel({
         </Box>
       )}
 
-      {needsSurvey.length > 0 && (
-        <SectionHeader label={`To record (${needsSurvey.length})`} color={spaceColors.amberText} />
-      )}
-      {needsSurvey.map((s) => (
+      {/* This week: still-due rows first (actionable), then recorded ones. */}
+      {!empty && <SectionHeader label="This week" color={spaceColors.brandDark} />}
+      {dueThisWeek.map((s) => (
         <SurveyWorklistRow
           key={s.id}
           survey={s}
-          state={deriveSurveyState(s) === 'due-this-week' ? 'due-this-week' : 'needs-survey'}
+          state="due-this-week"
+          surveyors={resolveSurveyors(s.surveyor_ids)}
+          greenIds={greenIds}
+          onAddSurvey={onAddSurvey}
+          onAssign={onAssign}
+        />
+      ))}
+      {recordedThisWeek.map((s) => (
+        <SurveyWorklistRow
+          key={s.id}
+          survey={s}
+          state="recorded"
+          surveyors={resolveSurveyors(s.surveyor_ids)}
+          greenIds={greenIds}
+          onAddSurvey={onAddSurvey}
+          onAssign={onAssign}
+          onOpen={onOpenSurvey}
+        />
+      ))}
+      {!empty && thisWeekCount === 0 && (
+        <Box sx={{ px: 2.25, py: 1.4 }}>
+          <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
+            No survey scheduled this week.
+          </Typography>
+        </Box>
+      )}
+
+      {overdue.length > 0 && (
+        <SectionHeader label={`To record (${overdue.length})`} color={spaceColors.amberText} />
+      )}
+      {overdue.map((s) => (
+        <SurveyWorklistRow
+          key={s.id}
+          survey={s}
+          state="needs-survey"
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}

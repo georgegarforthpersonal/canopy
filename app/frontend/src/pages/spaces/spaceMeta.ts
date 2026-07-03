@@ -1,9 +1,10 @@
 /**
  * Helpers mapping a survey type to its Spaces presentation: the accent colour
- * for its icon tile and the species type that drives its wildlife icon/charts.
+ * for its icon tile, the species type that drives its wildlife icon/charts,
+ * and the name-slug URLs that make spaces addressable as /spaces/butterfly.
  */
 import { notionColors } from '../../theme';
-import type { SurveyType, SurveyTypeWithDetails } from '../../services/api';
+import { surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails } from '../../services/api';
 
 export interface AccentColors {
   bg: string;
@@ -28,4 +29,32 @@ export function accentColors(surveyType: Pick<SurveyType, 'color'>): AccentColor
  */
 export function primarySpeciesType(surveyType: SurveyTypeWithDetails): string {
   return surveyType.species_types[0]?.name ?? 'butterfly';
+}
+
+/** URL slug for a survey type name, e.g. "Breeding Birds" → "breeding-birds". */
+export function spaceSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/** Canonical path for a space — the name slug, or the id if the name has no
+ * sluggable characters. */
+export function spacePath(surveyType: Pick<SurveyType, 'id' | 'name'>): string {
+  return `/spaces/${spaceSlug(surveyType.name) || surveyType.id}`;
+}
+
+/**
+ * Resolve a /spaces/:typeId route param — a name slug or a numeric id (old
+ * links keep working) — to the survey type id, or null when nothing matches.
+ * Slugs are matched against the full survey type list; if two names ever
+ * slugify identically the first wins, and the numeric URL stays canonical.
+ */
+export async function resolveSpaceTypeId(param: string): Promise<number | null> {
+  if (/^\d+$/.test(param)) return Number(param);
+  const slug = param.toLowerCase();
+  const types = await surveyTypesAPI.getAll();
+  return types.find((t) => spaceSlug(t.name) === slug)?.id ?? null;
 }
