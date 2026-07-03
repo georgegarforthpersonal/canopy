@@ -317,6 +317,8 @@ export interface Surveyor {
   first_name: string;
   last_name: string | null;
   is_active: boolean;
+  /** Account this surveyor is linked to, for self-signup state */
+  user_id?: number | null;
 }
 
 export interface Species {
@@ -807,6 +809,21 @@ export const surveysAPI = {
       method: 'PUT',
       body: JSON.stringify(survey),
     });
+  },
+
+  /**
+   * Sign the current user up to a scheduled survey (any role). Creates or
+   * links the surveyor for their account; other assignees are untouched.
+   */
+  signUp: (id: number): Promise<{ survey_id: number; surveyor_id: number; surveyor_ids: number[] }> => {
+    return fetchAPI(`/surveys/${id}/signup`, { method: 'POST' });
+  },
+
+  /**
+   * Remove the current user from a scheduled survey they signed up to.
+   */
+  withdraw: (id: number): Promise<{ survey_id: number; surveyor_id: number | null; surveyor_ids: number[] }> => {
+    return fetchAPI(`/surveys/${id}/signup`, { method: 'DELETE' });
   },
 
   /**
@@ -1532,23 +1549,85 @@ export const exportAPI = {
   },
 };
 
+// ============================================================================
+// Accounts & Auth
+// ============================================================================
+
+export type UserRole = 'viewer' | 'editor' | 'admin';
+
+export interface CurrentUser {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string | null;
+  role: UserRole;
+}
+
+export interface MeResponse {
+  authenticated: boolean;
+  user: CurrentUser | null;
+  role: UserRole | null;
+  legacy?: boolean;
+  organisation: { id: number; name: string; slug: string };
+}
+
+export interface OrgUser extends CurrentUser {
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface OrgInvite {
+  id: number;
+  email: string;
+  role: UserRole;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+}
+
+interface LoginResponse {
+  authenticated: boolean;
+  token?: string;
+  user?: CurrentUser;
+  legacy?: boolean;
+}
+
+const storeSession = (response: LoginResponse): LoginResponse => {
+  // The session cookie is httpOnly; the token is also kept in localStorage
+  // as a Bearer fallback for cross-origin setups where third-party cookies
+  // are blocked (e.g. Safari with the API on another domain).
+  if (response.token) {
+    setAuthToken(response.token);
+  }
+  return response;
+};
+
 export const authAPI = {
-  login: async (password: string): Promise<{ authenticated: boolean }> => {
-    const response = await fetchAPI<{ authenticated: boolean; token?: string }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    });
-    // Store the token for future requests
-    if (response.token) {
-      setAuthToken(response.token);
-    }
-    return { authenticated: response.authenticated };
+  /** Log in with a user account (email + password). */
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    return storeSession(
+      await fetchAPI<LoginResponse>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      })
+    );
+  },
+
+  /** Legacy shared org password login (kept until the accounts cutover). */
+  loginLegacy: async (password: string): Promise<LoginResponse> => {
+    return storeSession(
+      await fetchAPI<LoginResponse>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+      })
+    );
   },
 
   logout: async (): Promise<{ authenticated: boolean }> => {
     // Clear local token
     clearAuthToken();
-    // Also call backend to clear cookie (for same-origin setups)
+    // Also call backend to delete the session row and clear cookies
     return fetchAPI('/auth/logout', {
       method: 'POST',
     });
@@ -1556,6 +1635,96 @@ export const authAPI = {
 
   status: (): Promise<AuthStatus> => {
     return fetchAPI('/auth/status');
+  },
+
+  me: (): Promise<MeResponse> => {
+    return fetchAPI('/auth/me');
+  },
+
+  updateProfile: (updates: { first_name?: string; last_name?: string }): Promise<CurrentUser> => {
+    return fetchAPI('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    const response = await fetchAPI<LoginResponse>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    });
+    storeSession(response);
+  },
+
+  lookupInvite: (token: string): Promise<{ email: string; role: UserRole; organisation: { name: string; slug: string } }> => {
+    return fetchAPI(`/auth/invites/lookup?token=${encodeURIComponent(token)}`);
+  },
+
+  acceptInvite: async (details: {
+    token: string;
+    first_name: string;
+    last_name?: string;
+    password: string;
+  }): Promise<LoginResponse> => {
+    return storeSession(
+      await fetchAPI<LoginResponse>('/auth/accept-invite', {
+        method: 'POST',
+        body: JSON.stringify(details),
+      })
+    );
+  },
+
+  requestPasswordReset: (email: string): Promise<{ detail: string }> => {
+    return fetchAPI('/auth/request-password-reset', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword: async (token: string, password: string): Promise<LoginResponse> => {
+    return storeSession(
+      await fetchAPI<LoginResponse>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, password }),
+      })
+    );
+  },
+};
+
+/** Admin-only user & invite management (Users tab). */
+export const usersAPI = {
+  getAll: (): Promise<OrgUser[]> => {
+    return fetchAPI('/auth/users');
+  },
+
+  update: (userId: number, updates: { role?: UserRole; is_active?: boolean }): Promise<OrgUser> => {
+    return fetchAPI(`/auth/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  getInvites: (): Promise<OrgInvite[]> => {
+    return fetchAPI('/auth/invites');
+  },
+
+  createInvite: (email: string, role: UserRole): Promise<{ invite: OrgInvite; invite_url: string; email_sent: boolean }> => {
+    return fetchAPI('/auth/invites', {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    });
+  },
+
+  resendInvite: (inviteId: number): Promise<{ invite_url: string; email_sent: boolean }> => {
+    return fetchAPI(`/auth/invites/${inviteId}/resend`, {
+      method: 'POST',
+    });
+  },
+
+  revokeInvite: (inviteId: number): Promise<void> => {
+    return fetchAPI(`/auth/invites/${inviteId}`, {
+      method: 'DELETE',
+    });
   },
 };
 

@@ -13,6 +13,11 @@ import 'dayjs/locale/en-gb';
 import { theme } from './theme';
 import { Layout } from './components/layout/Layout';
 import { AuthProvider } from './context/AuthContext';
+import { RequireAuth } from './components/auth/RequireAuth';
+import { LoginPage } from './pages/auth/LoginPage';
+import { AcceptInvitePage } from './pages/auth/AcceptInvitePage';
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { ToastProvider } from './context/ToastContext';
 import { SurveysPage } from './pages/SurveysPage';
 import { SurveyDetailPage } from './pages/SurveyDetailPage';
@@ -45,44 +50,60 @@ const router = createBrowserRouter([
     element: (
       <AuthProvider>
         <ToastProvider>
-          <Layout>
-            <Outlet />
-          </Layout>
+          <Outlet />
         </ToastProvider>
       </AuthProvider>
     ),
     children: [
-      // Survey Spaces (beta) — grid, per-type space, and full survey history
-      { path: '/spaces', element: <SpacesPage /> },
-      { path: '/spaces/:typeId', element: <SpaceDetailPage /> },
-      { path: '/spaces/:typeId/all', element: <AllSurveysPage /> },
+      // Auth pages: reachable anonymously, rendered without the app chrome
+      { path: '/login', element: <LoginPage /> },
+      { path: '/accept-invite', element: <AcceptInvitePage /> },
+      { path: '/forgot-password', element: <ForgotPasswordPage /> },
+      { path: '/reset-password', element: <ResetPasswordPage /> },
 
-      // Dashboard page
-      { path: '/dashboards', element: <DashboardsPage /> },
+      // Everything else requires a signed-in account
+      {
+        element: (
+          <RequireAuth>
+            <Layout>
+              <Outlet />
+            </Layout>
+          </RequireAuth>
+        ),
+        children: [
+          // Survey Spaces (beta) — grid, per-type space, and full survey history
+          { path: '/spaces', element: <SpacesPage /> },
+          { path: '/spaces/:typeId', element: <SpaceDetailPage /> },
+          { path: '/spaces/:typeId/all', element: <AllSurveysPage /> },
 
-      // Admin page
-      { path: '/admin', element: <AdminPage /> },
+          // Dashboard page
+          { path: '/dashboards', element: <DashboardsPage /> },
 
-      // Main surveys list page
-      { path: '/surveys', element: <SurveysPage /> },
+          // Admin page
+          { path: '/admin', element: <AdminPage /> },
 
-      // New survey page
-      { path: '/surveys/new', element: <NewSurveyPage /> },
+          // Main surveys list page
+          { path: '/surveys', element: <SurveysPage /> },
 
-      // Camera trap survey wizard
-      { path: '/surveys/new/camera-trap', element: <NewCameraTrapSurveyPage /> },
+          // New survey page
+          { path: '/surveys/new', element: <NewSurveyPage /> },
 
-      // Audio survey wizard
-      { path: '/surveys/new/audio', element: <NewAudioSurveyPage /> },
+          // Camera trap survey wizard
+          { path: '/surveys/new/camera-trap', element: <NewCameraTrapSurveyPage /> },
 
-      // Survey detail page
-      { path: '/surveys/:id', element: <SurveyDetailPage /> },
+          // Audio survey wizard
+          { path: '/surveys/new/audio', element: <NewAudioSurveyPage /> },
 
-      // Redirect root to surveys
-      { path: '/', element: <Navigate to="/surveys" replace /> },
+          // Survey detail page
+          { path: '/surveys/:id', element: <SurveyDetailPage /> },
 
-      // Unmatched routes render an empty layout (as with <Routes> before)
-      { path: '*', element: null },
+          // Redirect root to surveys
+          { path: '/', element: <Navigate to="/surveys" replace /> },
+
+          // Unmatched routes render an empty layout (as with <Routes> before)
+          { path: '*', element: null },
+        ],
+      },
     ],
   },
 ]);

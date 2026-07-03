@@ -1,85 +1,92 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { authAPI, SESSION_EXPIRED_EVENT } from '../services/api';
-import { brandColors } from '../theme';
+import type { CurrentUser, MeResponse, UserRole } from '../services/api';
+
+interface Organisation {
+  id: number;
+  name: string;
+  slug: string;
+}
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (password: string) => Promise<void>;
+  /** The logged-in account, or null when anonymous or on a legacy session */
+  user: CurrentUser | null;
+  /** viewer | editor | admin; legacy shared-password sessions are admin */
+  role: UserRole | null;
+  /** True for the legacy shared-org-password session (pre-accounts) */
+  isLegacyAdmin: boolean;
+  organisation: Organisation | null;
+  login: (email: string, password: string) => Promise<void>;
+  loginLegacy: (password: string) => Promise<void>;
   logout: () => Promise<void>;
-  requireAuth: (action: () => void) => void;
+  /** Re-fetch identity from the server (e.g. after accepting an invite) */
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [me, setMe] = useState<MeResponse | null>(null);
 
-  // Check auth status on mount
-  useEffect(() => {
-    authAPI.status()
-      .then((data) => setIsAuthenticated(data.authenticated))
-      .catch(() => setIsAuthenticated(false))
-      .finally(() => setIsLoading(false));
+  const refresh = useCallback(async () => {
+    try {
+      setMe(await authAPI.me());
+    } catch {
+      setMe(null);
+    }
   }, []);
 
-  // When any API call fails with an expired session, prompt for re-login
-  // in place so the user keeps their page state. Repeated 401s are harmless:
-  // the dialog is a single conditionally-rendered instance.
+  // Load identity on mount
+  useEffect(() => {
+    refresh().finally(() => setIsLoading(false));
+  }, [refresh]);
+
+  // When any API call fails with an expired session, drop to anonymous;
+  // the RequireAuth route guard then redirects to /login preserving the
+  // current location, so the user comes straight back after logging in.
   useEffect(() => {
     const handleSessionExpired = () => {
-      setIsAuthenticated(false);
-      setShowPasswordDialog(true);
+      setMe((current) => (current ? { ...current, authenticated: false, user: null, role: null } : null));
     };
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, []);
 
-  const login = useCallback(async (password: string) => {
-    const data = await authAPI.login(password);
-    if (data.authenticated) {
-      setIsAuthenticated(true);
-      // Execute pending action if there was one
-      if (pendingAction) {
-        pendingAction();
-        setPendingAction(null);
-      }
-      setShowPasswordDialog(false);
-    }
-  }, [pendingAction]);
+  const login = useCallback(async (email: string, password: string) => {
+    await authAPI.login(email, password);
+    await refresh();
+  }, [refresh]);
+
+  const loginLegacy = useCallback(async (password: string) => {
+    await authAPI.loginLegacy(password);
+    await refresh();
+  }, [refresh]);
 
   const logout = useCallback(async () => {
     await authAPI.logout();
-    setIsAuthenticated(false);
-  }, []);
-
-  const requireAuth = useCallback((action: () => void) => {
-    if (isAuthenticated) {
-      action();
-    } else {
-      setPendingAction(() => action);
-      setShowPasswordDialog(true);
-    }
-  }, [isAuthenticated]);
-
-  const handleDialogClose = useCallback(() => {
-    setShowPasswordDialog(false);
-    setPendingAction(null);
-  }, []);
+    await refresh();
+  }, [refresh]);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, login, logout, requireAuth }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated: me?.authenticated ?? false,
+        isLoading,
+        user: me?.user ?? null,
+        role: me?.role ?? null,
+        isLegacyAdmin: (me?.authenticated && me?.legacy) || false,
+        organisation: me?.organisation ?? null,
+        login,
+        loginLegacy,
+        logout,
+        refresh,
+      }}
+    >
       {children}
-      {showPasswordDialog && (
-        <PasswordDialogInner
-          onLogin={login}
-          onClose={handleDialogClose}
-        />
-      )}
     </AuthContext.Provider>
   );
 }
@@ -92,67 +99,25 @@ export function useAuth() {
   return context;
 }
 
-// Inline password dialog to avoid circular imports
-import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, Alert } from '@mui/material';
-
-function PasswordDialogInner({ onLogin, onClose }: { onLogin: (password: string) => Promise<void>; onClose: () => void }) {
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!password.trim()) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await onLogin(password);
-    } catch {
-      setError('Incorrect password');
-    } finally {
-      setSubmitting(false);
-    }
+/**
+ * Capability flags derived from the current role. Components check these
+ * (never role strings) so the mapping lives in one place. UI gating is a
+ * courtesy — the backend independently enforces every permission.
+ */
+export function usePermissions() {
+  const { user, role, isAuthenticated } = useAuth();
+  const rank = role === 'admin' ? 2 : role === 'editor' ? 1 : role === 'viewer' ? 0 : -1;
+  return {
+    user,
+    role,
+    isAuthenticated,
+    /** Create/edit/delete surveys, sightings and media */
+    canEditSurveys: rank >= 1,
+    /** Admin page: devices, locations, survey types, surveyors, species,
+     * users & invites. Legacy shared-password sessions count as admin so an
+     * org can bootstrap its first real accounts from the UI. */
+    canAccessAdmin: rank >= 2,
+    /** Sign self up to scheduled surveys — needs a user account */
+    canSelfSignUp: user !== null,
   };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSubmit();
-    }
-  };
-
-  return (
-    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Admin Password Required</DialogTitle>
-      <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        <TextField
-          autoFocus
-          margin="normal"
-          label="Password"
-          type="password"
-          fullWidth
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={submitting}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={submitting}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          disabled={submitting || !password.trim()}
-          sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
-        >
-          {submitting ? 'Verifying...' : 'Login'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
 }
