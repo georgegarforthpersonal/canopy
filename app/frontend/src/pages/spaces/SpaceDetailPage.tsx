@@ -1,8 +1,8 @@
 /**
  * Space detail: the single-screen overview for one survey type. Neutral hero
- * plus two balanced columns — Surveys worklist + Species recorded (left); Files,
- * Locations & devices (right). On mobile the columns stack in the order
- * Surveys → Species recorded → Files → Locations.
+ * plus two balanced columns — Surveys worklist + Species count (left); Files,
+ * Locations & devices (right). On mobile the panels stack in the order
+ * Files → Surveys → Locations & devices → Species count.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -29,7 +29,7 @@ import SpaceHero from '../../components/spaces/SpaceHero';
 import SurveysPanel from '../../components/spaces/SurveysPanel';
 import FilesPanel from '../../components/spaces/FilesPanel';
 import LocationsDevicesPanel from '../../components/spaces/LocationsDevicesPanel';
-import SpeciesRecordedChart from '../../components/spaces/SpeciesRecordedChart';
+import SpeciesCountPanel from '../../components/spaces/SpeciesCountPanel';
 import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
 
 export default function SpaceDetailPage() {
@@ -200,33 +200,44 @@ export default function SpaceDetailPage() {
 
         <SpaceHero surveyType={surveyType} />
 
+        {/* On xs the column wrappers become display: contents so the four
+            panels stack as direct flex items in their `order`; the md column
+            grouping is unaffected (orders preserve in-column order). */}
         <Box
           sx={{
             display: 'flex',
             flexDirection: { xs: 'column', md: 'row' },
-            alignItems: 'flex-start',
+            alignItems: { xs: 'stretch', md: 'flex-start' },
             gap: 2.25,
             mt: 2.25,
           }}
         >
           {/* Left column */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25, flex: 1, width: '100%', minWidth: 0 }}>
-            <SurveysPanel
-              surveys={surveys}
-              resolveSurveyors={resolveSurveyors}
-              recordedCount={recordedCount}
-              greenIds={greenIds}
-              onAddSurvey={goToSurvey}
-              onAssign={setAssignSurvey}
-              onViewAll={() => navigate(`/spaces/${surveyTypeId}/all`)}
-            />
-            <SpeciesRecordedChart speciesType={speciesType} />
+          <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2.25, flex: 1, minWidth: 0 }}>
+            <Box sx={{ order: 2, minWidth: 0 }}>
+              <SurveysPanel
+                surveys={surveys}
+                resolveSurveyors={resolveSurveyors}
+                recordedCount={recordedCount}
+                greenIds={greenIds}
+                onAddSurvey={goToSurvey}
+                onAssign={setAssignSurvey}
+                onViewAll={() => navigate(`/spaces/${surveyTypeId}/all`)}
+              />
+            </Box>
+            <Box sx={{ order: 4, minWidth: 0 }}>
+              <SpeciesCountPanel speciesType={speciesType} />
+            </Box>
           </Box>
 
           {/* Right column */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25, flex: 1, width: '100%', minWidth: 0 }}>
-            <FilesPanel surveyTypeId={surveyTypeId} files={files} loading={filesLoading} />
-            <LocationsDevicesPanel locations={locations} devices={devices} />
+          <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2.25, flex: 1, minWidth: 0 }}>
+            <Box sx={{ order: 1, minWidth: 0 }}>
+              <FilesPanel surveyTypeId={surveyTypeId} files={files} loading={filesLoading} />
+            </Box>
+            <Box sx={{ order: 3, minWidth: 0 }}>
+              <LocationsDevicesPanel locations={locations} devices={devices} />
+            </Box>
           </Box>
         </Box>
       </Box>
