@@ -137,8 +137,8 @@ class TestGetSurveyTypeById:
             f"/api/survey-types/{created.json()['id']}", headers=auth_headers
         ).json()
         assert [
-            (loc["name"], loc["parent_name"]) for loc in data["locations"]
-        ] == [("Woodland ride", "Transect")]
+            (loc["name"], loc["parent_name"], loc["ordinal"]) for loc in data["locations"]
+        ] == [("Woodland ride", "Transect", 1)]
 
 
 class TestCreateSurveyType:

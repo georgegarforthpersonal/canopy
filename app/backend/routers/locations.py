@@ -110,7 +110,7 @@ def _write_geometry(
 
 
 def _location_read(loc: Location) -> Dict[str, Any]:
-    return {"id": loc.id, "name": loc.name, "location_type": loc.location_type}
+    return {"id": loc.id, "name": loc.name, "location_type": loc.location_type, "ordinal": loc.ordinal}
 
 
 def _write_sectors(
@@ -219,6 +219,7 @@ async def get_locations(
             "name": loc.name,
             "location_type": loc.location_type,
             "parent_name": names_by_id.get(loc.parent_location_id) if loc.parent_location_id else None,
+            "ordinal": loc.ordinal,
         }
         for loc in locations
     ]
@@ -232,7 +233,7 @@ async def get_locations_by_survey_type(
 ) -> List[dict[str, Any]]:
     """Get locations available for a specific survey type."""
     result = db.execute(text("""
-        SELECT l.id, l.name, l.location_type, p.name AS parent_name
+        SELECT l.id, l.name, l.location_type, p.name AS parent_name, l.ordinal
         FROM location l
         INNER JOIN survey_type_location stl ON stl.location_id = l.id
         LEFT JOIN location p ON p.id = l.parent_location_id
@@ -242,7 +243,7 @@ async def get_locations_by_survey_type(
     """).bindparams(survey_type_id=survey_type_id, org_id=org.id)).fetchall()
 
     return [
-        {"id": row[0], "name": row[1], "location_type": row[2], "parent_name": row[3]}
+        {"id": row[0], "name": row[1], "location_type": row[2], "parent_name": row[3], "ordinal": row[4]}
         for row in result
     ]
 
