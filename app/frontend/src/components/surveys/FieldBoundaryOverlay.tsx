@@ -215,7 +215,18 @@ export default function FieldBoundaryOverlay({
     );
   };
 
+  // A sector can arrive twice: nested in its parent route AND as a standalone
+  // location (e.g. a space's assigned locations). Drawing both stacks a plain
+  // polyline over the route's segment, blocking its hover highlight — skip the
+  // standalone copy when its route is already rendered.
+  const coveredSectorIds = new Set(
+    locations.flatMap((l) =>
+      l.location_type === 'route' && l.geometry ? (l.sectors ?? []).map((s) => s.id) : [],
+    ),
+  );
+
   const renderable = locations
+    .filter((loc) => !(loc.location_type === 'sector' && coveredSectorIds.has(loc.id)))
     .map((loc) => ({ loc, geometry: loc.geometry }))
     .filter((entry): entry is { loc: LocationWithBoundary; geometry: GeoJsonGeometry } => entry.geometry !== null)
     .sort((a, b) => stackRank(a.geometry) - stackRank(b.geometry));
