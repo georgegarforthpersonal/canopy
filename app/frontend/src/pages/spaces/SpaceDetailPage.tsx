@@ -175,8 +175,8 @@ export default function SpaceDetailPage() {
   }
 
   const speciesType = primarySpeciesType(surveyType);
-  const goToSurvey = (s: Survey) =>
-    navigate(`/surveys/${s.id}`, {
+  const goToSurvey = (s: Survey, opts?: { edit?: boolean }) =>
+    navigate(`/surveys/${s.id}${opts?.edit ? '?edit=true' : ''}`, {
       state: { returnTo: { pathname: `/spaces/${surveyTypeId}`, label: surveyType.name } },
     });
 
@@ -226,7 +226,7 @@ export default function SpaceDetailPage() {
                 resolveSurveyors={resolveSurveyors}
                 recordedCount={recordedCount}
                 greenIds={greenIds}
-                onAddSurvey={goToSurvey}
+                onAddSurvey={(s) => goToSurvey(s, { edit: true })}
                 onAssign={setAssignSurvey}
                 onOpenSurvey={goToSurvey}
                 onViewAll={() => navigate(`/spaces/${surveyTypeId}/all`)}
