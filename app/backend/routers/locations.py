@@ -32,7 +32,7 @@ from models import (
     GEOMETRY_TYPES_BY_LOCATION_TYPE,
     Organisation,
 )
-from auth import require_admin
+from auth import require_admin_role
 from dependencies import get_current_organisation
 
 router = APIRouter()
@@ -310,7 +310,7 @@ async def get_location(
 # Write endpoints (admin only)
 # ---------------------------------------------------------------------------
 
-@router.post("", response_model=LocationRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post("", response_model=LocationRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin_role)])
 async def create_location(
     location: LocationCreate,
     org: Organisation = Depends(get_current_organisation),
@@ -346,7 +346,7 @@ async def create_location(
     return _location_read(db_location)
 
 
-@router.put("/{location_id}", response_model=LocationRead, dependencies=[Depends(require_admin)])
+@router.put("/{location_id}", response_model=LocationRead, dependencies=[Depends(require_admin_role)])
 async def update_location(
     location_id: int,
     location: LocationUpdate,
@@ -410,7 +410,7 @@ async def update_location(
     return _location_read(db_location)
 
 
-@router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
+@router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin_role)])
 async def delete_location(
     location_id: int,
     org: Organisation = Depends(get_current_organisation),

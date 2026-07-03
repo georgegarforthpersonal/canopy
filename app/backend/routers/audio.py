@@ -30,7 +30,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlmodel import col
 
-from auth import require_admin
+from auth import require_editor
 from database.connection import get_db, get_session_factory
 from dependencies import get_current_organisation
 from models import (
@@ -66,7 +66,7 @@ router = APIRouter()
 @router.post(
     "/process-audio",
     response_model=AudioProcessingResponse,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def process_audio_files(
     files: List[UploadFile] = File(...),
@@ -162,7 +162,7 @@ def _parse_hms(value: str) -> time:
     "/{survey_id}/audio/detections",
     response_model=SurveyDetectionsSaveResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def save_survey_detections(
     survey_id: int,
@@ -286,7 +286,7 @@ async def get_audio_processing_summary(
     "/{survey_id}/audio",
     response_model=List[AudioRecordingRead],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def upload_audio_files(
     survey_id: int,
@@ -361,7 +361,7 @@ async def upload_audio_files(
 
 @router.post(
     "/{survey_id}/audio/{recording_id}/process",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def process_audio_recording(
     survey_id: int,
@@ -482,7 +482,7 @@ async def get_audio_detections(
 @router.delete(
     "/{survey_id}/audio/{recording_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def delete_audio_recording(
     survey_id: int,

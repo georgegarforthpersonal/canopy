@@ -22,14 +22,14 @@ from sqlalchemy.orm import Session, aliased
 from sqlalchemy import desc, func, text, case
 from sqlmodel import col
 from database.connection import get_db
-from auth import require_admin
+from auth import Principal, require_editor, require_user
 from dependencies import get_current_organisation
 import logging
 from models import (
     Survey, SurveyRead, SurveyCreate, SurveyUpdate, SurveyStatus, SurveyScheduleCreate,
     ScheduleCadence,
     Sighting, SightingCreate, SightingUpdate, SightingWithDetails,
-    Species, SpeciesType, Location, SurveySurveyor,
+    Species, SpeciesType, Location, Surveyor, SurveySurveyor,
     BreedingStatusCode, BreedingStatusCodeRead,
     IndividualLocationCreate, IndividualLocationRead, SightingWithIndividuals,
     SightingImage, SightingAudioClip,
@@ -336,7 +336,7 @@ async def get_survey(
     }
 
 
-@router.post("", response_model=SurveyRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post("", response_model=SurveyRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_editor)])
 async def create_survey(
     survey: SurveyCreate,
     org: Organisation = Depends(get_current_organisation),
@@ -406,7 +406,7 @@ async def create_survey(
     "/schedule",
     response_model=List[SurveyRead],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def schedule_surveys(
     schedule: SurveyScheduleCreate,
@@ -492,7 +492,7 @@ async def schedule_surveys(
         raise HTTPException(status_code=500, detail=f"Failed to schedule surveys: {str(e)}")
 
 
-@router.put("/{survey_id}", response_model=SurveyRead, dependencies=[Depends(require_admin)])
+@router.put("/{survey_id}", response_model=SurveyRead, dependencies=[Depends(require_editor)])
 async def update_survey(
     survey_id: int,
     survey: SurveyUpdate,
@@ -579,7 +579,120 @@ async def update_survey(
     }
 
 
-@router.delete("/{survey_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
+def _get_scheduled_survey_for_signup(db: Session, survey_id: int, org_id: int) -> Survey:
+    survey = db.query(Survey).filter(
+        Survey.id == survey_id,
+        Survey.organisation_id == org_id,
+    ).first()
+    if not survey:
+        raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
+    if survey.status != SurveyStatus.scheduled:
+        raise HTTPException(status_code=400, detail="You can only sign up to scheduled surveys")
+    return survey  # type: ignore[no-any-return]
+
+
+def _get_or_create_own_surveyor(db: Session, principal: Principal, org_id: int) -> Surveyor:
+    """The surveyor linked to the caller's account, creating/linking on first use.
+
+    If exactly one unlinked active surveyor has the same name, link it rather
+    than creating a duplicate — most volunteers already exist as surveyors.
+    """
+    user = principal.user
+    assert user is not None  # guarded by callers
+    surveyor = db.query(Surveyor).filter(Surveyor.user_id == user.id).first()
+    if surveyor:
+        return surveyor  # type: ignore[no-any-return]
+
+    name_matches = db.query(Surveyor).filter(
+        Surveyor.organisation_id == org_id,
+        Surveyor.user_id == None,  # noqa: E711
+        Surveyor.is_active == True,  # noqa: E712
+        func.lower(Surveyor.first_name) == user.first_name.lower(),
+        func.lower(func.coalesce(Surveyor.last_name, "")) == (user.last_name or "").lower(),
+    ).all()
+    if len(name_matches) == 1:
+        surveyor = name_matches[0]
+        surveyor.user_id = user.id
+    else:
+        surveyor = Surveyor(
+            first_name=user.first_name,
+            last_name=user.last_name,
+            organisation_id=org_id,
+            user_id=user.id,
+        )
+    db.add(surveyor)
+    db.commit()
+    db.refresh(surveyor)
+    return surveyor  # type: ignore[no-any-return]
+
+
+@router.post("/{survey_id}/signup")
+async def sign_up_to_survey(
+    survey_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_user),
+) -> dict[str, Any]:
+    """
+    Add *yourself* to a scheduled survey (any role, including viewers).
+
+    Unlike PUT /surveys/{id}, this can only touch the caller's own
+    membership: it links (or creates) the surveyor for their account and
+    adds it, leaving everything else about the survey unchanged.
+    """
+    if principal.user is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Signing up needs a user account; legacy admin sessions can use the surveyor picker instead",
+        )
+    survey = _get_scheduled_survey_for_signup(db, survey_id, org.id)  # type: ignore[arg-type]
+    surveyor = _get_or_create_own_surveyor(db, principal, org.id)  # type: ignore[arg-type]
+
+    already = db.query(SurveySurveyor).filter(
+        SurveySurveyor.survey_id == survey.id,
+        SurveySurveyor.surveyor_id == surveyor.id,
+    ).first()
+    if not already:
+        db.add(SurveySurveyor(survey_id=survey.id, surveyor_id=surveyor.id))
+        db.commit()
+
+    surveyor_ids = [
+        sid for (sid,) in db.query(SurveySurveyor.surveyor_id)
+        .filter(SurveySurveyor.survey_id == survey.id)
+        .order_by(SurveySurveyor.surveyor_id).all()
+    ]
+    return {"survey_id": survey.id, "surveyor_id": surveyor.id, "surveyor_ids": surveyor_ids}
+
+
+@router.delete("/{survey_id}/signup")
+async def withdraw_from_survey(
+    survey_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_user),
+) -> dict[str, Any]:
+    """Remove *yourself* from a scheduled survey you signed up to."""
+    if principal.user is None:
+        raise HTTPException(status_code=400, detail="Withdrawing needs a user account")
+    survey = _get_scheduled_survey_for_signup(db, survey_id, org.id)  # type: ignore[arg-type]
+
+    surveyor = db.query(Surveyor).filter(Surveyor.user_id == principal.user_id).first()
+    if surveyor:
+        db.query(SurveySurveyor).filter(
+            SurveySurveyor.survey_id == survey.id,
+            SurveySurveyor.surveyor_id == surveyor.id,
+        ).delete()
+        db.commit()
+
+    surveyor_ids = [
+        sid for (sid,) in db.query(SurveySurveyor.surveyor_id)
+        .filter(SurveySurveyor.survey_id == survey.id)
+        .order_by(SurveySurveyor.surveyor_id).all()
+    ]
+    return {"survey_id": survey.id, "surveyor_id": surveyor.id if surveyor else None, "surveyor_ids": surveyor_ids}
+
+
+@router.delete("/{survey_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_editor)])
 async def delete_survey(
     survey_id: int,
     org: Organisation = Depends(get_current_organisation),
@@ -743,7 +856,7 @@ async def get_survey_sightings(
     return result
 
 
-@router.post("/{survey_id}/sightings", response_model=SightingWithIndividuals, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post("/{survey_id}/sightings", response_model=SightingWithIndividuals, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_editor)])
 async def create_sighting(
     survey_id: int,
     sighting: SightingCreate,
@@ -952,7 +1065,7 @@ async def create_sighting(
     }
 
 
-@router.put("/{survey_id}/sightings/{sighting_id}", response_model=SightingWithDetails, dependencies=[Depends(require_admin)])
+@router.put("/{survey_id}/sightings/{sighting_id}", response_model=SightingWithDetails, dependencies=[Depends(require_editor)])
 async def update_sighting(
     survey_id: int,
     sighting_id: int,
@@ -1065,7 +1178,7 @@ async def update_sighting(
     }
 
 
-@router.delete("/{survey_id}/sightings/{sighting_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
+@router.delete("/{survey_id}/sightings/{sighting_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_editor)])
 async def delete_sighting(
     survey_id: int,
     sighting_id: int,
@@ -1105,7 +1218,7 @@ async def delete_sighting(
 # Individual Location Operations (Nested under sightings)
 # ============================================================================
 
-@router.post("/{survey_id}/sightings/{sighting_id}/individuals", response_model=IndividualLocationRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post("/{survey_id}/sightings/{sighting_id}/individuals", response_model=IndividualLocationRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_editor)])
 async def add_individual_location(
     survey_id: int,
     sighting_id: int,
@@ -1175,7 +1288,7 @@ async def add_individual_location(
     }
 
 
-@router.put("/{survey_id}/sightings/{sighting_id}/individuals/{individual_id}", response_model=IndividualLocationRead, dependencies=[Depends(require_admin)])
+@router.put("/{survey_id}/sightings/{sighting_id}/individuals/{individual_id}", response_model=IndividualLocationRead, dependencies=[Depends(require_editor)])
 async def update_individual_location(
     survey_id: int,
     sighting_id: int,
@@ -1271,7 +1384,7 @@ async def update_individual_location(
     }
 
 
-@router.delete("/{survey_id}/sightings/{sighting_id}/individuals/{individual_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
+@router.delete("/{survey_id}/sightings/{sighting_id}/individuals/{individual_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_editor)])
 async def delete_individual_location(
     survey_id: int,
     sighting_id: int,
