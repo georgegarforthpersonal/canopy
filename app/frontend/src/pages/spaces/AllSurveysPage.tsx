@@ -18,7 +18,7 @@ import {
   type Surveyor,
 } from '../../services/api';
 import { spaceCardSx, spaceColors } from './spacesTokens';
-import { primarySpeciesType } from './spaceMeta';
+import { primarySpeciesType, resolveSpaceTypeId } from './spaceMeta';
 import { deriveSurveyState, formatSurveyDate, type SurveyState } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSurveyorLookup } from '../../hooks';
@@ -60,7 +60,6 @@ function StatusChip({ state }: { state: SurveyState }) {
 export default function AllSurveysPage() {
   const { typeId } = useParams<{ typeId: string }>();
   const navigate = useNavigate();
-  const surveyTypeId = Number(typeId);
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
   const [surveys, setSurveys] = useState<Survey[]>([]);
@@ -75,7 +74,7 @@ export default function AllSurveysPage() {
   const toast = useToast();
 
   useEffect(() => {
-    if (!Number.isFinite(surveyTypeId)) {
+    if (!typeId) {
       setNotFound(true);
       setLoading(false);
       return;
@@ -83,6 +82,14 @@ export default function AllSurveysPage() {
     let active = true;
     (async () => {
       try {
+        // The route param is a name slug (or a legacy numeric id) — resolve it
+        // to the survey type id before anything else can be fetched.
+        const surveyTypeId = await resolveSpaceTypeId(typeId);
+        if (!active) return;
+        if (surveyTypeId == null) {
+          setNotFound(true);
+          return;
+        }
         const [details, page, surveyorList] = await Promise.all([
           surveyTypesAPI.getById(surveyTypeId),
           surveysAPI.getAll({ survey_type_id: surveyTypeId, page: 1, limit: PAGE_SIZE }),
@@ -106,7 +113,7 @@ export default function AllSurveysPage() {
     return () => {
       active = false;
     };
-  }, [surveyTypeId]);
+  }, [typeId]);
 
   const resolveSurveyors = useSurveyorLookup(surveyors);
 
@@ -145,7 +152,7 @@ export default function AllSurveysPage() {
     setLoadingMore(true);
     try {
       const nextPage = Math.floor(surveys.length / PAGE_SIZE) + 1;
-      const page = await surveysAPI.getAll({ survey_type_id: surveyTypeId, page: nextPage, limit: PAGE_SIZE });
+      const page = await surveysAPI.getAll({ survey_type_id: surveyType.id, page: nextPage, limit: PAGE_SIZE });
       setSurveys((prev) => [...prev, ...page.data]);
       setTotal(page.total);
     } catch {
@@ -177,7 +184,7 @@ export default function AllSurveysPage() {
     navigate(`/surveys/${surveyId}${opts?.edit ? '?edit=true' : ''}`, {
       state: {
         returnTo: {
-          pathname: `/spaces/${surveyTypeId}/all`,
+          pathname: `/spaces/${typeId}/all`,
           label: surveyType?.name ?? 'All surveys',
         },
       },
@@ -189,7 +196,7 @@ export default function AllSurveysPage() {
         <SpaceBreadcrumb
           crumbs={[
             { label: 'Spaces', to: '/spaces' },
-            { label: surveyType?.name ?? 'Survey type', to: `/spaces/${surveyTypeId}` },
+            { label: surveyType?.name ?? 'Survey type', to: `/spaces/${typeId}` },
             { label: 'All surveys' },
           ]}
         />
