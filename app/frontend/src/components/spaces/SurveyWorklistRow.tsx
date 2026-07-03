@@ -6,12 +6,13 @@
  *
  * Actions by state: overdue rows record only (the week has passed, surveyors
  * are captured on the record form); due-this-week rows both sign up and record
- * (people join surveys later in the current week); upcoming rows sign up only.
+ * (people join surveys later in the current week); upcoming rows sign up only;
+ * recorded rows (this week's survey, already done) link through to the survey.
  * The "To record" section header carries the due-now meaning, so due-this-week
  * rows need no status line of their own.
  */
 import { Box, Button, Typography } from '@mui/material';
-import { Add, PersonAddAlt1, WarningAmberRounded } from '@mui/icons-material';
+import { Add, CheckCircleOutline, ChevronRight, PersonAddAlt1, WarningAmberRounded } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
 import SurveyorAvatars from './SurveyorAvatars';
 import { spaceColors } from '../../pages/spaces/spacesTokens';
@@ -19,7 +20,7 @@ import { formatSurveyDate } from '../../pages/spaces/surveyState';
 
 interface SurveyWorklistRowProps {
   survey: Survey;
-  state: 'needs-survey' | 'due-this-week' | 'upcoming';
+  state: 'needs-survey' | 'due-this-week' | 'upcoming' | 'recorded';
   surveyors: Surveyor[];
   /** Surveyor ids assigned this session — rendered green. */
   greenIds?: Set<number>;
@@ -27,6 +28,8 @@ interface SurveyWorklistRowProps {
   onAddSurvey: (survey: Survey) => void;
   /** Open the surveyor sign-up picker. */
   onAssign: (survey: Survey) => void;
+  /** Open a recorded survey read-only (recorded rows only). */
+  onOpen?: (survey: Survey) => void;
 }
 
 const recordButtonSx = {
@@ -59,9 +62,11 @@ export default function SurveyWorklistRow({
   greenIds,
   onAddSurvey,
   onAssign,
+  onOpen,
 }: SurveyWorklistRowProps) {
   const needsSurvey = state === 'needs-survey';
   const dueThisWeek = state === 'due-this-week';
+  const recorded = state === 'recorded';
 
   const recordButton = (
     <Button
@@ -87,6 +92,7 @@ export default function SurveyWorklistRow({
 
   return (
     <Box
+      onClick={recorded && onOpen ? () => onOpen(survey) : undefined}
       sx={{
         display: 'flex',
         alignItems: 'center',
@@ -95,6 +101,9 @@ export default function SurveyWorklistRow({
         py: 1.6,
         borderTop: `1px solid ${spaceColors.dividerInner}`,
         bgcolor: needsSurvey ? spaceColors.amberRowBg : 'transparent',
+        ...(recorded && onOpen
+          ? { cursor: 'pointer', '&:hover': { bgcolor: spaceColors.page } }
+          : {}),
       }}
     >
       <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -116,7 +125,31 @@ export default function SurveyWorklistRow({
         )}
       </Box>
 
-      {needsSurvey ? (
+      {recorded ? (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
+          {surveyors.length > 0 && (
+            <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} emptyLabel="" />
+          )}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              px: 1.25,
+              py: 0.4,
+              borderRadius: '6px',
+              bgcolor: '#DBEDDB',
+              color: spaceColors.brandDark,
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            <CheckCircleOutline sx={{ fontSize: 15 }} />
+            Recorded
+          </Box>
+          {onOpen && <ChevronRight sx={{ fontSize: 18, color: spaceColors.textMuted }} />}
+        </Box>
+      ) : needsSurvey ? (
         recordButton
       ) : dueThisWeek ? (
         <Box
