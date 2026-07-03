@@ -76,7 +76,7 @@ def committed_survey():
 
     org = Organisation(
         name="JobQ Test Org", slug="jobq-test-org",
-        admin_password="x", is_active=True,
+        is_active=True,
     )
     db.add(org)
     db.commit()

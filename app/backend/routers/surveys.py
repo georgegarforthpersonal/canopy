@@ -598,7 +598,6 @@ def _get_or_create_own_surveyor(db: Session, principal: Principal, org_id: int) 
     than creating a duplicate — most volunteers already exist as surveyors.
     """
     user = principal.user
-    assert user is not None  # guarded by callers
     surveyor = db.query(Surveyor).filter(Surveyor.user_id == user.id).first()
     if surveyor:
         return surveyor  # type: ignore[no-any-return]
@@ -640,11 +639,6 @@ async def sign_up_to_survey(
     membership: it links (or creates) the surveyor for their account and
     adds it, leaving everything else about the survey unchanged.
     """
-    if principal.user is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Signing up needs a user account; legacy admin sessions can use the surveyor picker instead",
-        )
     survey = _get_scheduled_survey_for_signup(db, survey_id, org.id)  # type: ignore[arg-type]
     surveyor = _get_or_create_own_surveyor(db, principal, org.id)  # type: ignore[arg-type]
 
@@ -672,8 +666,6 @@ async def withdraw_from_survey(
     principal: Principal = Depends(require_user),
 ) -> dict[str, Any]:
     """Remove *yourself* from a scheduled survey you signed up to."""
-    if principal.user is None:
-        raise HTTPException(status_code=400, detail="Withdrawing needs a user account")
     survey = _get_scheduled_survey_for_signup(db, survey_id, org.id)  # type: ignore[arg-type]
 
     surveyor = db.query(Surveyor).filter(Surveyor.user_id == principal.user_id).first()

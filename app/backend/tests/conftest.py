@@ -17,7 +17,6 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlmodel import SQLModel
 
 # Set test environment variables before importing app modules
-os.environ.setdefault("SESSION_SECRET_KEY", "test-secret-key")
 # Tests drive processing explicitly; never run the polling dispatcher
 os.environ.setdefault("JOB_DISPATCHER_ENABLED", "false")
 
@@ -27,7 +26,6 @@ from main import app
 from database.connection import get_db
 from dependencies import get_current_organisation
 from auth import (
-    create_session_token,
     create_user_session,
     get_current_principal,
     hash_password,
@@ -118,7 +116,6 @@ def test_org(db_session: Session) -> Organisation:
     org = Organisation(
         name="Test Organisation",
         slug="test-org",
-        admin_password="test-password",
         is_active=True,
     )
     db_session.add(org)
@@ -132,19 +129,21 @@ def test_org(db_session: Session) -> Organisation:
 # ============================================================================
 
 @pytest.fixture
-def auth_token(test_org: Organisation) -> str:
-    """Generate a valid legacy (org-password) session token.
+def auth_headers(db_session: Session, create_user) -> dict:
+    """Session headers for an admin user.
 
-    Legacy tokens act as an admin principal, so these headers pass every
-    role check — which keeps the pre-accounts test suite working unchanged.
+    Most endpoint tests just need "an authenticated caller that passes every
+    role check", which is what the old shared-password token provided; an
+    admin account is its modern equivalent.
     """
-    return create_session_token(test_org.slug)
-
-
-@pytest.fixture
-def auth_headers(auth_token: str) -> dict:
-    """Return headers with Authorization bearer token (legacy admin)."""
-    return {"Authorization": f"Bearer {auth_token}"}
+    admin = create_user(
+        email="fixture-admin@example.org",
+        role=UserRole.admin,
+        first_name="Fixture",
+        last_name="Admin",
+    )
+    token = create_user_session(db_session, admin)
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture

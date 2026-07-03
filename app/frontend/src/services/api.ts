@@ -1567,7 +1567,6 @@ export interface MeResponse {
   authenticated: boolean;
   user: CurrentUser | null;
   role: UserRole | null;
-  legacy?: boolean;
   organisation: { id: number; name: string; slug: string };
 }
 
@@ -1590,7 +1589,6 @@ interface LoginResponse {
   authenticated: boolean;
   token?: string;
   user?: CurrentUser;
-  legacy?: boolean;
 }
 
 const storeSession = (response: LoginResponse): LoginResponse => {
@@ -1610,16 +1608,6 @@ export const authAPI = {
       await fetchAPI<LoginResponse>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
-      })
-    );
-  },
-
-  /** Legacy shared org password login (kept until the accounts cutover). */
-  loginLegacy: async (password: string): Promise<LoginResponse> => {
-    return storeSession(
-      await fetchAPI<LoginResponse>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ password }),
       })
     );
   },

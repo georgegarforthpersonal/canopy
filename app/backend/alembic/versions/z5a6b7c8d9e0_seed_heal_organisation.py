@@ -24,13 +24,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Seed Heal organisation and backfill data."""
-    # Get the current admin password from environment
-    admin_password = os.getenv('ADMIN_PASSWORD', '')
-    if not admin_password:
-        raise ValueError(
-            "ADMIN_PASSWORD environment variable must be set to run this migration. "
-            "This password will be stored for the Heal organisation."
-        )
+    # Historical note: this originally required a real ADMIN_PASSWORD for the
+    # shared-password auth. That system is gone (the column is dropped by
+    # acct02), so fresh databases just seed a placeholder that nothing reads.
+    admin_password = os.getenv('ADMIN_PASSWORD', 'removed-by-acct02')
 
     # Insert Heal organisation with plaintext password
     op.execute(

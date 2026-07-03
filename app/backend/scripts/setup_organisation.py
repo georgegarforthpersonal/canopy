@@ -17,8 +17,7 @@ Config file structure:
 {
   "organisation": {
     "name": "Org Name",
-    "slug": "org-slug",
-    "admin_password": "password"
+    "slug": "org-slug"
   },
   "locations": [
     {
@@ -71,15 +70,11 @@ def setup_organisation(config_path: str, dry_run: bool = True, update: bool = Fa
     locations = config.get('locations', [])
 
     # Validate required fields
-    required_fields = ['name', 'slug', 'admin_password']
+    required_fields = ['name', 'slug']
     for field in required_fields:
         if field not in org_config:
             logger.error(f"Missing required field: organisation.{field}")
             sys.exit(1)
-
-    if org_config['admin_password'] == 'CHANGE_ME':
-        logger.error("Please set a real password in the config file (admin_password is 'CHANGE_ME')")
-        sys.exit(1)
 
     if dry_run:
         logger.info("DRY RUN - No changes will be made to the database")
@@ -108,14 +103,13 @@ def setup_organisation(config_path: str, dry_run: bool = True, update: bool = Fa
             else:
                 result = conn.execute(
                     text("""
-                        INSERT INTO organisation (name, slug, admin_password, is_active)
-                        VALUES (:name, :slug, :admin_password, true)
+                        INSERT INTO organisation (name, slug, is_active)
+                        VALUES (:name, :slug, true)
                         RETURNING id
                     """),
                     {
                         "name": org_config['name'],
                         "slug": org_config['slug'],
-                        "admin_password": org_config['admin_password']
                     }
                 )
                 org_id = result.fetchone()[0]

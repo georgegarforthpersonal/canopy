@@ -1,9 +1,6 @@
 """
 Tests for user accounts: login, roles, invites, password reset,
 user management and survey self-signup.
-
-Legacy org-password behaviour is covered in test_auth.py; these tests cover
-the account system that replaces it.
 """
 
 from datetime import datetime, timedelta
@@ -95,15 +92,7 @@ class TestMe:
         data = client.get("/api/auth/me", headers=headers).json()
         assert data["authenticated"] is True
         assert data["role"] == "editor"
-        assert data["legacy"] is False
         assert data["user"]["email"] == user.email
-
-    def test_me_legacy_admin(self, client: TestClient, auth_headers):
-        data = client.get("/api/auth/me", headers=auth_headers).json()
-        assert data["authenticated"] is True
-        assert data["role"] == "admin"
-        assert data["legacy"] is True
-        assert data["user"] is None
 
     def test_me_anonymous(self, client: TestClient, test_org):
         data = client.get("/api/auth/me").json()
@@ -153,14 +142,6 @@ class TestRoleEnforcement:
             "/api/devices",
             json={"name": "Cam", "device_type": "camera_trap", "latitude": 51.0, "longitude": -2.0},
             headers=headers,
-        )
-        assert device.status_code == 201
-
-    def test_legacy_token_still_acts_as_admin(self, client: TestClient, auth_headers):
-        device = client.post(
-            "/api/devices",
-            json={"name": "Cam", "device_type": "camera_trap", "latitude": 51.0, "longitude": -2.0},
-            headers=auth_headers,
         )
         assert device.status_code == 201
 
@@ -506,12 +487,13 @@ class TestSurveySignup:
         assert response.status_code == 200
         assert response.json()["surveyor_ids"] == []
 
-    def test_legacy_admin_cannot_self_signup(
+    def test_admin_can_also_self_signup(
         self, client: TestClient, auth_headers, create_survey, db_session
     ):
+        """Self sign-up is an any-role action, admins included."""
         survey = create_survey()
         survey.status = "scheduled"
         db_session.add(survey)
         db_session.commit()
         response = client.post(f"/api/surveys/{survey.id}/signup", headers=auth_headers)
-        assert response.status_code == 400
+        assert response.status_code == 200

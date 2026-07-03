@@ -4,10 +4,11 @@ FastAPI Dependencies for Multi-Organisation Support
 Provides dependencies for extracting organisation context from requests.
 
 Security model:
-- User sessions: organisation comes from the authenticated user's account
-- Legacy org-password sessions: org_slug embedded in the signed token
-- Unauthenticated requests (login/accept-invite): X-Org-Slug header
-- Local development: X-Org-Slug header or defaults to 'heal'
+- Authenticated requests: organisation comes from the user's account row —
+  a client cannot reach another org's data by sending a different header.
+- Unauthenticated requests (login, accept-invite, password reset): the
+  X-Org-Slug header identifies which org's login is being used.
+- Local development: X-Org-Slug header or defaults to 'heal'.
 """
 
 from fastapi import Request, HTTPException
@@ -19,12 +20,6 @@ from auth import get_current_principal
 async def get_current_organisation(request: Request) -> Organisation:
     """
     Extract organisation from the authenticated principal or X-Org-Slug header.
-
-    Priority:
-    1. Authenticated user account (org is a column on the user row)
-    2. Legacy org-password session (org_slug embedded in signed token)
-    3. X-Org-Slug header (for login flow before a session exists)
-    4. Default to 'heal' for localhost (development convenience)
 
     Opens and closes its own session rather than using Depends(get_db): a
     request-scoped session stays checked out for the whole request, and on
@@ -46,12 +41,8 @@ async def get_current_organisation(request: Request) -> Organisation:
     org_slug = None
 
     principal = get_current_principal(request)
-    if principal is not None and principal.organisation_id is not None:
-        # Authenticated user: the account pins the organisation — a client
-        # cannot reach another org's data by sending a different header.
+    if principal is not None:
         org_id = principal.organisation_id
-    elif principal is not None and principal.legacy_org_slug:
-        org_slug = principal.legacy_org_slug
     else:
         # Not authenticated - use X-Org-Slug header (for login flow)
         org_slug = request.headers.get("x-org-slug")

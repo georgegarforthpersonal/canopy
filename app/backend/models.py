@@ -69,7 +69,6 @@ class Organisation(OrganisationBase, table=True):  # type: ignore[call-arg]
     __tablename__ = "organisation"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    admin_password: str = Field(max_length=255, description="Admin password for this organisation")
     is_active: bool = Field(default=True, description="Whether organisation is active")
     created_at: datetime = Field(
         default_factory=datetime.utcnow,

@@ -4,8 +4,7 @@ import type { ReactNode } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 /**
- * Route guard: everything in the app requires a signed-in account (or a
- * legacy shared-password session during the accounts transition).
+ * Route guard: everything in the app requires a signed-in account.
  * Anonymous visitors are sent to /login and returned to where they were
  * afterwards via the ?next= param.
  */

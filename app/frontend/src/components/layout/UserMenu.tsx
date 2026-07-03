@@ -33,17 +33,17 @@ const ROLE_LABELS: Record<string, string> = {
  * with change-password (user accounts) and sign out.
  */
 export function UserMenu() {
-  const { user, role, isLegacyAdmin, logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const initials = user
     ? `${user.first_name[0] ?? ''}${user.last_name?.[0] ?? ''}`.toUpperCase()
-    : 'A';
+    : '?';
   const displayName = user
     ? [user.first_name, user.last_name].filter(Boolean).join(' ')
-    : 'Shared admin session';
+    : 'Signed in';
 
   const handleLogout = async () => {
     setAnchorEl(null);
@@ -71,24 +71,22 @@ export function UserMenu() {
         <Box sx={{ px: 2, py: 1 }}>
           <Typography variant="subtitle2">{displayName}</Typography>
           <Typography variant="caption" color="text.secondary">
-            {user ? user.email : 'Full access until accounts take over'}
+            {user?.email}
             {role && ` · ${ROLE_LABELS[role] ?? role}`}
           </Typography>
         </Box>
         <Divider />
-        {!isLegacyAdmin && (
-          <MenuItem
-            onClick={() => {
-              setAnchorEl(null);
-              setChangePasswordOpen(true);
-            }}
-          >
-            <ListItemIcon>
-              <Key fontSize="small" />
-            </ListItemIcon>
-            Change password
-          </MenuItem>
-        )}
+        <MenuItem
+          onClick={() => {
+            setAnchorEl(null);
+            setChangePasswordOpen(true);
+          }}
+        >
+          <ListItemIcon>
+            <Key fontSize="small" />
+          </ListItemIcon>
+          Change password
+        </MenuItem>
         <MenuItem onClick={handleLogout}>
           <ListItemIcon>
             <Logout fontSize="small" />

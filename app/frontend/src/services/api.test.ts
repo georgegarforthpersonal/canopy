@@ -137,7 +137,7 @@ describe('session expiry handling', () => {
     mockFetchError(401, 'Invalid password');
     const { authAPI } = await import('./api');
 
-    await expect(authAPI.loginLegacy('wrong-password')).rejects.toThrowError('Invalid password');
+    await expect(authAPI.login('jane@example.org', 'wrong-password')).rejects.toThrowError('Invalid password');
 
     expect(sessionExpiredEvents).toHaveLength(0);
     expect(localStorage.getItem(TOKEN_KEY)).toBe('stale-token');

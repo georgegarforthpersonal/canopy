@@ -95,18 +95,6 @@ class Settings(BaseSettings):
             return ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # =========================================================================
-    # Authentication & Security
-    # =========================================================================
-    session_secret_key: str = Field(
-        default="",
-        description="Secret key for session encryption (required in production)"
-    )
-    admin_password: str = Field(
-        default="",
-        description="Admin password for seeding database (legacy, removed at accounts cutover)"
-    )
-
-    # =========================================================================
     # Transactional Email (invites, password resets)
     # =========================================================================
     resend_api_key: str = Field(

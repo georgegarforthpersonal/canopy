@@ -12,15 +12,11 @@ interface Organisation {
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  /** The logged-in account, or null when anonymous or on a legacy session */
+  /** The logged-in account, or null when anonymous */
   user: CurrentUser | null;
-  /** viewer | editor | admin; legacy shared-password sessions are admin */
   role: UserRole | null;
-  /** True for the legacy shared-org-password session (pre-accounts) */
-  isLegacyAdmin: boolean;
   organisation: Organisation | null;
   login: (email: string, password: string) => Promise<void>;
-  loginLegacy: (password: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Re-fetch identity from the server (e.g. after accepting an invite) */
   refresh: () => Promise<void>;
@@ -61,11 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [refresh]);
 
-  const loginLegacy = useCallback(async (password: string) => {
-    await authAPI.loginLegacy(password);
-    await refresh();
-  }, [refresh]);
-
   const logout = useCallback(async () => {
     await authAPI.logout();
     await refresh();
@@ -78,10 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         user: me?.user ?? null,
         role: me?.role ?? null,
-        isLegacyAdmin: (me?.authenticated && me?.legacy) || false,
         organisation: me?.organisation ?? null,
         login,
-        loginLegacy,
         logout,
         refresh,
       }}
@@ -114,10 +103,9 @@ export function usePermissions() {
     /** Create/edit/delete surveys, sightings and media */
     canEditSurveys: rank >= 1,
     /** Admin page: devices, locations, survey types, surveyors, species,
-     * users & invites. Legacy shared-password sessions count as admin so an
-     * org can bootstrap its first real accounts from the UI. */
+     * users & invites. */
     canAccessAdmin: rank >= 2,
-    /** Sign self up to scheduled surveys — needs a user account */
+    /** Sign self up to scheduled surveys (any signed-in account) */
     canSelfSignUp: user !== null,
   };
 }

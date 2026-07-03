@@ -1,8 +1,7 @@
 {
   "organisation": {
     "name": "Cannwood",
-    "slug": "cannwood",
-    "admin_password": "turtledove2026"
+    "slug": "cannwood"
   },
   "locations": [
     {

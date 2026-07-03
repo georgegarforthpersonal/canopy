@@ -31,7 +31,7 @@ SAMPLE_DEVICE = {
 
 def _override_org(slug: str) -> None:
     async def _org() -> Organisation:
-        return Organisation(name=slug, slug=slug, admin_password="", is_active=True)
+        return Organisation(name=slug, slug=slug, is_active=True)
 
     app.dependency_overrides[get_current_organisation] = _org
 

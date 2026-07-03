@@ -2,10 +2,10 @@
 Auth Router - user accounts, sessions, invites and password resets
 
 Endpoints:
-  POST   /api/auth/login                  - Log in (email+password, or legacy org password)
+  POST   /api/auth/login                  - Log in with email + password
   POST   /api/auth/logout                 - End the session
   GET    /api/auth/me                     - Current user, role and organisation
-  GET    /api/auth/status                 - Legacy auth check (kept for old clients)
+  GET    /api/auth/status                 - Lightweight auth check
   PATCH  /api/auth/me                     - Update own name
   POST   /api/auth/change-password        - Change own password
   POST   /api/auth/request-password-reset - Email a reset link (always 200)
@@ -34,10 +34,7 @@ from auth import (
     PASSWORD_RESET_MAX_AGE,
     SESSION_COOKIE_NAME,
     SESSION_MAX_AGE,
-    USER_SESSION_COOKIE_NAME,
-    USER_SESSION_MAX_AGE,
     Principal,
-    create_session_token,
     create_user_session,
     enforce_rate_limit,
     generate_token,
@@ -52,7 +49,6 @@ from auth import (
     reset_rate_limiter,
     revoke_user_sessions,
     validate_new_password,
-    verify_org_password,
     verify_password,
 )
 from config import settings
@@ -77,8 +73,7 @@ router = APIRouter()
 # ============================================================================
 
 class LoginRequest(BaseModel):
-    # email present → user account login; absent → legacy org password login
-    email: Optional[EmailStr] = None
+    email: EmailStr
     password: str
 
 
@@ -180,21 +175,10 @@ async def login(
     org: Organisation = Depends(get_current_organisation),
 ) -> dict[str, Any]:
     """
-    Log in with email + password (user account), or password alone
-    (legacy shared org password, kept until the accounts cutover).
+    Log in with email + password.
 
     The organisation is determined from the request hostname / X-Org-Slug.
     """
-    if body.email is None:
-        # Legacy org-password login: acts as an admin for the organisation
-        enforce_rate_limit(login_rate_limiter, f"legacy:{_client_ip(request)}:{org.slug}")
-        if not verify_org_password(body.password, org):
-            raise HTTPException(status_code=401, detail="Incorrect password")
-        token = create_session_token(org.slug)
-        _set_session_cookie(response, SESSION_COOKIE_NAME, token, SESSION_MAX_AGE)
-        # Token also returned for clients that keep it in localStorage
-        return {"authenticated": True, "token": token, "legacy": True}
-
     email = body.email.lower()
     enforce_rate_limit(login_rate_limiter, f"login:{_client_ip(request)}:{email}")
 
@@ -213,8 +197,11 @@ async def login(
     db.add(user)
     db.commit()
 
+    # The token is returned as well as set as a cookie: browsers that block
+    # cross-site cookies (e.g. Safari with the API on another domain) fall
+    # back to sending it as a Bearer header from localStorage.
     token = create_user_session(db, user)
-    _set_session_cookie(response, USER_SESSION_COOKIE_NAME, token, USER_SESSION_MAX_AGE)
+    _set_session_cookie(response, SESSION_COOKIE_NAME, token, SESSION_MAX_AGE)
     return {
         "authenticated": True,
         "token": token,
@@ -235,7 +222,6 @@ async def logout(
             UserSession.token_hash == hash_token(token)
         ).delete()
     db.commit()
-    response.delete_cookie(key=USER_SESSION_COOKIE_NAME, path="/")
     response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
     return {"authenticated": False}
 
@@ -245,14 +231,13 @@ async def me(
     org: Organisation = Depends(get_current_organisation),
     principal: Optional[Principal] = Depends(get_current_principal),
 ) -> dict[str, Any]:
-    """Current identity: user (or legacy admin), role and organisation."""
+    """Current identity: user, role and organisation."""
     if principal is None:
         return {"authenticated": False, "user": None, "role": None, "organisation": _org_payload(org)}
     return {
         "authenticated": True,
-        "user": _user_payload(principal.user) if principal.user else None,
+        "user": _user_payload(principal.user),
         "role": principal.role.value,
-        "legacy": principal.is_legacy,
         "organisation": _org_payload(org),
     }
 
@@ -262,7 +247,7 @@ async def auth_status(
     org: Organisation = Depends(get_current_organisation),
     principal: Optional[Principal] = Depends(get_current_principal),
 ) -> dict[str, Any]:
-    """Legacy auth check, kept so already-deployed frontends keep working."""
+    """Lightweight auth check (predates /me; kept for older clients)."""
     return {
         "authenticated": principal is not None,
         "organisation": _org_payload(org),
@@ -280,8 +265,6 @@ async def update_profile(
     principal: Principal = Depends(require_user),
 ) -> dict[str, Any]:
     """Update own name (any role)."""
-    if principal.user is None:
-        raise HTTPException(status_code=400, detail="Legacy sessions have no profile; log in with a user account")
     user = db.get(User, principal.user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -305,8 +288,6 @@ async def change_password(
     principal: Principal = Depends(require_user),
 ) -> dict[str, Any]:
     """Change own password; revokes all existing sessions and issues a new one."""
-    if principal.user is None:
-        raise HTTPException(status_code=400, detail="Legacy sessions have no password; log in with a user account")
     user = db.get(User, principal.user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -320,7 +301,7 @@ async def change_password(
     revoke_user_sessions(db, user.id)
 
     token = create_user_session(db, user)
-    _set_session_cookie(response, USER_SESSION_COOKIE_NAME, token, USER_SESSION_MAX_AGE)
+    _set_session_cookie(response, SESSION_COOKIE_NAME, token, SESSION_MAX_AGE)
     return {"authenticated": True, "token": token}
 
 
@@ -380,7 +361,7 @@ async def reset_password(
     revoke_user_sessions(db, user.id)
 
     token = create_user_session(db, user)
-    _set_session_cookie(response, USER_SESSION_COOKIE_NAME, token, USER_SESSION_MAX_AGE)
+    _set_session_cookie(response, SESSION_COOKIE_NAME, token, SESSION_MAX_AGE)
     return {"authenticated": True, "token": token, "user": _user_payload(user)}
 
 
@@ -443,7 +424,7 @@ async def accept_invite(
 
     org = db.get(Organisation, invite.organisation_id)
     token = create_user_session(db, user)
-    _set_session_cookie(response, USER_SESSION_COOKIE_NAME, token, USER_SESSION_MAX_AGE)
+    _set_session_cookie(response, SESSION_COOKIE_NAME, token, SESSION_MAX_AGE)
     return {
         "authenticated": True,
         "token": token,

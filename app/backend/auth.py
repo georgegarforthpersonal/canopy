@@ -1,31 +1,27 @@
 """
 Authentication and authorization.
 
-Two kinds of credential are accepted during the accounts transition:
+Per-user accounts with argon2id password hashes and three ordered roles
+(viewer < editor < admin). Sessions are server-side rows in ``user_session``
+holding a sha256 of the token, so deactivating a user or changing their role
+takes effect immediately.
 
-1. User sessions (the real system): per-user accounts with argon2id password
-   hashes and three ordered roles (viewer < editor < admin). Sessions are
-   server-side rows in ``user_session`` holding a sha256 of the token, so
-   deactivating a user or changing their role takes effect immediately.
+Request handlers depend on :func:`require_role` (or the ``require_user`` /
+``require_editor`` / ``require_admin_role`` aliases) and receive a
+:class:`Principal`.
 
-2. Legacy organisation sessions: the old shared-admin-password flow. A valid
-   legacy token is treated as an *admin* principal for its organisation. This
-   path exists only so nobody is locked out while accounts are rolled out;
-   it is removed at cutover along with ``organisation.admin_password``.
-
-Request handlers depend on :func:`require_role` (or the ``require_user``
-alias) and receive a :class:`Principal`.
+Bootstrapping: a fresh organisation has no users, and every endpoint needs a
+login — create the first admin with ``scripts/create_admin.py``.
 """
 
 import hashlib
-import hmac
 import logging
 import secrets
 import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Deque, Dict, Optional, Tuple
+from typing import Deque, Dict, Optional
 
 import sentry_sdk
 from argon2 import PasswordHasher
@@ -33,20 +29,15 @@ from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHas
 from fastapi import Depends, Request, HTTPException, status
 from sqlalchemy.orm import Session
 
-from config import settings
-from models import Organisation, User, UserRole, UserSession
+from models import User, UserRole, UserSession
 
 logger = logging.getLogger(__name__)
 
-# Legacy org-password session cookie (kept until cutover)
-SESSION_COOKIE_NAME = "admin_session"
-SESSION_MAX_AGE = 60 * 60 * 24  # 24 hours
-
-# User account sessions: 30-day sliding expiry suits multi-day fieldwork
-USER_SESSION_COOKIE_NAME = "canopy_session"
-USER_SESSION_MAX_AGE = 60 * 60 * 24 * 30
+# 30-day sliding expiry suits multi-day fieldwork
+SESSION_COOKIE_NAME = "canopy_session"
+SESSION_MAX_AGE = 60 * 60 * 24 * 30
 # Extend the sliding window at most this often, to avoid a DB write per request
-USER_SESSION_REFRESH_INTERVAL = 60 * 60
+SESSION_REFRESH_INTERVAL = 60 * 60
 
 MIN_PASSWORD_LENGTH = 10
 # Tokens are emailed/displayed once; only their sha256 is stored
@@ -119,32 +110,24 @@ def hash_token(token: str) -> str:
 
 @dataclass
 class Principal:
-    """The authenticated caller, however they authenticated.
-
-    ``user`` is None (and ``is_legacy`` True) for legacy org-password
-    sessions, which act as admin for their organisation. ``organisation_id``
-    is None for legacy principals — their org is resolved from the token's
-    embedded slug by ``get_current_organisation``.
-    """
+    """The authenticated caller: their user row and effective role."""
     role: UserRole
-    user: Optional[User] = None
-    organisation_id: Optional[int] = None
-    legacy_org_slug: Optional[str] = None
-
-    @property
-    def is_legacy(self) -> bool:
-        return self.user is None
+    user: User
 
     @property
     def user_id(self) -> Optional[int]:
-        return self.user.id if self.user else None
+        return self.user.id
+
+    @property
+    def organisation_id(self) -> int:
+        return self.user.organisation_id
 
     def has_role(self, minimum: UserRole) -> bool:
         return _ROLE_RANK[self.role] >= _ROLE_RANK[minimum]
 
 
 # ============================================================================
-# User sessions (DB-backed)
+# Sessions (DB-backed)
 # ============================================================================
 
 def create_user_session(db: Session, user: User) -> str:
@@ -154,7 +137,7 @@ def create_user_session(db: Session, user: User) -> str:
     db.add(UserSession(
         user_id=user.id,
         token_hash=hash_token(token),
-        expires_at=now + timedelta(seconds=USER_SESSION_MAX_AGE),
+        expires_at=now + timedelta(seconds=SESSION_MAX_AGE),
         last_seen_at=now,
     ))
     db.commit()
@@ -168,7 +151,7 @@ def revoke_user_sessions(db: Session, user_id: int) -> None:
 
 
 def _resolve_user_session(db: Session, token: str) -> Optional[Principal]:
-    """Return a Principal for a valid user-session token, else None.
+    """Return a Principal for a valid session token, else None.
 
     Extends the sliding expiry at most hourly so routine traffic doesn't
     write on every request.
@@ -185,58 +168,13 @@ def _resolve_user_session(db: Session, token: str) -> Optional[Principal]:
     if not user or not user.is_active:
         return None
 
-    if (now - session.last_seen_at).total_seconds() > USER_SESSION_REFRESH_INTERVAL:
+    if (now - session.last_seen_at).total_seconds() > SESSION_REFRESH_INTERVAL:
         session.last_seen_at = now
-        session.expires_at = now + timedelta(seconds=USER_SESSION_MAX_AGE)
+        session.expires_at = now + timedelta(seconds=SESSION_MAX_AGE)
         db.add(session)
         db.commit()
 
-    return Principal(
-        role=UserRole(user.role),
-        user=user,
-        organisation_id=user.organisation_id,
-    )
-
-
-# ============================================================================
-# Legacy organisation-password sessions (removed at cutover)
-# ============================================================================
-
-def verify_org_password(password: str, org: Organisation) -> bool:
-    """Verify a password against an organisation's legacy shared password."""
-    return hmac.compare_digest(password.encode(), (org.admin_password or "").encode())
-
-
-def create_session_token(org_slug: str) -> str:
-    """Create a signed legacy token: {org_slug}.{timestamp}.{signature}."""
-    timestamp = str(int(time.time()))
-    secret = settings.session_secret_key
-    payload = f"{org_slug}.{timestamp}"
-    signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    return f"{org_slug}.{timestamp}.{signature}"
-
-
-def validate_session_token(token: str) -> Tuple[bool, Optional[str]]:
-    """Validate a legacy token; returns (is_valid, org_slug)."""
-    try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            return False, None
-
-        org_slug, timestamp, signature = parts
-        secret = settings.session_secret_key
-        payload = f"{org_slug}.{timestamp}"
-        expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-
-        if not hmac.compare_digest(signature, expected):
-            return False, None
-
-        if (time.time() - int(timestamp)) >= SESSION_MAX_AGE:
-            return False, None
-
-        return True, org_slug
-    except (ValueError, TypeError):
-        return False, None
+    return Principal(role=UserRole(user.role), user=user)
 
 
 # ============================================================================
@@ -244,39 +182,26 @@ def validate_session_token(token: str) -> Tuple[bool, Optional[str]]:
 # ============================================================================
 
 def get_token_candidates(request: Request) -> list[str]:
-    """Possible auth tokens on a request, most specific first."""
+    """Possible auth tokens on a request: Bearer header, then cookie."""
     candidates = []
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         candidates.append(auth_header[7:])
-    for cookie_name in (USER_SESSION_COOKIE_NAME, SESSION_COOKIE_NAME):
-        cookie = request.cookies.get(cookie_name)
-        if cookie:
-            candidates.append(cookie)
+    cookie = request.cookies.get(SESSION_COOKIE_NAME)
+    if cookie:
+        candidates.append(cookie)
     return candidates
 
 
-def get_token_from_request(request: Request) -> Optional[str]:
-    """First auth token on the request (header, then cookies), if any."""
-    candidates = get_token_candidates(request)
-    return candidates[0] if candidates else None
-
-
 def resolve_principal(request: Request, db: Session) -> Optional[Principal]:
-    """Resolve the caller from session cookies / Authorization header.
+    """Resolve the caller from the session cookie / Authorization header.
 
-    Tries each candidate token first as a user session, then as a legacy
-    org token. Returns None for anonymous requests.
+    Returns None for anonymous requests.
     """
     for token in get_token_candidates(request):
         principal = _resolve_user_session(db, token)
         if principal:
             return principal
-
-        is_valid, org_slug = validate_session_token(token)
-        if is_valid:
-            return Principal(role=UserRole.admin, legacy_org_slug=org_slug)
-
     return None
 
 
@@ -307,10 +232,8 @@ def _set_sentry_user(principal: Optional[Principal]) -> None:
     """Attach the caller to Sentry events for attribution."""
     if principal is None:
         sentry_sdk.set_user(None)
-    elif principal.is_legacy:
-        sentry_sdk.set_user({"id": "legacy-admin", "username": f"legacy:{principal.legacy_org_slug}"})
     else:
-        sentry_sdk.set_user({"id": str(principal.user_id), "email": principal.user.email if principal.user else None})
+        sentry_sdk.set_user({"id": str(principal.user_id), "email": principal.user.email})
 
 
 # ============================================================================
