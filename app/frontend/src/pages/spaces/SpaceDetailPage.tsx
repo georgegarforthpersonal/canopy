@@ -39,7 +39,7 @@ export default function SpaceDetailPage() {
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
   const [surveys, setSurveys] = useState<Survey[]>([]);
-  const [totalSurveys, setTotalSurveys] = useState(0);
+  const [recordedCount, setRecordedCount] = useState(0);
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [locations, setLocations] = useState<LocationWithBoundary[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -71,10 +71,11 @@ export default function SpaceDetailPage() {
 
         // The worklist is built from ALL scheduled surveys (upcoming + overdue;
         // truncation would drop exactly the overdue rows, which sort last);
-        // the "All surveys" door shows the total across every status.
-        const [scheduled, totalPage, surveyorList, withBoundaries, deviceList] = await Promise.all([
+        // the "All surveys" door shows a recorded/scheduled split, so the
+        // recorded side needs the completed-only total.
+        const [scheduled, completedPage, surveyorList, withBoundaries, deviceList] = await Promise.all([
           surveysAPI.getAllPages({ survey_type_id: surveyTypeId, survey_status: 'scheduled' }),
-          surveysAPI.getAll({ survey_type_id: surveyTypeId, page: 1, limit: 1 }),
+          surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'completed', page: 1, limit: 1 }),
           surveyorsAPI.getAll(),
           locationsAPI.getAllWithBoundaries(),
           devicesAPI.getAll(),
@@ -82,7 +83,7 @@ export default function SpaceDetailPage() {
         if (!active) return;
 
         setSurveys(scheduled);
-        setTotalSurveys(totalPage.total);
+        setRecordedCount(completedPage.total);
         setSurveyors(surveyorList);
 
         // The survey type's full location set is authoritative (all transects,
@@ -203,7 +204,7 @@ export default function SpaceDetailPage() {
             <SurveysPanel
               surveys={surveys}
               resolveSurveyors={resolveSurveyors}
-              totalCount={totalSurveys}
+              recordedCount={recordedCount}
               greenIds={greenIds}
               onAddSurvey={goToSurvey}
               onAssign={setAssignSurvey}

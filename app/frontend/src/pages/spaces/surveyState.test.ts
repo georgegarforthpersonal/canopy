@@ -119,7 +119,7 @@ describe('buildWorklist', () => {
     survey({ id: 1, date: '2026-06-21', status: 'scheduled' }), // needs-survey
     survey({ id: 2, date: '2026-06-18', status: 'scheduled' }), // needs-survey
     survey({ id: 3, date: '2026-06-10', status: 'scheduled' }), // needs-survey
-    survey({ id: 4, date: '2026-06-05', status: 'scheduled' }), // needs-survey (4th, dropped)
+    survey({ id: 4, date: '2026-06-05', status: 'scheduled' }), // needs-survey (4th, still shown)
     survey({ id: 5, date: '2026-06-15', status: 'completed', sightings_count: 2 }), // recorded (excluded)
     survey({ id: 10, date: '2026-06-08', status: 'cancelled' }), // cancelled (excluded)
     survey({ id: 6, date: '2026-06-27', status: 'scheduled' }), // upcoming
@@ -128,14 +128,15 @@ describe('buildWorklist', () => {
     survey({ id: 9, date: '2026-07-19', status: 'scheduled' }), // upcoming (4th, dropped)
   ];
 
-  it('caps needs-survey at 3, most recent first', () => {
+  it('never caps needs-survey, most recent first', () => {
     const { needsSurvey } = buildWorklist(surveys, TODAY);
-    expect(needsSurvey.map((s) => s.id)).toEqual([1, 2, 3]);
+    expect(needsSurvey.map((s) => s.id)).toEqual([1, 2, 3, 4]);
   });
 
-  it('caps upcoming at 3, soonest first', () => {
-    const { upcoming } = buildWorklist(surveys, TODAY);
+  it('caps upcoming at 3 (soonest first) but reports the true total', () => {
+    const { upcoming, upcomingTotal } = buildWorklist(surveys, TODAY);
     expect(upcoming.map((s) => s.id)).toEqual([6, 7, 8]);
+    expect(upcomingTotal).toBe(4);
   });
 
   it('places a due-this-week (in-window) survey in the needs-survey bucket, not upcoming', () => {

@@ -78,10 +78,13 @@ export function formatWeekRange(startIso: string, endIso: string): string {
 }
 
 /**
- * Build the fixed worklist for the Surveys panel: up to 3 rows that need doing
- * (overdue and due-this-week, most recent first) followed by up to 3 upcoming
- * rows (soonest first). A due-this-week (weekly, in-window) survey is actionable
- * now, so it sits with needs-survey rather than being filtered out as upcoming.
+ * Build the worklist for the Surveys panel: every row that needs doing (overdue
+ * and due-this-week, most recent first — the actionable backlog is never hidden)
+ * followed by the next 3 upcoming rows (soonest first; future weeks are
+ * effectively endless, so they stay capped). `upcomingTotal` carries the true
+ * upcoming count so the panel can say how many the cap hid. A due-this-week
+ * (weekly, in-window) survey is actionable now, so it sits with needs-survey
+ * rather than being filtered out as upcoming.
  */
 export function buildWorklist(surveys: Survey[], today: string = todayIso()) {
   const needsSurvey = surveys
@@ -89,15 +92,13 @@ export function buildWorklist(surveys: Survey[], today: string = todayIso()) {
       const state = deriveSurveyState(s, today);
       return state === 'needs-survey' || state === 'due-this-week';
     })
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 3);
+    .sort((a, b) => b.date.localeCompare(a.date));
 
-  const upcoming = surveys
+  const allUpcoming = surveys
     .filter((s) => deriveSurveyState(s, today) === 'upcoming')
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 3);
+    .sort((a, b) => a.date.localeCompare(b.date));
 
-  return { needsSurvey, upcoming };
+  return { needsSurvey, upcoming: allUpcoming.slice(0, 3), upcomingTotal: allUpcoming.length };
 }
 
 /** Soonest upcoming survey, or null if none scheduled. */

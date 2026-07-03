@@ -266,7 +266,8 @@ export default function AllSurveysPage() {
                     </Box>
                   )}
 
-                  {state === 'upcoming' && (
+                  {/* Sign-up is open for future weeks and the current week alike. */}
+                  {(state === 'upcoming' || state === 'due-this-week') && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
                       <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
                       <Button
@@ -287,7 +288,7 @@ export default function AllSurveysPage() {
                           py: 0.5,
                         }}
                       >
-                        Add
+                        Sign up
                       </Button>
                     </Box>
                   )}
@@ -311,7 +312,7 @@ export default function AllSurveysPage() {
                         py: 0.6,
                       }}
                     >
-                      Add survey
+                      Record survey
                     </Button>
                   )}
                 </Box>
