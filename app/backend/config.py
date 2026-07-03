@@ -103,8 +103,34 @@ class Settings(BaseSettings):
     )
     admin_password: str = Field(
         default="",
-        description="Admin password for seeding database"
+        description="Admin password for seeding database (legacy, removed at accounts cutover)"
     )
+
+    # =========================================================================
+    # Transactional Email (invites, password resets)
+    # =========================================================================
+    resend_api_key: str = Field(
+        default="",
+        description="Resend API key; when empty, emails are logged instead of sent"
+    )
+    email_from: str = Field(
+        default="Canopy <noreply@canopydata.app>",
+        description="From address for transactional email"
+    )
+    frontend_base_url: str = Field(
+        default="",
+        description="Base URL for links in emails, e.g. https://{org}.canopydata.app "
+                    "({org} is replaced with the organisation slug). "
+                    "Defaults to the production template, or localhost:5173 in dev."
+    )
+
+    def frontend_url_for(self, org_slug: str) -> str:
+        """Base frontend URL for an organisation (used in emailed links)."""
+        if self.frontend_base_url:
+            return self.frontend_base_url.replace("{org}", org_slug)
+        if self.is_production:
+            return f"https://{org_slug}.canopydata.app"
+        return "http://localhost:5173"
 
     # =========================================================================
     # Ecotopia / Druid Tracker Integration
