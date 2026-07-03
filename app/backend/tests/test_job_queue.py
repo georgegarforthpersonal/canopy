@@ -357,7 +357,7 @@ class TestRequeueEndpoints:
 
 class TestProcessingSummary:
     def test_audio_processing_summary(
-        self, client: TestClient, db_session: Session, create_survey
+        self, client: TestClient, db_session: Session, create_survey, auth_headers: dict
     ):
         survey = create_survey()
         statuses = [
@@ -377,7 +377,7 @@ class TestProcessingSummary:
             db_session.add(rec)
         db_session.commit()
 
-        response = client.get(f"/api/surveys/{survey.id}/audio/processing-summary")
+        response = client.get(f"/api/surveys/{survey.id}/audio/processing-summary", headers=auth_headers)
 
         assert response.status_code == 200
         assert response.json() == {
@@ -389,7 +389,7 @@ class TestProcessingSummary:
         }
 
     def test_image_processing_summary(
-        self, client: TestClient, db_session: Session, create_survey
+        self, client: TestClient, db_session: Session, create_survey, auth_headers: dict
     ):
         survey = create_survey()
         for status in [ProcessingStatus.pending, ProcessingStatus.completed]:
@@ -402,7 +402,7 @@ class TestProcessingSummary:
             db_session.add(img)
         db_session.commit()
 
-        response = client.get(f"/api/surveys/{survey.id}/images/processing-summary")
+        response = client.get(f"/api/surveys/{survey.id}/images/processing-summary", headers=auth_headers)
 
         assert response.status_code == 200
         body = response.json()
@@ -410,6 +410,6 @@ class TestProcessingSummary:
         assert body["completed"] == 1
         assert body["total"] == 2
 
-    def test_summary_for_missing_survey_is_404(self, client: TestClient):
-        response = client.get("/api/surveys/999999/audio/processing-summary")
+    def test_summary_for_missing_survey_is_404(self, client: TestClient, auth_headers: dict):
+        response = client.get("/api/surveys/999999/audio/processing-summary", headers=auth_headers)
         assert response.status_code == 404

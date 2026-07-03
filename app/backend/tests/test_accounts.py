@@ -340,6 +340,9 @@ class TestPasswordReset:
         db_session.commit()
 
         client.post("/api/auth/reset-password", json={"token": token, "password": "new-password-123"})
+        # Drop the fresh session cookie the reset response set on the client,
+        # so this asserts on the old Bearer token alone
+        client.cookies.clear()
         assert client.get("/api/surveyors", headers=headers).status_code == 401
 
 
@@ -352,7 +355,9 @@ class TestChangePassword:
             headers=headers,
         )
         assert response.status_code == 200
-        # Old session is revoked; the response's new token works
+        # Old session is revoked; the response's new token works. Clear the
+        # cookie jar first so the old Bearer token is the only credential.
+        client.cookies.clear()
         assert client.get("/api/surveyors", headers=headers).status_code == 401
         new_headers = {"Authorization": f"Bearer {response.json()['token']}"}
         assert client.get("/api/surveyors", headers=new_headers).status_code == 200
