@@ -21,13 +21,24 @@ os.environ.setdefault("SESSION_SECRET_KEY", "test-secret-key")
 # Tests drive processing explicitly; never run the polling dispatcher
 os.environ.setdefault("JOB_DISPATCHER_ENABLED", "false")
 
+from fastapi import Request
+
 from main import app
 from database.connection import get_db
 from dependencies import get_current_organisation
-from auth import create_session_token
+from auth import (
+    create_session_token,
+    create_user_session,
+    get_current_principal,
+    hash_password,
+    login_rate_limiter,
+    reset_rate_limiter,
+    resolve_principal,
+)
 from models import (
     Organisation, Surveyor, Location, Species, SpeciesType,
-    SurveyType, Survey, SurveySurveyor, Device, DeviceType
+    SurveyType, Survey, SurveySurveyor, Device, DeviceType,
+    User, UserRole,
 )
 
 
@@ -85,6 +96,13 @@ def db_session(test_engine) -> Generator[Session, None, None]:
         connection.close()
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiters():
+    """Login limiters are in-memory and would otherwise leak across tests."""
+    login_rate_limiter.reset()
+    reset_rate_limiter.reset()
+
+
 # ============================================================================
 # Test Organisation Fixture
 # ============================================================================
@@ -115,14 +133,63 @@ def test_org(db_session: Session) -> Organisation:
 
 @pytest.fixture
 def auth_token(test_org: Organisation) -> str:
-    """Generate a valid session token for the test organisation."""
+    """Generate a valid legacy (org-password) session token.
+
+    Legacy tokens act as an admin principal, so these headers pass every
+    role check — which keeps the pre-accounts test suite working unchanged.
+    """
     return create_session_token(test_org.slug)
 
 
 @pytest.fixture
 def auth_headers(auth_token: str) -> dict:
-    """Return headers with Authorization bearer token."""
+    """Return headers with Authorization bearer token (legacy admin)."""
     return {"Authorization": f"Bearer {auth_token}"}
+
+
+@pytest.fixture
+def create_user(db_session: Session, test_org: Organisation):
+    """Factory fixture to create user accounts."""
+    _counter = {"n": 0}
+
+    def _create_user(
+        email: str = None,
+        role: UserRole = UserRole.viewer,
+        password: str = "correct-horse-battery",
+        first_name: str = "Test",
+        last_name: str = "User",
+        is_active: bool = True,
+    ) -> User:
+        if email is None:
+            _counter["n"] += 1
+            email = f"{role.value}{_counter['n']}@example.org"
+        user = User(
+            organisation_id=test_org.id,
+            email=email.lower(),
+            first_name=first_name,
+            last_name=last_name,
+            password_hash=hash_password(password),
+            role=role,
+            is_active=is_active,
+        )
+        db_session.add(user)
+        db_session.commit()
+        db_session.refresh(user)
+        return user
+
+    return _create_user
+
+
+@pytest.fixture
+def login_as(db_session: Session, create_user):
+    """Factory fixture: create a user with a role and return (headers, user)."""
+
+    def _login_as(role: UserRole = UserRole.viewer, **kwargs):
+        user = create_user(role=role, **kwargs)
+        token = create_user_session(db_session, user)
+        return {"Authorization": f"Bearer {token}"}, user
+
+    return _login_as
 
 
 # ============================================================================
@@ -148,8 +215,15 @@ def client(db_session: Session, test_org: Organisation) -> Generator[TestClient,
     async def override_get_current_organisation():
         return test_org
 
+    def override_get_current_principal(request: Request):
+        # Same resolution logic as production, but against the test
+        # transaction (production opens its own DB session, which cannot
+        # see uncommitted test data).
+        return resolve_principal(request, db_session)
+
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_organisation] = override_get_current_organisation
+    app.dependency_overrides[get_current_principal] = override_get_current_principal
 
     with TestClient(app) as test_client:
         yield test_client
