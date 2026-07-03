@@ -23,6 +23,7 @@ import {
 } from '../../services/api';
 import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
 import { primarySpeciesType } from './spaceMeta';
+import { recordedThisWeek } from './surveyState';
 import { useSurveyorLookup } from '../../hooks';
 import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
 import SpaceHero from '../../components/spaces/SpaceHero';
@@ -39,6 +40,7 @@ export default function SpaceDetailPage() {
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
   const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [recentCompleted, setRecentCompleted] = useState<Survey[]>([]);
   const [recordedCount, setRecordedCount] = useState(0);
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [locations, setLocations] = useState<LocationWithBoundary[]>([]);
@@ -72,10 +74,12 @@ export default function SpaceDetailPage() {
         // The worklist is built from ALL scheduled surveys (upcoming + overdue;
         // truncation would drop exactly the overdue rows, which sort last);
         // the "All surveys" door shows a recorded/scheduled split, so the
-        // recorded side needs the completed-only total.
+        // recorded side needs the completed-only total. The first completed
+        // page (date-descending) is kept so the panel can pin any survey
+        // already recorded for the current week.
         const [scheduled, completedPage, surveyorList, withBoundaries, deviceList] = await Promise.all([
           surveysAPI.getAllPages({ survey_type_id: surveyTypeId, survey_status: 'scheduled' }),
-          surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'completed', page: 1, limit: 1 }),
+          surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'completed', page: 1, limit: 25 }),
           surveyorsAPI.getAll(),
           locationsAPI.getAllWithBoundaries(),
           devicesAPI.getAll(),
@@ -83,6 +87,7 @@ export default function SpaceDetailPage() {
         if (!active) return;
 
         setSurveys(scheduled);
+        setRecentCompleted(completedPage.data);
         setRecordedCount(completedPage.total);
         setSurveyors(surveyorList);
 
@@ -217,11 +222,13 @@ export default function SpaceDetailPage() {
             <Box sx={{ order: 2, minWidth: 0 }}>
               <SurveysPanel
                 surveys={surveys}
+                recordedThisWeek={recordedThisWeek(recentCompleted)}
                 resolveSurveyors={resolveSurveyors}
                 recordedCount={recordedCount}
                 greenIds={greenIds}
                 onAddSurvey={goToSurvey}
                 onAssign={setAssignSurvey}
+                onOpenSurvey={goToSurvey}
                 onViewAll={() => navigate(`/spaces/${surveyTypeId}/all`)}
               />
             </Box>
