@@ -14,6 +14,7 @@
 import { Box, Button, Typography } from '@mui/material';
 import { Add, CheckCircleOutline, ChevronRight, PersonAddAlt1, WarningAmberRounded } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
+import { usePermissions } from '../../context/AuthContext';
 import SurveyorAvatars from './SurveyorAvatars';
 import { spaceColors } from '../../pages/spaces/spacesTokens';
 import { formatSurveyDate } from '../../pages/spaces/surveyState';
@@ -67,8 +68,11 @@ export default function SurveyWorklistRow({
   const needsSurvey = state === 'needs-survey';
   const dueThisWeek = state === 'due-this-week';
   const recorded = state === 'recorded';
+  // Recording a survey needs editor access; the button is hidden below that.
+  // Sign up stays for everyone — it is the viewer role's one action.
+  const { canEditSurveys } = usePermissions();
 
-  const recordButton = (
+  const recordButton = canEditSurveys ? (
     <Button
       variant="contained"
       startIcon={<Add sx={{ fontSize: 18 }} />}
@@ -77,7 +81,7 @@ export default function SurveyWorklistRow({
     >
       Record survey
     </Button>
-  );
+  ) : null;
 
   const assignButton = (
     <Button

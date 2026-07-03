@@ -1,11 +1,15 @@
 /**
- * Sign surveyors up to (or off) an upcoming survey, in place. The list is
- * rendered inline in the dialog — no dropdown popover, so nothing ever covers
- * the actions — and every tap applies immediately: toggling a name PUTs the
- * new surveyor_ids onto the survey (optimistically, serialized so rapid taps
- * can't race, reverted to the last server-acknowledged set on failure).
- * Removing someone is the same single tap as adding them, so there is no
- * Save/Cancel pair — just Done.
+ * Sign-up dialog for an upcoming survey, split by role:
+ *
+ * - Editors/admins assign anyone: an inline instant-apply list — toggling a
+ *   name PUTs the new surveyor_ids onto the survey (optimistically,
+ *   serialized so rapid taps can't race, reverted to the last
+ *   server-acknowledged set on failure). No Save/Cancel pair — just Done.
+ * - Viewers (and any signed-in account) get a true "sign me up": one click
+ *   calls the self-signup endpoint, which only ever adds/removes their own
+ *   linked surveyor.
+ *
+ * The space updates the row's avatars from the returned ids either way.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -15,6 +19,7 @@ import {
   DialogActions,
   Button,
   Checkbox,
+  CircularProgress,
   List,
   ListItemButton,
   ListItemIcon,
@@ -23,6 +28,7 @@ import {
   Typography,
 } from '@mui/material';
 import { surveysAPI, type Survey, type Surveyor } from '../../services/api';
+import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { spaceColors } from '../../pages/spaces/spacesTokens';
 import { formatSessionDate } from '../../pages/spaces/surveyState';
@@ -39,13 +45,87 @@ interface SurveyorPickerDialogProps {
   onSaved: (surveyId: number, surveyorIds: number[]) => void;
 }
 
-export default function SurveyorPickerDialog({
-  open,
-  survey,
-  surveyors,
-  onClose,
-  onSaved,
-}: SurveyorPickerDialogProps) {
+const brandButtonSx = {
+  textTransform: 'none',
+  bgcolor: spaceColors.brand,
+  '&:hover': { bgcolor: spaceColors.brandHover },
+};
+
+export default function SurveyorPickerDialog(props: SurveyorPickerDialogProps) {
+  const { canEditSurveys } = usePermissions();
+  // Editors and admins manage the full assignee list; everyone else
+  // (viewers, whose only power this is) manages just their own place.
+  return canEditSurveys ? <AssignSurveyorsDialog {...props} /> : <SelfSignupDialog {...props} />;
+}
+
+function SelfSignupDialog({ open, survey, surveyors, onClose, onSaved }: SurveyorPickerDialogProps) {
+  const toast = useToast();
+  const { user } = usePermissions();
+  const [saving, setSaving] = useState(false);
+
+  const mySurveyor = useMemo(
+    () => surveyors.find((s) => s.user_id != null && s.user_id === user?.id),
+    [surveyors, user],
+  );
+  const isSignedUp = Boolean(
+    survey && mySurveyor && survey.surveyor_ids?.includes(mySurveyor.id),
+  );
+
+  const handleAction = async () => {
+    if (!survey) return;
+    setSaving(true);
+    try {
+      const result = isSignedUp
+        ? await surveysAPI.withdraw(survey.id)
+        : await surveysAPI.signUp(survey.id);
+      onSaved(survey.id, result.surveyor_ids);
+      toast.success(isSignedUp ? 'You’ve been taken off this survey' : 'You’re signed up');
+      onClose();
+    } catch {
+      toast.error(isSignedUp ? 'Failed to withdraw' : 'Failed to sign up');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ pb: 0.5 }}>
+        {isSignedUp ? 'You’re signed up' : 'Sign up for this survey'}
+        {survey && (
+          <Typography sx={{ fontSize: 13, color: spaceColors.textMuted }}>
+            {formatSessionDate(survey.date)}
+            {survey.location_name ? ` · ${survey.location_name}` : ''}
+          </Typography>
+        )}
+      </DialogTitle>
+      <DialogContent dividers>
+        <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
+          {isSignedUp
+            ? 'Your name is on this survey. You can take yourself off it below.'
+            : 'Add your name to this survey so everyone can see who’s going.'}
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving} sx={{ textTransform: 'none' }}>
+          Cancel
+        </Button>
+        <Button
+          onClick={handleAction}
+          variant={isSignedUp ? 'outlined' : 'contained'}
+          color={isSignedUp ? 'error' : undefined}
+          disabled={saving}
+          startIcon={saving ? <CircularProgress size={14} color="inherit" /> : undefined}
+          sx={isSignedUp ? { textTransform: 'none' } : brandButtonSx}
+        >
+          {isSignedUp ? 'Take me off it' : 'Sign me up'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function AssignSurveyorsDialog({ open, survey, surveyors, onClose, onSaved }: SurveyorPickerDialogProps) {
   const toast = useToast();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [query, setQuery] = useState('');
@@ -175,15 +255,7 @@ export default function SurveyorPickerDialog({
               : `${selectedIds.length} signed up`}
           </Typography>
         )}
-        <Button
-          onClick={onClose}
-          variant="contained"
-          sx={{
-            textTransform: 'none',
-            bgcolor: spaceColors.brand,
-            '&:hover': { bgcolor: spaceColors.brandHover },
-          }}
-        >
+        <Button onClick={onClose} variant="contained" sx={brandButtonSx}>
           Done
         </Button>
       </DialogActions>
