@@ -1,8 +1,8 @@
 /**
  * Space detail: the single-screen overview for one survey type. Neutral hero
- * plus two balanced columns — Surveys worklist + Species recorded (left); Files,
+ * plus two balanced columns — Surveys worklist + Species count (left); Files,
  * Locations & devices (right). On mobile the panels stack in the order
- * Files → Surveys → Locations & devices → Species recorded.
+ * Files → Surveys → Locations & devices → Species count.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -29,7 +29,7 @@ import SpaceHero from '../../components/spaces/SpaceHero';
 import SurveysPanel from '../../components/spaces/SurveysPanel';
 import FilesPanel from '../../components/spaces/FilesPanel';
 import LocationsDevicesPanel from '../../components/spaces/LocationsDevicesPanel';
-import SpeciesRecordedChart from '../../components/spaces/SpeciesRecordedChart';
+import SpeciesCountPanel from '../../components/spaces/SpeciesCountPanel';
 import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
 
 export default function SpaceDetailPage() {
@@ -226,7 +226,7 @@ export default function SpaceDetailPage() {
               />
             </Box>
             <Box sx={{ order: 4, minWidth: 0 }}>
-              <SpeciesRecordedChart speciesType={speciesType} />
+              <SpeciesCountPanel speciesType={speciesType} />
             </Box>
           </Box>
 
