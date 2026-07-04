@@ -586,33 +586,24 @@ def _get_scheduled_survey_for_signup(db: Session, survey_id: int, org_id: int) -
 
 
 def _get_or_create_own_surveyor(db: Session, principal: Principal, org_id: int) -> Surveyor:
-    """The surveyor linked to the caller's account, creating/linking on first use.
+    """The surveyor linked to the caller's account, created on first use.
 
-    If exactly one unlinked active surveyor has the same name, link it rather
-    than creating a duplicate — most volunteers already exist as surveyors.
+    Deliberately NO name-matching against existing surveyor rows: a wrong
+    guess mis-attributes someone else's survey history, whereas a duplicate
+    row is visible and can be merged deliberately (repoint survey_surveyor
+    at the linked surveyor, then delete the historical one).
     """
     user = principal.user
     surveyor = db.query(Surveyor).filter(Surveyor.user_id == user.id).first()
     if surveyor:
         return surveyor  # type: ignore[no-any-return]
 
-    name_matches = db.query(Surveyor).filter(
-        Surveyor.organisation_id == org_id,
-        Surveyor.user_id == None,  # noqa: E711
-        Surveyor.is_active == True,  # noqa: E712
-        func.lower(Surveyor.first_name) == user.first_name.lower(),
-        func.lower(func.coalesce(Surveyor.last_name, "")) == (user.last_name or "").lower(),
-    ).all()
-    if len(name_matches) == 1:
-        surveyor = name_matches[0]
-        surveyor.user_id = user.id
-    else:
-        surveyor = Surveyor(
-            first_name=user.first_name,
-            last_name=user.last_name,
-            organisation_id=org_id,
-            user_id=user.id,
-        )
+    surveyor = Surveyor(
+        first_name=user.first_name,
+        last_name=user.last_name,
+        organisation_id=org_id,
+        user_id=user.id,
+    )
     db.add(surveyor)
     db.commit()
     db.refresh(surveyor)
@@ -630,8 +621,8 @@ async def sign_up_to_survey(
     Add *yourself* to a scheduled survey (any role, including viewers).
 
     Unlike PUT /surveys/{id}, this can only touch the caller's own
-    membership: it links (or creates) the surveyor for their account and
-    adds it, leaving everything else about the survey unchanged.
+    membership: it adds the surveyor linked to their account (created on
+    first use), leaving everything else about the survey unchanged.
     """
     survey = _get_scheduled_survey_for_signup(db, survey_id, org.id)  # type: ignore[arg-type]
     surveyor = _get_or_create_own_surveyor(db, principal, org.id)  # type: ignore[arg-type]

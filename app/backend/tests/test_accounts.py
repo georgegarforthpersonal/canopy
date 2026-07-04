@@ -429,11 +429,14 @@ class TestSurveySignup:
         assert surveyor.first_name == "Nell"
         assert response.json()["surveyor_ids"] == [surveyor_id]
 
-    def test_signup_links_existing_surveyor_by_name(
+    def test_signup_never_links_existing_surveyor_by_name(
         self, client: TestClient, login_as, create_survey, create_surveyor, db_session
     ):
+        """No heuristic matching: even an exact name match gets a NEW
+        surveyor. Historical surveyors are merged deliberately by an admin,
+        never guessed at — a wrong guess would mis-attribute survey history."""
         existing = create_surveyor(first_name="Nell", last_name="Woods")
-        headers, user = login_as(UserRole.viewer, first_name="nell", last_name="woods")
+        headers, user = login_as(UserRole.viewer, first_name="Nell", last_name="Woods")
         survey = create_survey()
         survey.status = "scheduled"
         db_session.add(survey)
@@ -441,9 +444,12 @@ class TestSurveySignup:
 
         response = client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
         assert response.status_code == 200
-        assert response.json()["surveyor_id"] == existing.id
+        assert response.json()["surveyor_id"] != existing.id
         db_session.refresh(existing)
-        assert existing.user_id == user.id
+        assert existing.user_id is None
+
+        new_surveyor = db_session.get(Surveyor, response.json()["surveyor_id"])
+        assert new_surveyor.user_id == user.id
 
     def test_signup_is_idempotent(self, client: TestClient, login_as, create_survey, db_session):
         headers, _ = login_as(UserRole.viewer)
