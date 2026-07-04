@@ -49,12 +49,14 @@ const getApiBaseUrl = () => {
  *
  * Patterns supported:
  *   - {org}.canopydata.app → {org} (new custom domains)
+ *   - {org}.staging.canopydata.app → {org} (staging environment)
  *   - {org}data.up.railway.app → {org} (legacy Railway domains)
  *   - localhost → heal (default for development)
  *
  * Examples:
  *   - heal.canopydata.app → heal
  *   - cannwood.canopydata.app → cannwood
+ *   - heal.staging.canopydata.app → heal
  *   - healdata.up.railway.app → heal
  *   - cannwooddata.up.railway.app → cannwood
  */
@@ -68,8 +70,8 @@ const getOrgSlug = (): string => {
     return urlParams.get('org') || 'heal';
   }
 
-  // New custom domain pattern: {org}.canopydata.app
-  const canopyMatch = hostname.match(/^([a-z]+)\.canopydata\.app$/);
+  // Custom domain patterns: {org}.canopydata.app and {org}.staging.canopydata.app
+  const canopyMatch = hostname.match(/^([a-z]+)\.(?:staging\.)?canopydata\.app$/);
   if (canopyMatch) {
     return canopyMatch[1];
   }
