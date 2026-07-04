@@ -71,8 +71,11 @@ export default function SurveyWorklistRow({
       onClick={recorded && onOpen ? () => onOpen(survey) : undefined}
       sx={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 1.6,
+        // A due-this-week row carries two buttons; on phones they'd crush
+        // the date to nothing, so that state stacks: date line, actions line.
+        flexDirection: { xs: dueThisWeek ? 'column' : 'row', sm: 'row' },
+        alignItems: { xs: dueThisWeek ? 'stretch' : 'center', sm: 'center' },
+        gap: { xs: dueThisWeek ? 1 : 1.6, sm: 1.6 },
         px: 2.25,
         py: 1.6,
         borderTop: `1px solid ${spaceColors.dividerInner}`,

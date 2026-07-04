@@ -2,10 +2,11 @@
  * Self sign-up as an instant toggle — no confirmation dialog. Signing up and
  * withdrawing are both single clicks: each is trivially reversible (the
  * opposite click undoes it), so the pattern is act-immediately + toast, with
- * the button itself carrying the state. Signed up it reads "✓ Signed up" in
- * brand green; hovering flips it to a red "Withdraw" (GitHub-unfollow style).
- * On touch there is no hover, so a tap on the signed-up button withdraws
- * directly — acceptable because re-signing up is one tap too.
+ * the button itself carrying the state. Signed up it reads "✓ Signed up ×"
+ * in brand green — the trailing × (removable-chip pattern) is what makes
+ * tap-to-withdraw discoverable on touch, where there is no hover. Hovering
+ * (desktop) flips the whole button to a red "Withdraw" (GitHub-unfollow
+ * style).
  */
 import { useState } from 'react';
 import { Button, CircularProgress } from '@mui/material';
@@ -69,6 +70,11 @@ export default function SelfSignupButton({ survey, assigned, onSaved }: SelfSign
         ) : (
           <PersonAddAlt1 sx={{ fontSize: 17 }} />
         )
+      }
+      endIcon={
+        isSignedUp && !showWithdraw && !saving ? (
+          <Close sx={{ fontSize: 15, opacity: 0.6 }} />
+        ) : undefined
       }
       sx={{
         flexShrink: 0,
