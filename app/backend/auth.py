@@ -29,7 +29,7 @@ from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHas
 from fastapi import Depends, Request, HTTPException, status
 from sqlalchemy.orm import Session
 
-from models import User, UserRole, UserSession
+from models import Organisation, User, UserRole, UserSession
 
 logger = logging.getLogger(__name__)
 
@@ -197,12 +197,30 @@ def resolve_principal(request: Request, db: Session) -> Optional[Principal]:
     """Resolve the caller from the session cookie / Authorization header.
 
     Returns None for anonymous requests.
+
+    A session only counts on its own organisation's site: every org's
+    frontend calls the same API domain, so the session cookie is shared
+    between {org} subdomains. The frontend derives X-Org-Slug from its
+    hostname; a session whose user belongs to a different org is skipped
+    (not an error — a later candidate may match, and none matching just
+    means "not logged in here"). Without this, a heal admin opening the
+    cannwood site would silently act inside heal. Requests without the
+    header (curl, scripts) are unaffected.
     """
+    requested_slug = (request.headers.get("X-Org-Slug") or "").strip().lower()
     for token in get_token_candidates(request):
         principal = _resolve_user_session(db, token)
-        if principal:
-            return principal
+        if principal is None:
+            continue
+        if requested_slug and not _org_matches(db, principal, requested_slug):
+            continue
+        return principal
     return None
+
+
+def _org_matches(db: Session, principal: Principal, requested_slug: str) -> bool:
+    org = db.get(Organisation, principal.organisation_id)
+    return org is not None and org.slug.lower() == requested_slug
 
 
 def get_current_principal(request: Request) -> Optional[Principal]:

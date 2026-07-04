@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
 
-from models import Invite, Surveyor, SurveySurveyor, User, UserRole
+from models import Invite, Organisation, Surveyor, SurveySurveyor, User, UserRole
 
 
 def _token_from_url(url: str) -> str:
@@ -409,6 +409,41 @@ class TestUserManagement:
 # ============================================================================
 # Survey self-signup (Spaces)
 # ============================================================================
+
+class TestOrgDomainSessionGuard:
+    """Every org's frontend shares one API domain, so the session cookie
+    leaks across {org} subdomains. A session must only count on its own
+    org's site (X-Org-Slug, derived from the hostname)."""
+
+    def test_session_ignored_on_another_orgs_site(
+        self, client: TestClient, auth_headers: dict, db_session, test_org
+    ):
+        other = Organisation(name="Other Org", slug="other-org", is_active=True)
+        db_session.add(other)
+        db_session.commit()
+
+        headers = {**auth_headers, "X-Org-Slug": "other-org"}
+        me = client.get("/api/auth/me", headers=headers)
+        assert me.status_code == 200
+        assert me.json()["authenticated"] is False
+
+        # Data reads are anonymous there too — not silently cross-org.
+        assert client.get("/api/surveys", headers=headers).status_code == 401
+
+    def test_session_valid_on_own_orgs_site(
+        self, client: TestClient, auth_headers: dict, test_org
+    ):
+        headers = {**auth_headers, "X-Org-Slug": test_org.slug}
+        me = client.get("/api/auth/me", headers=headers)
+        assert me.json()["authenticated"] is True
+
+    def test_session_valid_without_header(
+        self, client: TestClient, auth_headers: dict, test_org
+    ):
+        """curl/scripts don't send X-Org-Slug; the session still works."""
+        me = client.get("/api/auth/me", headers=auth_headers)
+        assert me.json()["authenticated"] is True
+
 
 class TestSurveySignup:
     def test_viewer_signs_up_creates_linked_surveyor(
