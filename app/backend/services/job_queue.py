@@ -64,6 +64,7 @@ class JobDispatcher:
         self.job_timeout = job_timeout or settings.job_timeout_seconds
         self._tasks: set["asyncio.Task[None]"] = set()
         self._loop_task: Optional["asyncio.Task[None]"] = None
+        self._sweep_task: Optional["asyncio.Task[None]"] = None
         self._stopping = asyncio.Event()
         self._last_sweep: Optional[datetime] = None
         self._rotation = 0
@@ -85,6 +86,8 @@ class JobDispatcher:
         self._stopping.set()
         if self._loop_task:
             await self._loop_task
+        if self._sweep_task:
+            await asyncio.wait([self._sweep_task], timeout=SHUTDOWN_GRACE_SECONDS)
         if self._tasks:
             logger.info(f"Waiting up to {SHUTDOWN_GRACE_SECONDS}s for {len(self._tasks)} job(s)")
             await asyncio.wait(self._tasks, timeout=SHUTDOWN_GRACE_SECONDS)
@@ -103,9 +106,13 @@ class JobDispatcher:
 
     async def _tick(self) -> None:
         now = datetime.utcnow()
-        if self._last_sweep is None or (now - self._last_sweep).total_seconds() >= SWEEP_INTERVAL_SECONDS:
+        due_for_sweep = (
+            self._last_sweep is None
+            or (now - self._last_sweep).total_seconds() >= SWEEP_INTERVAL_SECONDS
+        )
+        if due_for_sweep and (self._sweep_task is None or self._sweep_task.done()):
             self._last_sweep = now
-            await asyncio.to_thread(self.sweep_stale)
+            self._sweep_task = asyncio.create_task(self._run_sweep())
 
         free = self.concurrency - len(self._tasks)
         if free <= 0:
@@ -124,6 +131,20 @@ class JobDispatcher:
                 self._tasks.add(task)
                 task.add_done_callback(self._tasks.discard)
                 free -= 1
+
+    async def _run_sweep(self) -> None:
+        """Run sweep_stale off the tick's critical path.
+
+        sweep_stale only needs to run once a minute, but claiming new jobs
+        needs to happen every poll_interval. If the two shared a single
+        await chain, a sweep query stuck waiting on a saturated connection
+        pool (up to the pool's checkout timeout) would stall job claiming
+        for the same duration.
+        """
+        try:
+            await asyncio.to_thread(self.sweep_stale)
+        except Exception:
+            logger.exception("Stale-job sweep failed")
 
     def claim(self, kind: JobKind, limit: int) -> list[int]:
         """Atomically claim up to `limit` pending rows and mark them processing."""
