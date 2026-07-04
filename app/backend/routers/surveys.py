@@ -525,17 +525,12 @@ async def update_survey(
     for field, value in update_data.items():
         setattr(db_survey, field, value)
 
-    # Saving a scheduled survey's details records it — even with zero sightings,
-    # which is a valid nil count. Assigning surveyors alone sends only
-    # surveyor_ids (no recording fields here) and must not flip the lifecycle;
-    # an explicit status in the payload (e.g. cancelled) always wins.
-    recording_fields = update_data.keys() - {'status'}
-    if (
-        db_survey.status == SurveyStatus.scheduled
-        and recording_fields
-        and 'status' not in update_data
-    ):
-        db_survey.status = SurveyStatus.completed
+    # Lifecycle transitions are always explicit: a survey moves from scheduled
+    # to completed (or cancelled) only when the payload carries `status` — the
+    # record flow sends status='completed'. Editing any other field, whatever
+    # the combination, never changes the lifecycle; the same field edit can
+    # mean "fix the plan" or "write up the survey", and only the caller knows
+    # which, so it must say so.
 
     # Update surveyor associations if provided
     if survey.surveyor_ids is not None:

@@ -181,8 +181,10 @@ export default function SpaceDetailPage() {
   }
 
   const speciesType = primarySpeciesType(surveyType);
-  const goToSurvey = (s: Survey, opts?: { edit?: boolean }) =>
-    navigate(`/surveys/${s.id}${opts?.edit ? '?edit=true' : ''}`, {
+  // `record` opens the survey form in record mode: saving marks the
+  // scheduled survey completed. A plain open never changes the lifecycle.
+  const goToSurvey = (s: Survey, opts?: { record?: boolean }) =>
+    navigate(`/surveys/${s.id}${opts?.record ? '?record=true' : ''}`, {
       state: { returnTo: { pathname: `/spaces/${typeId}`, label: surveyType.name } },
     });
 
@@ -237,7 +239,7 @@ export default function SpaceDetailPage() {
                 resolveSurveyors={resolveSurveyors}
                 recordedCount={recordedCount}
                 greenIds={greenIds}
-                onAddSurvey={(s) => goToSurvey(s, { edit: true })}
+                onAddSurvey={(s) => goToSurvey(s, { record: true })}
                 onSignupSaved={handleSignupSaved}
                 onOpenSurvey={goToSurvey}
                 onViewAll={() => navigate(`/spaces/${typeId}/all`)}

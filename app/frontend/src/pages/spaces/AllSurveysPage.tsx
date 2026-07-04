@@ -185,9 +185,10 @@ export default function AllSurveysPage() {
 
   // Open a survey, telling it to return here (the space's survey history)
   // rather than the main surveys list after editing/deleting. Record survey
-  // passes edit so the form opens ready to enter sightings.
-  const goToSurvey = (surveyId: number, opts?: { edit?: boolean }) =>
-    navigate(`/surveys/${surveyId}${opts?.edit ? '?edit=true' : ''}`, {
+  // passes record so the form opens in record mode — saving marks the
+  // scheduled survey completed; a plain open never changes the lifecycle.
+  const goToSurvey = (surveyId: number, opts?: { record?: boolean }) =>
+    navigate(`/surveys/${surveyId}${opts?.record ? '?record=true' : ''}`, {
       state: {
         returnTo: {
           pathname: `/spaces/${typeId}/all`,
@@ -295,7 +296,7 @@ export default function AllSurveysPage() {
                       startIcon={<Add sx={{ fontSize: 18 }} />}
                       onClick={(e) => {
                         e.stopPropagation();
-                        goToSurvey(survey.id, { edit: true });
+                        goToSurvey(survey.id, { record: true });
                       }}
                       sx={{
                         flexShrink: 0,
