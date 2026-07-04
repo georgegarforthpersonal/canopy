@@ -85,21 +85,30 @@ export default function SurveyWorklistRow({
           : {}),
       }}
     >
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: spaceColors.textPrimary }} noWrap>
-          {formatSurveyDate(survey)}
-        </Typography>
-        {survey.location_name && (
-          <Typography sx={{ fontSize: 13, color: spaceColors.textMuted, mt: 0.25 }} noWrap>
-            {survey.location_name}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1 }}>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: spaceColors.textPrimary }} noWrap>
+            {formatSurveyDate(survey)}
           </Typography>
-        )}
-        {needsSurvey && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-            <WarningAmberRounded sx={{ fontSize: 15, color: spaceColors.amberText }} />
-            <Typography sx={{ fontSize: 13.5, color: spaceColors.amberText }}>
-              Overdue — no survey recorded
+          {survey.location_name && (
+            <Typography sx={{ fontSize: 13, color: spaceColors.textMuted, mt: 0.25 }} noWrap>
+              {survey.location_name}
             </Typography>
+          )}
+          {needsSurvey && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+              <WarningAmberRounded sx={{ fontSize: 15, color: spaceColors.amberText }} />
+              <Typography sx={{ fontSize: 13.5, color: spaceColors.amberText }}>
+                Overdue — no survey recorded
+              </Typography>
+            </Box>
+          )}
+        </Box>
+        {/* On the stacked phone layout the avatars ride with the date (who's
+            going is information); the buttons line below is actions only. */}
+        {dueThisWeek && surveyors.length > 0 && (
+          <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexShrink: 0 }}>
+            <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} emptyLabel="" />
           </Box>
         )}
       </Box>
@@ -142,7 +151,9 @@ export default function SurveyWorklistRow({
           }}
         >
           {surveyors.length > 0 && (
-            <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} emptyLabel="" />
+            <Box sx={{ display: { xs: 'none', sm: 'flex' } }}>
+              <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} emptyLabel="" />
+            </Box>
           )}
           {assignButton}
           {recordButton}
