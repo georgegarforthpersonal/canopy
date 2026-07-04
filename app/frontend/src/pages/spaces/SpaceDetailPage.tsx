@@ -31,7 +31,6 @@ import SurveysPanel from '../../components/spaces/SurveysPanel';
 import FilesPanel from '../../components/spaces/FilesPanel';
 import LocationsDevicesPanel from '../../components/spaces/LocationsDevicesPanel';
 import SpeciesCountPanel from '../../components/spaces/SpeciesCountPanel';
-import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
 
 export default function SpaceDetailPage() {
   const { typeId } = useParams<{ typeId: string }>();
@@ -50,8 +49,6 @@ export default function SpaceDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);
 
-  // Surveyor assignment picker state
-  const [assignSurvey, setAssignSurvey] = useState<Survey | null>(null);
   const [greenIds, setGreenIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -189,7 +186,7 @@ export default function SpaceDetailPage() {
       state: { returnTo: { pathname: `/spaces/${typeId}`, label: surveyType.name } },
     });
 
-  const handleAssignSaved = (surveyId: number, surveyorIds: number[]) => {
+  const handleSignupSaved = (surveyId: number, surveyorIds: number[]) => {
     setSurveys((prev) =>
       prev.map((s) => (s.id === surveyId ? { ...s, surveyor_ids: surveyorIds } : s)),
     );
@@ -241,8 +238,7 @@ export default function SpaceDetailPage() {
                 recordedCount={recordedCount}
                 greenIds={greenIds}
                 onAddSurvey={(s) => goToSurvey(s, { edit: true })}
-                onAssign={setAssignSurvey}
-                onSignupSaved={handleAssignSaved}
+                onSignupSaved={handleSignupSaved}
                 onOpenSurvey={goToSurvey}
                 onViewAll={() => navigate(`/spaces/${typeId}/all`)}
               />
@@ -264,13 +260,6 @@ export default function SpaceDetailPage() {
         </Box>
       </Box>
 
-      <SurveyorPickerDialog
-        open={assignSurvey != null}
-        survey={assignSurvey}
-        surveyors={surveyors}
-        onClose={() => setAssignSurvey(null)}
-        onSaved={handleAssignSaved}
-      />
     </Box>
   );
 }

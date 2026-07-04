@@ -12,7 +12,7 @@
  * rows need no status line of their own.
  */
 import { Box, Button, Typography } from '@mui/material';
-import { Add, CheckCircleOutline, ChevronRight, PersonAddAlt1, WarningAmberRounded } from '@mui/icons-material';
+import { Add, CheckCircleOutline, ChevronRight, WarningAmberRounded } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
 import { usePermissions } from '../../context/AuthContext';
 import SelfSignupButton from './SelfSignupButton';
@@ -28,9 +28,7 @@ interface SurveyWorklistRowProps {
   greenIds?: Set<number>;
   /** Open the survey to record sightings. */
   onAddSurvey: (survey: Survey) => void;
-  /** Open the surveyor sign-up picker (editors/admins). */
-  onAssign: (survey: Survey) => void;
-  /** Called after a viewer's one-click sign-up/withdraw with the new ids. */
+  /** Called after a one-click sign-up/withdraw with the new surveyor ids. */
   onSignupSaved: (surveyId: number, surveyorIds: number[]) => void;
   /** Open a recorded survey read-only (recorded rows only). */
   onOpen?: (survey: Survey) => void;
@@ -47,25 +45,12 @@ const recordButtonSx = {
   py: 0.6,
 };
 
-const assignButtonSx = {
-  flexShrink: 0,
-  color: spaceColors.brand,
-  borderColor: spaceColors.brand,
-  '&:hover': { borderColor: spaceColors.brandDark, bgcolor: 'rgba(61,139,86,0.04)' },
-  borderRadius: '7px',
-  textTransform: 'none',
-  fontSize: 13,
-  px: 1.5,
-  py: 0.5,
-};
-
 export default function SurveyWorklistRow({
   survey,
   state,
   surveyors,
   greenIds,
   onAddSurvey,
-  onAssign,
   onSignupSaved,
   onOpen,
 }: SurveyWorklistRowProps) {
@@ -73,8 +58,8 @@ export default function SurveyWorklistRow({
   const dueThisWeek = state === 'due-this-week';
   const recorded = state === 'recorded';
   // Recording a survey needs editor access; the button is hidden below that.
-  // Sign up stays for everyone — it is the viewer role's one action: editors
-  // open the full picker, viewers get the one-click self sign-up toggle.
+  // Sign up is the same one-click self toggle for every role — putting other
+  // people on a survey is done on the survey itself, not here.
   const { canEditSurveys } = usePermissions();
 
   const recordButton = canEditSurveys ? (
@@ -88,16 +73,7 @@ export default function SurveyWorklistRow({
     </Button>
   ) : null;
 
-  const assignButton = canEditSurveys ? (
-    <Button
-      variant="outlined"
-      startIcon={<PersonAddAlt1 sx={{ fontSize: 17 }} />}
-      onClick={() => onAssign(survey)}
-      sx={assignButtonSx}
-    >
-      Sign up
-    </Button>
-  ) : (
+  const assignButton = (
     <SelfSignupButton survey={survey} assigned={surveyors} onSaved={onSignupSaved} />
   );
 

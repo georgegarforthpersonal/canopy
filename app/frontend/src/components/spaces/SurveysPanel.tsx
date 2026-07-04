@@ -25,8 +25,7 @@ interface SurveysPanelProps {
   recordedCount: number;
   greenIds?: Set<number>;
   onAddSurvey: (survey: Survey) => void;
-  onAssign: (survey: Survey) => void;
-  /** Called after a viewer's one-click sign-up/withdraw with the new ids. */
+  /** Called after a one-click sign-up/withdraw with the new surveyor ids. */
   onSignupSaved: (surveyId: number, surveyorIds: number[]) => void;
   /** Open a recorded survey read-only. */
   onOpenSurvey: (survey: Survey) => void;
@@ -63,7 +62,6 @@ export default function SurveysPanel({
   recordedCount,
   greenIds,
   onAddSurvey,
-  onAssign,
   onSignupSaved,
   onOpenSurvey,
   onViewAll,
@@ -98,7 +96,6 @@ export default function SurveysPanel({
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}
-          onAssign={onAssign}
           onSignupSaved={onSignupSaved}
         />
       ))}
@@ -110,7 +107,6 @@ export default function SurveysPanel({
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}
-          onAssign={onAssign}
           onSignupSaved={onSignupSaved}
           onOpen={onOpenSurvey}
         />
@@ -134,7 +130,6 @@ export default function SurveysPanel({
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}
-          onAssign={onAssign}
           onSignupSaved={onSignupSaved}
         />
       ))}
@@ -154,7 +149,6 @@ export default function SurveysPanel({
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}
-          onAssign={onAssign}
           onSignupSaved={onSignupSaved}
         />
       ))}

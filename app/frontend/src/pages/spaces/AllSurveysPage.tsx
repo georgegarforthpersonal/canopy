@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Paper, Typography, Button, CircularProgress } from '@mui/material';
-import { Add, PersonAddAlt1 } from '@mui/icons-material';
+import { Add } from '@mui/icons-material';
 import {
   ApiError,
   surveyTypesAPI,
@@ -27,7 +27,6 @@ import { useToast } from '../../context/ToastContext';
 import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
 import SelfSignupButton from '../../components/spaces/SelfSignupButton';
 import SurveyorAvatars from '../../components/spaces/SurveyorAvatars';
-import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
 
 const PAGE_SIZE = 25;
 
@@ -71,7 +70,6 @@ export default function AllSurveysPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);
-  const [assignSurvey, setAssignSurvey] = useState<Survey | null>(null);
   const [greenIds, setGreenIds] = useState<Set<number>>(new Set());
   const toast = useToast();
   const { canEditSurveys } = usePermissions();
@@ -165,7 +163,7 @@ export default function AllSurveysPage() {
     }
   };
 
-  const handleAssignSaved = (surveyId: number, surveyorIds: number[]) => {
+  const handleSignupSaved = (surveyId: number, surveyorIds: number[]) => {
     const previous = surveys.find((s) => s.id === surveyId)?.surveyor_ids ?? [];
     setSurveys((prev) =>
       prev.map((s) => (s.id === surveyId ? { ...s, surveyor_ids: surveyorIds } : s)),
@@ -282,35 +280,12 @@ export default function AllSurveysPage() {
                     </Box>
                   )}
 
-                  {/* Sign-up is open for future weeks and the current week alike:
-                      editors open the full picker, viewers get the one-click toggle. */}
+                  {/* Sign-up is open for future weeks and the current week alike —
+                      the same one-click self toggle for every role. */}
                   {(state === 'upcoming' || state === 'due-this-week') && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
                       <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
-                      {canEditSurveys ? (
-                        <Button
-                          variant="outlined"
-                          startIcon={<PersonAddAlt1 sx={{ fontSize: 17 }} />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAssignSurvey(survey);
-                          }}
-                          sx={{
-                            color: spaceColors.brand,
-                            borderColor: spaceColors.brand,
-                            '&:hover': { borderColor: spaceColors.brandDark, bgcolor: 'rgba(61,139,86,0.04)' },
-                            borderRadius: '7px',
-                            textTransform: 'none',
-                            fontSize: 13,
-                            px: 1.5,
-                            py: 0.5,
-                          }}
-                        >
-                          Sign up
-                        </Button>
-                      ) : (
-                        <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleAssignSaved} />
-                      )}
+                      <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleSignupSaved} />
                     </Box>
                   )}
 
@@ -356,13 +331,6 @@ export default function AllSurveysPage() {
         </Paper>
       </Box>
 
-      <SurveyorPickerDialog
-        open={assignSurvey != null}
-        survey={assignSurvey}
-        surveyors={surveyors}
-        onClose={() => setAssignSurvey(null)}
-        onSaved={handleAssignSaved}
-      />
     </Box>
   );
 }
