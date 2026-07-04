@@ -269,8 +269,13 @@ def get_engine() -> Engine:
             database_url,
             pool_pre_ping=True,  # Verify connections before using
             pool_recycle=300,  # Recycle connections older than 5 min (Neon pooler reaps idle sockets)
-            pool_size=5,
-            max_overflow=10,
+            # The in-process job dispatcher (services/job_queue.py) shares this pool with
+            # request handling and can run up to 16 worker threads concurrently (modal
+            # inference mode), each briefly needing a connection. The previous 5+10=15
+            # ceiling left no headroom for concurrent HTTP requests, causing QueuePool
+            # timeouts under bursty job + request load.
+            pool_size=10,
+            max_overflow=15,
             echo=False  # Set to True for SQL query logging
         )
         print(f"✅ SQLAlchemy engine created: {database_url.split('@')[1] if '@' in database_url else database_url}")
