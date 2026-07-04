@@ -15,6 +15,7 @@ import { Box, Button, Typography } from '@mui/material';
 import { Add, CheckCircleOutline, ChevronRight, PersonAddAlt1, WarningAmberRounded } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
 import { usePermissions } from '../../context/AuthContext';
+import SelfSignupButton from './SelfSignupButton';
 import SurveyorAvatars from './SurveyorAvatars';
 import { spaceColors } from '../../pages/spaces/spacesTokens';
 import { formatSurveyDate } from '../../pages/spaces/surveyState';
@@ -27,8 +28,10 @@ interface SurveyWorklistRowProps {
   greenIds?: Set<number>;
   /** Open the survey to record sightings. */
   onAddSurvey: (survey: Survey) => void;
-  /** Open the surveyor sign-up picker. */
+  /** Open the surveyor sign-up picker (editors/admins). */
   onAssign: (survey: Survey) => void;
+  /** Called after a viewer's one-click sign-up/withdraw with the new ids. */
+  onSignupSaved: (surveyId: number, surveyorIds: number[]) => void;
   /** Open a recorded survey read-only (recorded rows only). */
   onOpen?: (survey: Survey) => void;
 }
@@ -63,13 +66,15 @@ export default function SurveyWorklistRow({
   greenIds,
   onAddSurvey,
   onAssign,
+  onSignupSaved,
   onOpen,
 }: SurveyWorklistRowProps) {
   const needsSurvey = state === 'needs-survey';
   const dueThisWeek = state === 'due-this-week';
   const recorded = state === 'recorded';
   // Recording a survey needs editor access; the button is hidden below that.
-  // Sign up stays for everyone — it is the viewer role's one action.
+  // Sign up stays for everyone — it is the viewer role's one action: editors
+  // open the full picker, viewers get the one-click self sign-up toggle.
   const { canEditSurveys } = usePermissions();
 
   const recordButton = canEditSurveys ? (
@@ -83,7 +88,7 @@ export default function SurveyWorklistRow({
     </Button>
   ) : null;
 
-  const assignButton = (
+  const assignButton = canEditSurveys ? (
     <Button
       variant="outlined"
       startIcon={<PersonAddAlt1 sx={{ fontSize: 17 }} />}
@@ -92,6 +97,8 @@ export default function SurveyWorklistRow({
     >
       Sign up
     </Button>
+  ) : (
+    <SelfSignupButton survey={survey} assigned={surveyors} onSaved={onSignupSaved} />
   );
 
   return (

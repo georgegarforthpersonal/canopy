@@ -26,6 +26,8 @@ interface SurveysPanelProps {
   greenIds?: Set<number>;
   onAddSurvey: (survey: Survey) => void;
   onAssign: (survey: Survey) => void;
+  /** Called after a viewer's one-click sign-up/withdraw with the new ids. */
+  onSignupSaved: (surveyId: number, surveyorIds: number[]) => void;
   /** Open a recorded survey read-only. */
   onOpenSurvey: (survey: Survey) => void;
   onViewAll: () => void;
@@ -62,6 +64,7 @@ export default function SurveysPanel({
   greenIds,
   onAddSurvey,
   onAssign,
+  onSignupSaved,
   onOpenSurvey,
   onViewAll,
 }: SurveysPanelProps) {
@@ -80,7 +83,7 @@ export default function SurveysPanel({
       {empty && (
         <Box sx={{ px: 2.25, py: 3 }}>
           <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
-            No surveys need recording and none are scheduled. Use “Add survey” to schedule one.
+            No surveys need recording and none are scheduled.
           </Typography>
         </Box>
       )}
@@ -96,6 +99,7 @@ export default function SurveysPanel({
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}
           onAssign={onAssign}
+          onSignupSaved={onSignupSaved}
         />
       ))}
       {recordedThisWeek.map((s) => (
@@ -107,6 +111,7 @@ export default function SurveysPanel({
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}
           onAssign={onAssign}
+          onSignupSaved={onSignupSaved}
           onOpen={onOpenSurvey}
         />
       ))}
@@ -130,6 +135,7 @@ export default function SurveysPanel({
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}
           onAssign={onAssign}
+          onSignupSaved={onSignupSaved}
         />
       ))}
 
@@ -149,6 +155,7 @@ export default function SurveysPanel({
           greenIds={greenIds}
           onAddSurvey={onAddSurvey}
           onAssign={onAssign}
+          onSignupSaved={onSignupSaved}
         />
       ))}
 

@@ -203,6 +203,11 @@ export default function SpaceDetailPage() {
         return next;
       });
     }
+    // A first-time self sign-up can create a brand-new surveyor; refresh the
+    // lookup so their name resolves for avatars and the signed-up state.
+    if (surveyorIds.some((id) => !surveyors.some((s) => s.id === id))) {
+      surveyorsAPI.getAll().then(setSurveyors).catch(() => {});
+    }
   };
 
   return (
@@ -237,6 +242,7 @@ export default function SpaceDetailPage() {
                 greenIds={greenIds}
                 onAddSurvey={(s) => goToSurvey(s, { edit: true })}
                 onAssign={setAssignSurvey}
+                onSignupSaved={handleAssignSaved}
                 onOpenSurvey={goToSurvey}
                 onViewAll={() => navigate(`/spaces/${typeId}/all`)}
               />

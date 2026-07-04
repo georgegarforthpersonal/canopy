@@ -22,8 +22,10 @@ import { primarySpeciesType, resolveSpaceTypeId } from './spaceMeta';
 import { deriveSurveyState, formatSurveyDate, type SurveyState } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSurveyorLookup } from '../../hooks';
+import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
+import SelfSignupButton from '../../components/spaces/SelfSignupButton';
 import SurveyorAvatars from '../../components/spaces/SurveyorAvatars';
 import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
 
@@ -72,6 +74,7 @@ export default function AllSurveysPage() {
   const [assignSurvey, setAssignSurvey] = useState<Survey | null>(null);
   const [greenIds, setGreenIds] = useState<Set<number>>(new Set());
   const toast = useToast();
+  const { canEditSurveys } = usePermissions();
 
   useEffect(() => {
     if (!typeId) {
@@ -175,6 +178,11 @@ export default function AllSurveysPage() {
         return next;
       });
     }
+    // A first-time self sign-up can create a brand-new surveyor; refresh the
+    // lookup so their name resolves for avatars and the signed-up state.
+    if (surveyorIds.some((id) => !surveyors.some((s) => s.id === id))) {
+      surveyorsAPI.getAll().then(setSurveyors).catch(() => {});
+    }
   };
 
   // Open a survey, telling it to return here (the space's survey history)
@@ -274,34 +282,39 @@ export default function AllSurveysPage() {
                     </Box>
                   )}
 
-                  {/* Sign-up is open for future weeks and the current week alike. */}
+                  {/* Sign-up is open for future weeks and the current week alike:
+                      editors open the full picker, viewers get the one-click toggle. */}
                   {(state === 'upcoming' || state === 'due-this-week') && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
                       <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
-                      <Button
-                        variant="outlined"
-                        startIcon={<PersonAddAlt1 sx={{ fontSize: 17 }} />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setAssignSurvey(survey);
-                        }}
-                        sx={{
-                          color: spaceColors.brand,
-                          borderColor: spaceColors.brand,
-                          '&:hover': { borderColor: spaceColors.brandDark, bgcolor: 'rgba(61,139,86,0.04)' },
-                          borderRadius: '7px',
-                          textTransform: 'none',
-                          fontSize: 13,
-                          px: 1.5,
-                          py: 0.5,
-                        }}
-                      >
-                        Sign up
-                      </Button>
+                      {canEditSurveys ? (
+                        <Button
+                          variant="outlined"
+                          startIcon={<PersonAddAlt1 sx={{ fontSize: 17 }} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAssignSurvey(survey);
+                          }}
+                          sx={{
+                            color: spaceColors.brand,
+                            borderColor: spaceColors.brand,
+                            '&:hover': { borderColor: spaceColors.brandDark, bgcolor: 'rgba(61,139,86,0.04)' },
+                            borderRadius: '7px',
+                            textTransform: 'none',
+                            fontSize: 13,
+                            px: 1.5,
+                            py: 0.5,
+                          }}
+                        >
+                          Sign up
+                        </Button>
+                      ) : (
+                        <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleAssignSaved} />
+                      )}
                     </Box>
                   )}
 
-                  {actionable && (
+                  {actionable && canEditSurveys && (
                     <Button
                       variant="contained"
                       startIcon={<Add sx={{ fontSize: 18 }} />}

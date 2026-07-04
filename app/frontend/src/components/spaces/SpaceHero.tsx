@@ -1,6 +1,6 @@
 /**
  * Neutral hero band for a space: tinted species icon tile + name + description.
- * No action button (Add survey lives on the grid header and survey rows) and no
+ * No action button (recording and sign-up live on the survey rows) and no
  * season/coordinator meta (not modelled in the backend for the beta).
  */
 import { Box, Paper, Typography } from '@mui/material';
