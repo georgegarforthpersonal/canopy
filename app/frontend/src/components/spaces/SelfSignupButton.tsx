@@ -29,27 +29,35 @@ const withdrawRed = '#c62828';
 export default function SelfSignupButton({ survey, assigned, onSaved }: SelfSignupButtonProps) {
   const toast = useToast();
   const { user } = usePermissions();
-  const [saving, setSaving] = useState(false);
+  const [inFlight, setInFlight] = useState<'signup' | 'withdraw' | null>(null);
   const [hover, setHover] = useState(false);
 
   const isSignedUp = assigned.some((s) => s.user_id != null && s.user_id === user?.id);
-  const showWithdraw = isSignedUp && hover && !saving;
+  const saving = inFlight !== null;
+  // The red withdraw treatment shows while hovering the signed-up state and
+  // stays through the withdraw request itself. Hover is cleared after every
+  // completed action, so a fresh sign-up reads "✓ Signed up ×" even though
+  // the pointer is still on the button — Withdraw only appears once the
+  // pointer leaves and returns.
+  const showWithdraw = inFlight === 'withdraw' || (isSignedUp && hover && !saving);
 
   const handleClick = async (e: React.MouseEvent) => {
     // Some rows navigate on click — this button must never trigger that.
     e.stopPropagation();
     if (saving) return;
-    setSaving(true);
+    const withdrawing = isSignedUp;
+    setInFlight(withdrawing ? 'withdraw' : 'signup');
     try {
-      const result = isSignedUp
+      const result = withdrawing
         ? await surveysAPI.withdraw(survey.id)
         : await surveysAPI.signUp(survey.id);
       onSaved(survey.id, result.surveyor_ids);
-      toast.success(isSignedUp ? 'You’ve been taken off this survey' : 'You’re signed up');
+      toast.success(withdrawing ? 'You’ve been taken off this survey' : 'You’re signed up');
     } catch {
-      toast.error(isSignedUp ? 'Failed to withdraw' : 'Failed to sign up');
+      toast.error(withdrawing ? 'Failed to withdraw' : 'Failed to sign up');
     } finally {
-      setSaving(false);
+      setInFlight(null);
+      setHover(false);
     }
   };
 
@@ -84,25 +92,40 @@ export default function SelfSignupButton({ survey, assigned, onSaved }: SelfSign
         px: 1.5,
         py: 0.5,
         minWidth: 112,
-        ...(isSignedUp
+        // Colour is driven by the same state as the label (not CSS :hover),
+        // so text and treatment can never disagree.
+        ...(showWithdraw
           ? {
-              color: spaceColors.brandDark,
-              borderColor: spaceColors.brand,
-              bgcolor: 'rgba(61,139,86,0.06)',
-              '&:hover': {
-                color: withdrawRed,
-                borderColor: withdrawRed,
-                bgcolor: 'rgba(198,40,40,0.04)',
-              },
+              color: withdrawRed,
+              borderColor: withdrawRed,
+              bgcolor: 'rgba(198,40,40,0.04)',
+              '&:hover': { borderColor: withdrawRed, bgcolor: 'rgba(198,40,40,0.08)' },
+              '&.Mui-disabled': { color: withdrawRed, borderColor: 'rgba(198,40,40,0.4)' },
             }
-          : {
-              color: spaceColors.brand,
-              borderColor: spaceColors.brand,
-              '&:hover': { borderColor: spaceColors.brandDark, bgcolor: 'rgba(61,139,86,0.04)' },
-            }),
+          : isSignedUp
+            ? {
+                color: spaceColors.brandDark,
+                borderColor: spaceColors.brand,
+                bgcolor: 'rgba(61,139,86,0.06)',
+                '&:hover': { borderColor: spaceColors.brandDark, bgcolor: 'rgba(61,139,86,0.06)' },
+              }
+            : {
+                color: spaceColors.brand,
+                borderColor: spaceColors.brand,
+                '&:hover': { borderColor: spaceColors.brandDark, bgcolor: 'rgba(61,139,86,0.04)' },
+                '&.Mui-disabled': { color: spaceColors.brand, borderColor: spaceColors.brand },
+              }),
       }}
     >
-      {showWithdraw ? 'Withdraw' : isSignedUp ? 'Signed up' : 'Sign up'}
+      {inFlight === 'signup'
+        ? 'Signing up…'
+        : inFlight === 'withdraw'
+          ? 'Withdrawing…'
+          : showWithdraw
+            ? 'Withdraw'
+            : isSignedUp
+              ? 'Signed up'
+              : 'Sign up'}
     </Button>
   );
 }
