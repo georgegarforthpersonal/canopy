@@ -607,7 +607,7 @@ def _get_or_create_own_surveyor(db: Session, principal: Principal, org_id: int) 
     db.add(surveyor)
     db.commit()
     db.refresh(surveyor)
-    return surveyor  # type: ignore[no-any-return]
+    return surveyor
 
 
 @router.post("/{survey_id}/signup")
