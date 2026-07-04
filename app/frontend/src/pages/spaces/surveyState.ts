@@ -38,11 +38,6 @@ export function deriveSurveyState(survey: Survey, today: string = todayIso()): S
   return survey.date > today ? 'upcoming' : 'needs-survey';
 }
 
-/** Compact "next session" label, e.g. "Sat 27 Jun". */
-export function formatSessionDate(isoDate: string): string {
-  return dayjs(isoDate).format('ddd D MMM');
-}
-
 /** Whether a survey is scheduled for a whole week (weekly cadence) rather than a day. */
 export function hasWindow(survey: Survey): boolean {
   return Boolean(survey.scheduled_window_start && survey.scheduled_window_end);

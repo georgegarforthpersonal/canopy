@@ -98,8 +98,9 @@ const ORG_SLUG = getOrgSlug();
 // Export org slug for use in theming and conditional UI
 export { ORG_SLUG, getOrgSlug };
 
-// Token storage key
-const AUTH_TOKEN_KEY = 'admin_session_token';
+// Token storage key (localStorage Bearer fallback for browsers that block
+// the cross-site session cookie)
+const AUTH_TOKEN_KEY = 'canopy_session_token';
 
 /**
  * Window event dispatched when an authenticated request fails with 401,
@@ -1439,11 +1440,6 @@ export interface Organisation {
   slug: string;
 }
 
-export interface AuthStatus {
-  authenticated: boolean;
-  organisation: Organisation;
-}
-
 // ============================================================================
 // API Methods - Auth
 // ============================================================================
@@ -1569,7 +1565,7 @@ export interface MeResponse {
   authenticated: boolean;
   user: CurrentUser | null;
   role: UserRole | null;
-  organisation: { id: number; name: string; slug: string };
+  organisation: Organisation;
 }
 
 export interface OrgUser extends CurrentUser {
@@ -1623,19 +1619,8 @@ export const authAPI = {
     });
   },
 
-  status: (): Promise<AuthStatus> => {
-    return fetchAPI('/auth/status');
-  },
-
   me: (): Promise<MeResponse> => {
     return fetchAPI('/auth/me');
-  },
-
-  updateProfile: (updates: { first_name?: string; last_name?: string }): Promise<CurrentUser> => {
-    return fetchAPI('/auth/me', {
-      method: 'PATCH',
-      body: JSON.stringify(updates),
-    });
   },
 
   changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {

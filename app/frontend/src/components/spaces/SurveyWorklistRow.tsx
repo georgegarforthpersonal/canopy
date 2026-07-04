@@ -17,7 +17,7 @@ import type { Survey, Surveyor } from '../../services/api';
 import { usePermissions } from '../../context/AuthContext';
 import SelfSignupButton from './SelfSignupButton';
 import SurveyorAvatars from './SurveyorAvatars';
-import { spaceColors } from '../../pages/spaces/spacesTokens';
+import { recordButtonSx, spaceColors } from '../../pages/spaces/spacesTokens';
 import { formatSurveyDate } from '../../pages/spaces/surveyState';
 
 interface SurveyWorklistRowProps {
@@ -33,17 +33,6 @@ interface SurveyWorklistRowProps {
   /** Open a recorded survey read-only (recorded rows only). */
   onOpen?: (survey: Survey) => void;
 }
-
-const recordButtonSx = {
-  flexShrink: 0,
-  bgcolor: spaceColors.brand,
-  '&:hover': { bgcolor: spaceColors.brandHover },
-  borderRadius: '7px',
-  textTransform: 'none',
-  fontSize: 13,
-  px: 1.5,
-  py: 0.6,
-};
 
 export default function SurveyWorklistRow({
   survey,

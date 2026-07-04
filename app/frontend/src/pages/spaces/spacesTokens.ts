@@ -9,7 +9,6 @@
 
 export const spaceColors = {
   brand: '#3D8B56',
-  brandLight: '#5AA573',
   brandDark: '#2E6B42',
   brandHover: '#4A9B62',
 
@@ -25,8 +24,6 @@ export const spaceColors = {
 
   // "Needs a survey" amber treatment
   amberRowBg: '#FFFCF3',
-  amberBlockBg: '#FCF6E4',
-  amberBlockBorder: '#EAD9A8',
   amberText: '#B0860A',
   amberMonth: '#C99A00',
 } as const;
@@ -40,6 +37,19 @@ export const spaceCardSx = {
 } as const;
 
 export const SPACE_MAX_WIDTH = 1120;
+
+// The contained "Record survey" button, shared by the worklist row and the
+// All surveys page.
+export const recordButtonSx = {
+  flexShrink: 0,
+  bgcolor: spaceColors.brand,
+  '&:hover': { bgcolor: spaceColors.brandHover },
+  borderRadius: '7px',
+  textTransform: 'none',
+  fontSize: 13,
+  px: 1.5,
+  py: 0.6,
+} as const;
 
 // Surveyor avatar palette (cycled). A freshly-assigned surveyor renders green.
 const SURVEYOR_AVATAR_COLORS = ['#6b7280', '#7c6f64', '#5f6b7a', '#7a6678'] as const;

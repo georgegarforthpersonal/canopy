@@ -1,13 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { authAPI, SESSION_EXPIRED_EVENT } from '../services/api';
-import type { CurrentUser, MeResponse, UserRole } from '../services/api';
-
-interface Organisation {
-  id: number;
-  name: string;
-  slug: string;
-}
+import type { CurrentUser, MeResponse, Organisation, UserRole } from '../services/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;

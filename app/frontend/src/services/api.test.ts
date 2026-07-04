@@ -91,7 +91,7 @@ describe('getOrgSlug', () => {
 });
 
 describe('session expiry handling', () => {
-  const TOKEN_KEY = 'admin_session_token';
+  const TOKEN_KEY = 'canopy_session_token';
   const sessionExpiredEvents: Event[] = [];
   const recordEvent = (e: Event) => sessionExpiredEvents.push(e);
 
@@ -127,7 +127,7 @@ describe('session expiry handling', () => {
     mockFetchError(401, 'Invalid or expired session');
     const { authAPI } = await import('./api');
 
-    await expect(authAPI.status()).rejects.toThrowError('Invalid or expired session');
+    await expect(authAPI.me()).rejects.toThrowError('Invalid or expired session');
 
     expect(sessionExpiredEvents).toHaveLength(1);
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull();
@@ -147,7 +147,7 @@ describe('session expiry handling', () => {
     mockFetchError(500, 'Internal server error');
     const { authAPI } = await import('./api');
 
-    await expect(authAPI.status()).rejects.toThrowError('Internal server error');
+    await expect(authAPI.me()).rejects.toThrowError('Internal server error');
 
     expect(sessionExpiredEvents).toHaveLength(0);
     expect(localStorage.getItem(TOKEN_KEY)).toBe('stale-token');

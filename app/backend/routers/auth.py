@@ -5,8 +5,6 @@ Endpoints:
   POST   /api/auth/login                  - Log in with email + password
   POST   /api/auth/logout                 - End the session
   GET    /api/auth/me                     - Current user, role and organisation
-  GET    /api/auth/status                 - Lightweight auth check
-  PATCH  /api/auth/me                     - Update own name
   POST   /api/auth/change-password        - Change own password
   POST   /api/auth/request-password-reset - Email a reset link (always 200)
   POST   /api/auth/reset-password         - Set a new password from a reset token
@@ -77,11 +75,6 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class ProfileUpdate(BaseModel):
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-
-
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
@@ -127,6 +120,24 @@ def _set_session_cookie(response: Response, name: str, value: str, max_age: int)
         secure=settings.is_production,
         path="/",
     )
+
+
+def _clear_session_cookie(response: Response, name: str) -> None:
+    # Browsers only honour the clearing Set-Cookie if it carries the same
+    # SameSite/Secure attributes the cookie was set with.
+    response.delete_cookie(
+        key=name,
+        httponly=True,
+        samesite="none" if settings.is_production else "lax",
+        secure=settings.is_production,
+        path="/",
+    )
+
+
+# Hashed once at import time; verified against when a login names an unknown
+# or inactive account so the request costs the same as a real password check
+# (an early return would let response timing reveal which emails exist).
+_TIMING_EQUALISER_HASH = hash_password("timing-equaliser-not-a-real-password")
 
 
 def _user_payload(user: User) -> dict[str, Any]:
@@ -187,8 +198,12 @@ async def login(
         func.lower(User.email) == email,
     ).first()
 
-    # Same error for wrong email and wrong password: no account enumeration
-    if not user or not user.is_active or not verify_password(user.password_hash, body.password):
+    # Same error — and same argon2 cost — for wrong email and wrong password,
+    # so neither the message nor the response time enumerates accounts.
+    if not user or not user.is_active:
+        verify_password(_TIMING_EQUALISER_HASH, body.password)
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not verify_password(user.password_hash, body.password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     if password_needs_rehash(user.password_hash):
@@ -222,7 +237,7 @@ async def logout(
             UserSession.token_hash == hash_token(token)
         ).delete()
     db.commit()
-    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    _clear_session_cookie(response, SESSION_COOKIE_NAME)
     return {"authenticated": False}
 
 
@@ -242,43 +257,9 @@ async def me(
     }
 
 
-@router.get("/status")
-async def auth_status(
-    org: Organisation = Depends(get_current_organisation),
-    principal: Optional[Principal] = Depends(get_current_principal),
-) -> dict[str, Any]:
-    """Lightweight auth check (predates /me; kept for older clients)."""
-    return {
-        "authenticated": principal is not None,
-        "organisation": _org_payload(org),
-    }
-
-
 # ============================================================================
 # Own profile
 # ============================================================================
-
-@router.patch("/me")
-async def update_profile(
-    body: ProfileUpdate,
-    db: Session = Depends(get_db),
-    principal: Principal = Depends(require_user),
-) -> dict[str, Any]:
-    """Update own name (any role)."""
-    user = db.get(User, principal.user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    if body.first_name is not None:
-        if not body.first_name.strip():
-            raise HTTPException(status_code=422, detail="First name cannot be empty")
-        user.first_name = body.first_name.strip()
-    if body.last_name is not None:
-        user.last_name = body.last_name.strip() or None
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return _user_payload(user)
-
 
 @router.post("/change-password")
 async def change_password(

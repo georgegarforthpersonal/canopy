@@ -24,7 +24,7 @@ import {
 import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
 import { primarySpeciesType, resolveSpaceTypeId } from './spaceMeta';
 import { recordedThisWeek } from './surveyState';
-import { useSurveyorLookup } from '../../hooks';
+import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
 import SpaceHero from '../../components/spaces/SpaceHero';
 import SurveysPanel from '../../components/spaces/SurveysPanel';
@@ -151,6 +151,7 @@ export default function SpaceDetailPage() {
   }, [typeId]);
 
   const resolveSurveyors = useSurveyorLookup(surveyors);
+  const handleSignupSaved = useSignupSaved(surveys, setSurveys, setGreenIds, surveyors, setSurveyors);
 
   if (loading) {
     return (
@@ -187,27 +188,6 @@ export default function SpaceDetailPage() {
     navigate(`/surveys/${s.id}${opts?.record ? '?record=true' : ''}`, {
       state: { returnTo: { pathname: `/spaces/${typeId}`, label: surveyType.name } },
     });
-
-  const handleSignupSaved = (surveyId: number, surveyorIds: number[]) => {
-    setSurveys((prev) =>
-      prev.map((s) => (s.id === surveyId ? { ...s, surveyor_ids: surveyorIds } : s)),
-    );
-    // Highlight any surveyor newly added to this survey in green for the session.
-    const previous = surveys.find((s) => s.id === surveyId)?.surveyor_ids ?? [];
-    const added = surveyorIds.filter((id) => !previous.includes(id));
-    if (added.length > 0) {
-      setGreenIds((prev) => {
-        const next = new Set(prev);
-        added.forEach((id) => next.add(id));
-        return next;
-      });
-    }
-    // A first-time self sign-up can create a brand-new surveyor; refresh the
-    // lookup so their name resolves for avatars and the signed-up state.
-    if (surveyorIds.some((id) => !surveyors.some((s) => s.id === id))) {
-      surveyorsAPI.getAll().then(setSurveyors).catch(() => {});
-    }
-  };
 
   return (
     <Box sx={{ bgcolor: spaceColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>

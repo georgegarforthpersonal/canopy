@@ -22,7 +22,8 @@ def _require_cannwood(org: Organisation = Depends(get_current_organisation)) -> 
         raise HTTPException(status_code=404, detail="Not found")
 
 
-# Gated to the Cannwood org (no admin auth — the tracking dashboard is public).
+# Gated to the Cannwood org; like every data router, reads also require a
+# logged-in account (router-level require_user applied in main.py).
 router = APIRouter(dependencies=[Depends(_require_cannwood)])
 
 

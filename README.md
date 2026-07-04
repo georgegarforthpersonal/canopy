@@ -13,6 +13,20 @@ make down         # Stop all services
 - Frontend: http://localhost:5173
 - API: http://localhost:8000/api/docs
 
+## Accounts
+
+Everything requires a login (viewer / editor / admin roles). A fresh
+database has no users, so bootstrap the first admin, then invite everyone
+else from **Admin → Users** in the app:
+
+```bash
+./run dev create_admin.py --org heal --email you@example.org --first-name You
+```
+
+(Use `./run staging …` / `./run prod …` for the hosted environments.)
+Without `RESEND_API_KEY` set, invite emails aren't sent — the invite link
+is shown in the UI to copy instead.
+
 ## Commands
 
 ```bash

@@ -35,7 +35,6 @@ from models import (
     SightingImage, SightingAudioClip,
     AudioRecording, AudioDetection,
     CameraTrapImage,
-    Device,
     SurveyType,
     Organisation
 )

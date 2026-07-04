@@ -211,9 +211,9 @@ def setup_organisation(config_path: str, dry_run: bool = True, update: bool = Fa
         logger.info("Organisation setup complete!")
         logger.info("")
         logger.info("Next steps:")
-        logger.info(f"  1. Deploy frontend service with subdomain {org_config['slug']}data.up.railway.app")
-        logger.info(f"  2. Test locally: curl -H 'X-Org-Slug: {org_config['slug']}' http://localhost:8000/api/auth/status")
-        logger.info(f"  3. Create survey types from the frontend")
+        logger.info(f"  1. Point the {org_config['slug']}.canopydata.app domain at the frontend service")
+        logger.info(f"  2. Bootstrap the first admin: python scripts/create_admin.py --org {org_config['slug']} --email ...")
+        logger.info(f"  3. Log in and create survey types from the frontend")
 
 
 def main():

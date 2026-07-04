@@ -95,7 +95,7 @@ def _build_image_response(image: CameraTrapImage, detection_count: int) -> dict:
     }
 
 
-@filter_router.post("/filter-images")
+@filter_router.post("/filter-images", dependencies=[Depends(require_editor)])
 async def filter_images_for_false_positives(
     files: List[UploadFile] = File(...),
     org: Organisation = Depends(get_current_organisation),

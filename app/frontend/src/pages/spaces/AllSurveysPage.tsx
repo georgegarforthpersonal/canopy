@@ -17,11 +17,11 @@ import {
   type Survey,
   type Surveyor,
 } from '../../services/api';
-import { spaceCardSx, spaceColors } from './spacesTokens';
+import { recordButtonSx, spaceCardSx, spaceColors } from './spacesTokens';
 import { primarySpeciesType, resolveSpaceTypeId } from './spaceMeta';
 import { deriveSurveyState, formatSurveyDate, type SurveyState } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
-import { useSurveyorLookup } from '../../hooks';
+import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
@@ -117,6 +117,7 @@ export default function AllSurveysPage() {
   }, [typeId]);
 
   const resolveSurveyors = useSurveyorLookup(surveyors);
+  const handleSignupSaved = useSignupSaved(surveys, setSurveys, setGreenIds, surveyors, setSurveyors);
 
   if (loading) {
     return (
@@ -160,26 +161,6 @@ export default function AllSurveysPage() {
       toast.error('Failed to load more surveys');
     } finally {
       setLoadingMore(false);
-    }
-  };
-
-  const handleSignupSaved = (surveyId: number, surveyorIds: number[]) => {
-    const previous = surveys.find((s) => s.id === surveyId)?.surveyor_ids ?? [];
-    setSurveys((prev) =>
-      prev.map((s) => (s.id === surveyId ? { ...s, surveyor_ids: surveyorIds } : s)),
-    );
-    const added = surveyorIds.filter((id) => !previous.includes(id));
-    if (added.length > 0) {
-      setGreenIds((prev) => {
-        const next = new Set(prev);
-        added.forEach((id) => next.add(id));
-        return next;
-      });
-    }
-    // A first-time self sign-up can create a brand-new surveyor; refresh the
-    // lookup so their name resolves for avatars and the signed-up state.
-    if (surveyorIds.some((id) => !surveyors.some((s) => s.id === id))) {
-      surveyorsAPI.getAll().then(setSurveyors).catch(() => {});
     }
   };
 
@@ -298,16 +279,7 @@ export default function AllSurveysPage() {
                         e.stopPropagation();
                         goToSurvey(survey.id, { record: true });
                       }}
-                      sx={{
-                        flexShrink: 0,
-                        bgcolor: spaceColors.brand,
-                        '&:hover': { bgcolor: spaceColors.brandHover },
-                        borderRadius: '7px',
-                        textTransform: 'none',
-                        fontSize: 13,
-                        px: 1.5,
-                        py: 0.6,
-                      }}
+                      sx={recordButtonSx}
                     >
                       Record survey
                     </Button>
