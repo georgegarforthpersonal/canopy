@@ -78,7 +78,7 @@ export default function TeamsPage() {
       <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto' }}>
         <PageTitle
           title="Teams"
-          subtitle="Sign-up sheets, sites and results for each survey type."
+          subtitle="Sign-up, instructions, and records for each survey type."
         />
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
