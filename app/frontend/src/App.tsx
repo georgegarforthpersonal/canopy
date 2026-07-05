@@ -4,7 +4,6 @@ import {
   RouterProvider,
   Navigate,
   Outlet,
-  useLocation,
   useRouteError,
 } from 'react-router-dom';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -43,16 +42,6 @@ function BubbleRouteError(): never {
   throw useRouteError();
 }
 
-/** "Spaces" became "Teams"; old bookmarks and links keep working. */
-function LegacySpacesRedirect() {
-  const location = useLocation();
-  return (
-    <Navigate
-      to={{ ...location, pathname: location.pathname.replace(/^\/spaces/, '/teams') }}
-      replace
-    />
-  );
-}
 
 // Data router (createBrowserRouter) rather than declarative <BrowserRouter>
 // so that useBlocker can intercept in-app navigation (unsaved-changes guard).
@@ -87,7 +76,6 @@ const router = createBrowserRouter([
           { path: '/teams', element: <TeamsPage /> },
           { path: '/teams/:typeId', element: <TeamDetailPage /> },
           { path: '/teams/:typeId/all', element: <AllSurveysPage /> },
-          { path: '/spaces/*', element: <LegacySpacesRedirect /> },
 
           // Dashboard page
           { path: '/dashboards', element: <DashboardsPage /> },
