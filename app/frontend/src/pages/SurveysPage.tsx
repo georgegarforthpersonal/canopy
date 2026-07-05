@@ -6,6 +6,7 @@ import { usePermissions } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useRowHighlight } from '../hooks';
 import { getSpeciesIcon, formatSpeciesCount } from '../config';
+import { PageTitle } from '../components/layout/PageTitle';
 import { SurveyTypeChip } from '../components/SurveyTypeColors';
 import { notionColors, tableSizing } from '../theme';
 import { useState, useEffect, useRef } from 'react';
@@ -223,7 +224,28 @@ export function SurveysPage() {
 
   return (
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
-      {/* Filters and Action Button */}
+      <PageTitle
+        title="Surveys"
+        actions={
+          canEditSurveys ? (
+            <Button
+              variant="contained"
+              size="medium"
+              onClick={handleCreateClick}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                boxShadow: 'none',
+                '&:hover': { boxShadow: 'none' }
+              }}
+            >
+              New
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {/* Filters */}
       <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center" justifyContent="space-between">
         <Stack direction="row" spacing={2} alignItems="center">
           <FilterList sx={{ color: 'text.secondary', fontSize: 20 }} />
@@ -253,21 +275,6 @@ export function SurveysPage() {
             </Select>
           </FormControl>
         </Stack>
-        {canEditSurveys && (
-          <Button
-            variant="contained"
-            size="medium"
-            onClick={handleCreateClick}
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              boxShadow: 'none',
-              '&:hover': { boxShadow: 'none' }
-            }}
-          >
-            New
-          </Button>
-        )}
       </Stack>
 
       {/* Surveys Table */}

@@ -10,6 +10,7 @@ import { teamColors, TEAM_MAX_WIDTH } from './teamsTokens';
 import { nextScheduledSurvey } from './surveyState';
 import { primarySpeciesType, teamPath } from './teamMeta';
 import TeamCard from '../../components/teams/TeamCard';
+import { PageTitle } from '../../components/layout/PageTitle';
 
 // The survey type the beta surfaces. Matched case-insensitively by name.
 const BETA_SURVEY_TYPE_NAME = 'butterfly';
@@ -75,6 +76,10 @@ export default function TeamsPage() {
   return (
     <Box sx={{ bgcolor: teamColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
       <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto' }}>
+        <PageTitle
+          title="Teams"
+          subtitle="Sign-up sheets, sites and results for each survey type."
+        />
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />

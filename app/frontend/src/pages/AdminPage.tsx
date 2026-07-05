@@ -38,6 +38,7 @@ import { UsersPanel } from '../components/admin/UsersPanel';
 import { useToast } from '../context/ToastContext';
 import SurveyTypeFilesManager from '../components/admin/SurveyTypeFilesManager';
 import { SPACING } from '../config/responsive';
+import { PageTitle } from '../components/layout/PageTitle';
 import { useResponsive } from '../hooks/useResponsive';
 import { useRowHighlight } from '../hooks';
 import {
@@ -589,6 +590,7 @@ export function AdminPage() {
 
   return (
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
+      <PageTitle title="Admin" />
       {/* Tabs — scrollable on mobile so all five fit without clipping */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs
