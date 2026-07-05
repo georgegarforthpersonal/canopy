@@ -75,10 +75,6 @@ export default function SpacesPage() {
   return (
     <Box sx={{ bgcolor: spaceColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
       <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto' }}>
-        <Typography sx={{ fontSize: 26, fontWeight: 600, color: spaceColors.textPrimary, mb: 3 }}>
-          Survey spaces
-        </Typography>
-
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
