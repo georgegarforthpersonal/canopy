@@ -4,6 +4,7 @@ import {
   RouterProvider,
   Navigate,
   Outlet,
+  useLocation,
   useRouteError,
 } from 'react-router-dom';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -26,9 +27,9 @@ import { DashboardsPage } from './pages/DashboardsPage';
 import { AdminPage } from './pages/AdminPage';
 import { NewCameraTrapSurveyPage } from './pages/NewCameraTrapSurveyPage';
 import { NewAudioSurveyPage } from './pages/NewAudioSurveyPage';
-import SpacesPage from './pages/spaces/SpacesPage';
-import SpaceDetailPage from './pages/spaces/SpaceDetailPage';
-import AllSurveysPage from './pages/spaces/AllSurveysPage';
+import TeamsPage from './pages/teams/TeamsPage';
+import TeamDetailPage from './pages/teams/TeamDetailPage';
+import AllSurveysPage from './pages/teams/AllSurveysPage';
 
 // Set dayjs to use UK locale globally (dd/mm/yyyy format)
 dayjs.locale('en-gb');
@@ -40,6 +41,17 @@ dayjs.locale('en-gb');
  */
 function BubbleRouteError(): never {
   throw useRouteError();
+}
+
+/** "Spaces" became "Teams"; old bookmarks and links keep working. */
+function LegacySpacesRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ ...location, pathname: location.pathname.replace(/^\/spaces/, '/teams') }}
+      replace
+    />
+  );
 }
 
 // Data router (createBrowserRouter) rather than declarative <BrowserRouter>
@@ -71,10 +83,11 @@ const router = createBrowserRouter([
           </RequireAuth>
         ),
         children: [
-          // Survey Spaces (beta) — grid, per-type space, and full survey history
-          { path: '/spaces', element: <SpacesPage /> },
-          { path: '/spaces/:typeId', element: <SpaceDetailPage /> },
-          { path: '/spaces/:typeId/all', element: <AllSurveysPage /> },
+          // Teams (beta) — grid, per-type team page, and full survey history
+          { path: '/teams', element: <TeamsPage /> },
+          { path: '/teams/:typeId', element: <TeamDetailPage /> },
+          { path: '/teams/:typeId/all', element: <AllSurveysPage /> },
+          { path: '/spaces/*', element: <LegacySpacesRedirect /> },
 
           // Dashboard page
           { path: '/dashboards', element: <DashboardsPage /> },

@@ -1,5 +1,5 @@
 /**
- * Survey state derivation for Survey Spaces.
+ * Survey state derivation for Teams.
  *
  * There is no separate "session" concept: every Survey row carries an explicit
  * lifecycle `status`, and we map it (plus the date for scheduled rows) to a

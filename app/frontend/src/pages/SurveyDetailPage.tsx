@@ -228,7 +228,7 @@ export function SurveyDetailPage() {
           setDevices([]);
         }
 
-        // Landing with ?record=true ("Record survey" from a Space) or
+        // Landing with ?record=true ("Record survey" from a Team page) or
         // ?edit=true drops straight into the populated form.
         if (startInEditMode) {
           populateEditState(surveyData, sightingsData, surveyorsData);

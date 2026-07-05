@@ -1,13 +1,13 @@
 /**
- * Survey Spaces design tokens.
+ * Teams design tokens.
  *
- * Spaces is a beta surface that deliberately uses its OWN neutral + green
+ * Teams is a beta surface that deliberately uses its OWN neutral + green
  * palette regardless of the org brand colour (Heal's brand is purple). The
  * green here is the single data/action colour for the feature, per the design
- * handoff. Keep these scoped to Spaces — do not leak into the global theme.
+ * handoff. Keep these scoped to Teams — do not leak into the global theme.
  */
 
-export const spaceColors = {
+export const teamColors = {
   brand: '#3D8B56',
   brandDark: '#2E6B42',
   brandHover: '#4A9B62',
@@ -28,22 +28,22 @@ export const spaceColors = {
   amberMonth: '#C99A00',
 } as const;
 
-// Card chrome shared by every Space panel.
-export const spaceCardSx = {
-  bgcolor: spaceColors.paper,
-  border: `1px solid ${spaceColors.divider}`,
+// Card chrome shared by every Team panel.
+export const teamCardSx = {
+  bgcolor: teamColors.paper,
+  border: `1px solid ${teamColors.divider}`,
   borderRadius: '10px',
   boxShadow: 'none',
 } as const;
 
-export const SPACE_MAX_WIDTH = 1120;
+export const TEAM_MAX_WIDTH = 1120;
 
 // The contained "Record survey" button, shared by the worklist row and the
 // All surveys page.
 export const recordButtonSx = {
   flexShrink: 0,
-  bgcolor: spaceColors.brand,
-  '&:hover': { bgcolor: spaceColors.brandHover },
+  bgcolor: teamColors.brand,
+  '&:hover': { bgcolor: teamColors.brandHover },
   borderRadius: '7px',
   textTransform: 'none',
   fontSize: 13,

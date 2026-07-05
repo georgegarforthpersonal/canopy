@@ -1,5 +1,5 @@
 /**
- * Space detail: the single-screen overview for one survey type. Neutral hero
+ * Team detail: the single-screen overview for one survey type. Neutral hero
  * plus two balanced columns — Surveys worklist + Species count (left); Files,
  * Locations & devices (right). On mobile the panels stack in the order
  * Files → Surveys → Locations & devices → Species count.
@@ -21,18 +21,18 @@ import {
   type Device,
   type SurveyTypeFile,
 } from '../../services/api';
-import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
-import { primarySpeciesType, resolveSpaceTypeId } from './spaceMeta';
+import { teamColors, TEAM_MAX_WIDTH } from './teamsTokens';
+import { primarySpeciesType, resolveTeamTypeId } from './teamMeta';
 import { recordedThisWeek } from './surveyState';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
-import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
-import SpaceHero from '../../components/spaces/SpaceHero';
-import SurveysPanel from '../../components/spaces/SurveysPanel';
-import FilesPanel from '../../components/spaces/FilesPanel';
-import LocationsDevicesPanel from '../../components/spaces/LocationsDevicesPanel';
-import SpeciesCountPanel from '../../components/spaces/SpeciesCountPanel';
+import TeamBreadcrumb from '../../components/teams/TeamBreadcrumb';
+import TeamHero from '../../components/teams/TeamHero';
+import SurveysPanel from '../../components/teams/SurveysPanel';
+import FilesPanel from '../../components/teams/FilesPanel';
+import LocationsDevicesPanel from '../../components/teams/LocationsDevicesPanel';
+import SpeciesCountPanel from '../../components/teams/SpeciesCountPanel';
 
-export default function SpaceDetailPage() {
+export default function TeamDetailPage() {
   const { typeId } = useParams<{ typeId: string }>();
   const navigate = useNavigate();
 
@@ -64,7 +64,7 @@ export default function SpaceDetailPage() {
       try {
         // The route param is a name slug (or a legacy numeric id) — resolve it
         // to the survey type id before anything else can be fetched.
-        const surveyTypeId = await resolveSpaceTypeId(typeId);
+        const surveyTypeId = await resolveTeamTypeId(typeId);
         if (!active) return;
         if (surveyTypeId == null) {
           setNotFound(true);
@@ -135,7 +135,7 @@ export default function SpaceDetailPage() {
         );
         setDevices(deviceList.filter((d) => d.location_id != null && typeLocationIds.has(d.location_id)));
       } catch (err) {
-        // Only a 404 means the space doesn't exist; anything else is a fault.
+        // Only a 404 means the team doesn't exist; anything else is a fault.
         if (active) {
           if (err instanceof ApiError && err.status === 404) setNotFound(true);
           else setError(true);
@@ -163,19 +163,19 @@ export default function SpaceDetailPage() {
 
   if (error) {
     return (
-      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <SpaceBreadcrumb crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: 'Error' }]} />
-        <Alert severity="error">Failed to load this survey space. Please try again.</Alert>
+      <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <TeamBreadcrumb crumbs={[{ label: 'Teams', to: '/teams' }, { label: 'Error' }]} />
+        <Alert severity="error">Failed to load this team. Please try again.</Alert>
       </Box>
     );
   }
 
   if (notFound || !surveyType) {
     return (
-      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <SpaceBreadcrumb crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: 'Not found' }]} />
-        <Typography sx={{ color: spaceColors.textSecondary }}>
-          This survey space could not be found.
+      <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <TeamBreadcrumb crumbs={[{ label: 'Teams', to: '/teams' }, { label: 'Not found' }]} />
+        <Typography sx={{ color: teamColors.textSecondary }}>
+          This team could not be found.
         </Typography>
       </Box>
     );
@@ -186,17 +186,17 @@ export default function SpaceDetailPage() {
   // scheduled survey completed. A plain open never changes the lifecycle.
   const goToSurvey = (s: Survey, opts?: { record?: boolean }) =>
     navigate(`/surveys/${s.id}${opts?.record ? '?record=true' : ''}`, {
-      state: { returnTo: { pathname: `/spaces/${typeId}`, label: surveyType.name } },
+      state: { returnTo: { pathname: `/teams/${typeId}`, label: surveyType.name } },
     });
 
   return (
-    <Box sx={{ bgcolor: spaceColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
-      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto' }}>
-        <SpaceBreadcrumb
-          crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: surveyType.name }]}
+    <Box sx={{ bgcolor: teamColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
+      <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto' }}>
+        <TeamBreadcrumb
+          crumbs={[{ label: 'Teams', to: '/teams' }, { label: surveyType.name }]}
         />
 
-        <SpaceHero surveyType={surveyType} />
+        <TeamHero surveyType={surveyType} />
 
         {/* On xs the column wrappers become display: contents so the four
             panels stack as direct flex items in their `order`; the md column
@@ -222,7 +222,7 @@ export default function SpaceDetailPage() {
                 onAddSurvey={(s) => goToSurvey(s, { record: true })}
                 onSignupSaved={handleSignupSaved}
                 onOpenSurvey={goToSurvey}
-                onViewAll={() => navigate(`/spaces/${typeId}/all`)}
+                onViewAll={() => navigate(`/teams/${typeId}/all`)}
               />
             </Box>
             <Box sx={{ order: 4, minWidth: 0 }}>

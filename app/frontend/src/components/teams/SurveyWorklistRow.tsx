@@ -17,8 +17,8 @@ import type { Survey, Surveyor } from '../../services/api';
 import { usePermissions } from '../../context/AuthContext';
 import SelfSignupButton from './SelfSignupButton';
 import SurveyorAvatars from './SurveyorAvatars';
-import { recordButtonSx, spaceColors } from '../../pages/spaces/spacesTokens';
-import { formatSurveyDate } from '../../pages/spaces/surveyState';
+import { recordButtonSx, teamColors } from '../../pages/teams/teamsTokens';
+import { formatSurveyDate } from '../../pages/teams/surveyState';
 
 interface SurveyWorklistRowProps {
   survey: Survey;
@@ -78,27 +78,27 @@ export default function SurveyWorklistRow({
         gap: { xs: dueThisWeek ? 1 : 1.6, sm: 1.6 },
         px: 2.25,
         py: 1.6,
-        borderTop: `1px solid ${spaceColors.dividerInner}`,
-        bgcolor: needsSurvey ? spaceColors.amberRowBg : 'transparent',
+        borderTop: `1px solid ${teamColors.dividerInner}`,
+        bgcolor: needsSurvey ? teamColors.amberRowBg : 'transparent',
         ...(recorded && onOpen
-          ? { cursor: 'pointer', '&:hover': { bgcolor: spaceColors.page } }
+          ? { cursor: 'pointer', '&:hover': { bgcolor: teamColors.page } }
           : {}),
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1 }}>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: spaceColors.textPrimary }} noWrap>
+          <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: teamColors.textPrimary }} noWrap>
             {formatSurveyDate(survey)}
           </Typography>
           {survey.location_name && (
-            <Typography sx={{ fontSize: 13, color: spaceColors.textMuted, mt: 0.25 }} noWrap>
+            <Typography sx={{ fontSize: 13, color: teamColors.textMuted, mt: 0.25 }} noWrap>
               {survey.location_name}
             </Typography>
           )}
           {needsSurvey && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-              <WarningAmberRounded sx={{ fontSize: 15, color: spaceColors.amberText }} />
-              <Typography sx={{ fontSize: 13.5, color: spaceColors.amberText }}>
+              <WarningAmberRounded sx={{ fontSize: 15, color: teamColors.amberText }} />
+              <Typography sx={{ fontSize: 13.5, color: teamColors.amberText }}>
                 Overdue — no survey recorded
               </Typography>
             </Box>
@@ -127,7 +127,7 @@ export default function SurveyWorklistRow({
               py: 0.4,
               borderRadius: '6px',
               bgcolor: '#DBEDDB',
-              color: spaceColors.brandDark,
+              color: teamColors.brandDark,
               fontSize: 12.5,
               fontWeight: 600,
             }}
@@ -135,7 +135,7 @@ export default function SurveyWorklistRow({
             <CheckCircleOutline sx={{ fontSize: 15 }} />
             Recorded
           </Box>
-          {onOpen && <ChevronRight sx={{ fontSize: 18, color: spaceColors.textMuted }} />}
+          {onOpen && <ChevronRight sx={{ fontSize: 18, color: teamColors.textMuted }} />}
         </Box>
       ) : needsSurvey ? (
         recordButton

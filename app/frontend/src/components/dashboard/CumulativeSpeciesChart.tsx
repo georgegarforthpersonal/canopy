@@ -4,7 +4,7 @@
  * Self-contained: fetches the all-time cumulative-species series, transforms it
  * onto a time-scale x-axis (year label in January, then Apr/Jul/Oct), and
  * renders a brand-coloured area. Shared by the Dashboards page and the Survey
- * Spaces "Species recorded" panel — only the colour/height/chrome differ.
+ * Teams "Species recorded" panel — only the colour/height/chrome differ.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';

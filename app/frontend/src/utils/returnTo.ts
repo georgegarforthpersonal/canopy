@@ -2,7 +2,7 @@
  * "Return-to-origin" navigation for the survey detail page.
  *
  * The survey detail page is reached from several places: the main surveys list
- * (`/surveys`) and, within Survey Spaces, a space overview or its all-surveys
+ * (`/surveys`) and, within Teams, a team overview or its all-surveys
  * list. Its back button and post-save/delete navigation should land back where
  * the user came from — not always dump them on the main list.
  *
@@ -32,7 +32,7 @@ export function readReturnTo(location: Location): ReturnTo {
  *
  * The main surveys list announces the change itself (toast + row highlight)
  * via a query param it already consumes, so we keep that battle-tested flow
- * untouched. Any other origin (e.g. a Space) has no such announcer, so the
+ * untouched. Any other origin (e.g. a Team page) has no such announcer, so the
  * acting page shows the toast and we navigate there plainly.
  */
 export function returnAfterAction(

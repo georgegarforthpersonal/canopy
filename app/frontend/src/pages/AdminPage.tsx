@@ -111,7 +111,7 @@ export function AdminPage() {
   const surveyorHighlight = useRowHighlight();
   const surveyTypeHighlight = useRowHighlight();
   // Survey scheduling is a Heal-only admin facility for now, matching the
-  // Heal-only Spaces tab where scheduled surveys surface.
+  // Heal-only Teams tab where scheduled surveys surface.
   const showScheduling = getOrgSlug() === 'heal';
   const [tabValue, setTabValue] = useState(0);
 

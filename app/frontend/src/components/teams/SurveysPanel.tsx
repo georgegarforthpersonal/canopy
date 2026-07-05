@@ -11,12 +11,12 @@
 import { Box, Paper, Typography, ButtonBase } from '@mui/material';
 import { AssignmentTurnedIn, ChevronRight } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
-import { spaceCardSx, spaceColors } from '../../pages/spaces/spacesTokens';
-import { buildWorklist } from '../../pages/spaces/surveyState';
+import { teamCardSx, teamColors } from '../../pages/teams/teamsTokens';
+import { buildWorklist } from '../../pages/teams/surveyState';
 import SurveyWorklistRow from './SurveyWorklistRow';
 
 interface SurveysPanelProps {
-  /** All scheduled (not yet recorded) surveys for this space. */
+  /** All scheduled (not yet recorded) surveys for this team. */
   surveys: Survey[];
   /** This week's already-recorded surveys — pinned so the week stays visible. */
   recordedThisWeek: Survey[];
@@ -42,14 +42,14 @@ function SectionHeader({ label, color, suffix }: { label: string; color: string;
         px: 2.25,
         pt: 1.5,
         pb: 0.25,
-        borderTop: `1px solid ${spaceColors.dividerInner}`,
+        borderTop: `1px solid ${teamColors.dividerInner}`,
       }}
     >
       <Typography sx={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color }}>
         {label}
       </Typography>
       {suffix && (
-        <Typography sx={{ fontSize: 11.5, color: spaceColors.textMuted }}>{suffix}</Typography>
+        <Typography sx={{ fontSize: 11.5, color: teamColors.textMuted }}>{suffix}</Typography>
       )}
     </Box>
   );
@@ -71,23 +71,23 @@ export default function SurveysPanel({
   const empty = thisWeekCount === 0 && overdue.length === 0 && upcoming.length === 0;
 
   return (
-    <Paper sx={spaceCardSx}>
-      <Box sx={{ px: 2.25, py: 1.75, borderBottom: `1px solid ${spaceColors.divider}` }}>
-        <Typography sx={{ fontSize: 15, fontWeight: 600, color: spaceColors.textPrimary }}>
+    <Paper sx={teamCardSx}>
+      <Box sx={{ px: 2.25, py: 1.75, borderBottom: `1px solid ${teamColors.divider}` }}>
+        <Typography sx={{ fontSize: 15, fontWeight: 600, color: teamColors.textPrimary }}>
           Surveys
         </Typography>
       </Box>
 
       {empty && (
         <Box sx={{ px: 2.25, py: 3 }}>
-          <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
+          <Typography sx={{ fontSize: 13.5, color: teamColors.textMuted }}>
             No surveys need recording and none are scheduled.
           </Typography>
         </Box>
       )}
 
       {/* This week: still-due rows first (actionable), then recorded ones. */}
-      {!empty && <SectionHeader label="This week" color={spaceColors.brandDark} />}
+      {!empty && <SectionHeader label="This week" color={teamColors.brandDark} />}
       {dueThisWeek.map((s) => (
         <SurveyWorklistRow
           key={s.id}
@@ -113,14 +113,14 @@ export default function SurveysPanel({
       ))}
       {!empty && thisWeekCount === 0 && (
         <Box sx={{ px: 2.25, py: 1.4 }}>
-          <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
+          <Typography sx={{ fontSize: 13.5, color: teamColors.textMuted }}>
             No survey scheduled this week.
           </Typography>
         </Box>
       )}
 
       {overdue.length > 0 && (
-        <SectionHeader label={`To record (${overdue.length})`} color={spaceColors.amberText} />
+        <SectionHeader label={`To record (${overdue.length})`} color={teamColors.amberText} />
       )}
       {overdue.map((s) => (
         <SurveyWorklistRow
@@ -137,7 +137,7 @@ export default function SurveysPanel({
       {upcoming.length > 0 && (
         <SectionHeader
           label={`Upcoming (${upcomingTotal})`}
-          color={spaceColors.textMuted}
+          color={teamColors.textMuted}
           suffix={upcomingTotal > upcoming.length ? `showing next ${upcoming.length}` : undefined}
         />
       )}
@@ -163,7 +163,7 @@ export default function SurveysPanel({
           gap: 1.6,
           px: 2.25,
           py: 1.6,
-          borderTop: `1px solid ${spaceColors.dividerInner}`,
+          borderTop: `1px solid ${teamColors.dividerInner}`,
           textAlign: 'left',
           '&:hover': { bgcolor: '#f9fbf9' },
         }}
@@ -180,17 +180,17 @@ export default function SurveysPanel({
             flexShrink: 0,
           }}
         >
-          <AssignmentTurnedIn sx={{ fontSize: 18, color: spaceColors.brandDark }} />
+          <AssignmentTurnedIn sx={{ fontSize: 18, color: teamColors.brandDark }} />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: spaceColors.textPrimary }}>
+          <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: teamColors.textPrimary }}>
             All surveys
           </Typography>
-          <Typography sx={{ fontSize: 12, color: spaceColors.textMuted }}>
+          <Typography sx={{ fontSize: 12, color: teamColors.textMuted }}>
             {recordedCount} recorded · {surveys.length} scheduled
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: spaceColors.brand, flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: teamColors.brand, flexShrink: 0 }}>
           <Typography sx={{ fontSize: 13, fontWeight: 600 }}>View all</Typography>
           <ChevronRight sx={{ fontSize: 18 }} />
         </Box>

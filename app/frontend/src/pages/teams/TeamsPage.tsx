@@ -1,15 +1,15 @@
 /**
- * Spaces grid (landing). For the Heal beta this shows a single Butterfly card.
+ * Teams grid (landing). For the Heal beta this shows a single Butterfly card.
  * Selecting a card opens that survey type's space.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Typography, CircularProgress } from '@mui/material';
 import { surveyTypesAPI, surveysAPI, dashboardAPI, type Survey, type SurveyTypeWithDetails } from '../../services/api';
-import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
+import { teamColors, TEAM_MAX_WIDTH } from './teamsTokens';
 import { nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, spacePath } from './spaceMeta';
-import SpaceCard from '../../components/spaces/SpaceCard';
+import { primarySpeciesType, teamPath } from './teamMeta';
+import TeamCard from '../../components/teams/TeamCard';
 
 // The survey type the beta surfaces. Matched case-insensitively by name.
 const BETA_SURVEY_TYPE_NAME = 'butterfly';
@@ -21,7 +21,7 @@ interface CardData {
   nextSurvey: Survey | null;
 }
 
-export default function SpacesPage() {
+export default function TeamsPage() {
   const navigate = useNavigate();
   const [cards, setCards] = useState<CardData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,17 +73,17 @@ export default function SpacesPage() {
   }, []);
 
   return (
-    <Box sx={{ bgcolor: spaceColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
-      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto' }}>
+    <Box sx={{ bgcolor: teamColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
+      <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto' }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
           </Box>
         ) : error ? (
-          <Alert severity="error">Failed to load survey spaces. Please try again.</Alert>
+          <Alert severity="error">Failed to load teams. Please try again.</Alert>
         ) : cards.length === 0 ? (
-          <Typography sx={{ fontSize: 14, color: spaceColors.textMuted }}>
-            No survey spaces are available yet.
+          <Typography sx={{ fontSize: 14, color: teamColors.textMuted }}>
+            No teams are available yet.
           </Typography>
         ) : (
           <Box
@@ -94,13 +94,13 @@ export default function SpacesPage() {
             }}
           >
             {cards.map((c) => (
-              <SpaceCard
+              <TeamCard
                 key={c.surveyType.id}
                 surveyType={c.surveyType}
                 surveyCount={c.surveyCount}
                 speciesCount={c.speciesCount}
                 nextSurvey={c.nextSurvey}
-                onOpen={() => navigate(spacePath(c.surveyType))}
+                onOpen={() => navigate(teamPath(c.surveyType))}
               />
             ))}
           </Box>

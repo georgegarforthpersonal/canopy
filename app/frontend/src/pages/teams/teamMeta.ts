@@ -1,7 +1,7 @@
 /**
- * Helpers mapping a survey type to its Spaces presentation: the accent colour
+ * Helpers mapping a survey type to its Teams presentation: the accent colour
  * for its icon tile, the species type that drives its wildlife icon/charts,
- * and the name-slug URLs that make spaces addressable as /spaces/butterfly.
+ * and the name-slug URLs that make teams addressable as /teams/butterfly.
  */
 import { notionColors } from '../../theme';
 import { surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails } from '../../services/api';
@@ -24,7 +24,7 @@ export function accentColors(surveyType: Pick<SurveyType, 'color'>): AccentColor
 }
 
 /**
- * The species type that drives a space's icon and charts. Uses the survey
+ * The species type that drives a team's icon and charts. Uses the survey
  * type's first linked species type, falling back to "butterfly" for the beta.
  */
 export function primarySpeciesType(surveyType: SurveyTypeWithDetails): string {
@@ -32,7 +32,7 @@ export function primarySpeciesType(surveyType: SurveyTypeWithDetails): string {
 }
 
 /** URL slug for a survey type name, e.g. "Breeding Birds" → "breeding-birds". */
-export function spaceSlug(name: string): string {
+export function teamSlug(name: string): string {
   return name
     .toLowerCase()
     .trim()
@@ -40,21 +40,21 @@ export function spaceSlug(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Canonical path for a space — the name slug, or the id if the name has no
+/** Canonical path for a team — the name slug, or the id if the name has no
  * sluggable characters. */
-export function spacePath(surveyType: Pick<SurveyType, 'id' | 'name'>): string {
-  return `/spaces/${spaceSlug(surveyType.name) || surveyType.id}`;
+export function teamPath(surveyType: Pick<SurveyType, 'id' | 'name'>): string {
+  return `/teams/${teamSlug(surveyType.name) || surveyType.id}`;
 }
 
 /**
- * Resolve a /spaces/:typeId route param — a name slug or a numeric id (old
+ * Resolve a /teams/:typeId route param — a name slug or a numeric id (old
  * links keep working) — to the survey type id, or null when nothing matches.
  * Slugs are matched against the full survey type list; if two names ever
  * slugify identically the first wins, and the numeric URL stays canonical.
  */
-export async function resolveSpaceTypeId(param: string): Promise<number | null> {
+export async function resolveTeamTypeId(param: string): Promise<number | null> {
   if (/^\d+$/.test(param)) return Number(param);
   const slug = param.toLowerCase();
   const types = await surveyTypesAPI.getAll();
-  return types.find((t) => spaceSlug(t.name) === slug)?.id ?? null;
+  return types.find((t) => teamSlug(t.name) === slug)?.id ?? null;
 }

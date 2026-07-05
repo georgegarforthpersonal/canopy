@@ -1,5 +1,5 @@
 /**
- * Locations & devices panel for a space. Lists the locations assigned to the
+ * Locations & devices panel for a team. Lists the locations assigned to the
  * survey type plus the devices sited at them, as either a map or a list (local
  * toggle, default Map). Letters (A/B/C…) tie the two views together. The map is
  * the same shared DeviceMap used by the admin tab, in read-only mode.
@@ -21,7 +21,7 @@ import {
   formatLength,
   formatArea,
 } from '../../utils/geometry';
-import { spaceCardSx, spaceColors } from '../../pages/spaces/spacesTokens';
+import { teamCardSx, teamColors } from '../../pages/teams/teamsTokens';
 import DeviceMap from '../admin/DeviceMap';
 
 interface LocationsDevicesPanelProps {
@@ -79,7 +79,7 @@ export default function LocationsDevicesPanel({
   const isEmpty = locations.length === 0 && devices.length === 0;
 
   return (
-    <Paper sx={spaceCardSx}>
+    <Paper sx={teamCardSx}>
       <Box
         sx={{
           display: 'flex',
@@ -88,10 +88,10 @@ export default function LocationsDevicesPanel({
           gap: 1,
           px: 2.25,
           py: 1.5,
-          borderBottom: `1px solid ${spaceColors.divider}`,
+          borderBottom: `1px solid ${teamColors.divider}`,
         }}
       >
-        <Typography sx={{ fontSize: 15, fontWeight: 600, color: spaceColors.textPrimary, whiteSpace: 'nowrap' }}>
+        <Typography sx={{ fontSize: 15, fontWeight: 600, color: teamColors.textPrimary, whiteSpace: 'nowrap' }}>
           Locations &amp; devices
         </Typography>
         <ToggleButtonGroup
@@ -115,7 +115,7 @@ export default function LocationsDevicesPanel({
             },
             '& .Mui-selected': {
               bgcolor: '#fff !important',
-              color: `${spaceColors.textPrimary} !important`,
+              color: `${teamColors.textPrimary} !important`,
               boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
             },
           }}
@@ -131,7 +131,7 @@ export default function LocationsDevicesPanel({
 
       {isEmpty ? (
         <Box sx={{ px: 2.25, py: 3 }}>
-          <Typography sx={{ fontSize: 13.5, color: spaceColors.textMuted }}>
+          <Typography sx={{ fontSize: 13.5, color: teamColors.textMuted }}>
             No locations or devices assigned to this survey type yet.
           </Typography>
         </Box>
@@ -153,7 +153,7 @@ export default function LocationsDevicesPanel({
                 gap: 1.5,
                 px: 2.25,
                 py: 1.3,
-                borderTop: `1px solid ${spaceColors.dividerInner}`,
+                borderTop: `1px solid ${teamColors.dividerInner}`,
               }}
             >
               <Box
@@ -172,10 +172,10 @@ export default function LocationsDevicesPanel({
                 <PlaceIcon sx={{ fontSize: 16 }} />
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontSize: 13, fontWeight: 600, color: spaceColors.textPrimary }} noWrap>
+                <Typography sx={{ fontSize: 13, fontWeight: 600, color: teamColors.textPrimary }} noWrap>
                   {locationDisplayName(location)}
                 </Typography>
-                <Typography sx={{ fontSize: 11.5, color: spaceColors.textMuted }}>
+                <Typography sx={{ fontSize: 11.5, color: teamColors.textMuted }}>
                   {locationDetail(location)}
                 </Typography>
               </Box>
@@ -192,7 +192,7 @@ export default function LocationsDevicesPanel({
                 gap: 1.5,
                 px: 2.25,
                 py: 1.3,
-                borderTop: `1px solid ${spaceColors.dividerInner}`,
+                borderTop: `1px solid ${teamColors.dividerInner}`,
               }}
             >
               <Box
@@ -213,10 +213,10 @@ export default function LocationsDevicesPanel({
                 •
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontSize: 13, fontWeight: 600, color: spaceColors.textPrimary }} noWrap>
+                <Typography sx={{ fontSize: 13, fontWeight: 600, color: teamColors.textPrimary }} noWrap>
                   {d.name}
                 </Typography>
-                <Typography sx={{ fontSize: 11.5, color: spaceColors.textMuted }}>
+                <Typography sx={{ fontSize: 11.5, color: teamColors.textMuted }}>
                   {d.location_name ?? 'Device'}
                 </Typography>
               </Box>

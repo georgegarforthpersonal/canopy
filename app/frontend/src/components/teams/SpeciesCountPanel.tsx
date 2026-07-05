@@ -1,12 +1,12 @@
 /**
- * "Species count" panel for a space: a headline count + "+N this season"
+ * "Species count" panel for a team: a headline count + "+N this season"
  * over the shared all-time cumulative-species area chart (rendered in brand
  * green). The chart itself is the same component the Dashboards page uses.
  */
 import { useState } from 'react';
 import { Box, Paper, Typography } from '@mui/material';
 import CumulativeSpeciesChart, { type CumulativeSummary } from '../dashboard/CumulativeSpeciesChart';
-import { spaceCardSx, spaceColors } from '../../pages/spaces/spacesTokens';
+import { teamCardSx, teamColors } from '../../pages/teams/teamsTokens';
 
 interface SpeciesCountPanelProps {
   speciesType: string;
@@ -16,28 +16,28 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
   const [summary, setSummary] = useState<CumulativeSummary>({ total: 0, seasonDelta: 0 });
 
   return (
-    <Paper sx={spaceCardSx}>
+    <Paper sx={teamCardSx}>
       <Box
         sx={{
           px: 2.25,
           py: 1.75,
-          borderBottom: `1px solid ${spaceColors.divider}`,
+          borderBottom: `1px solid ${teamColors.divider}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'baseline',
           gap: 1,
         }}
       >
-        <Typography sx={{ fontSize: 15, fontWeight: 600, color: spaceColors.textPrimary }}>
+        <Typography sx={{ fontSize: 15, fontWeight: 600, color: teamColors.textPrimary }}>
           Species count
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
           {summary.seasonDelta > 0 && (
-            <Typography sx={{ fontSize: 12, color: spaceColors.brand }}>
+            <Typography sx={{ fontSize: 12, color: teamColors.brand }}>
               +{summary.seasonDelta} this season
             </Typography>
           )}
-          <Typography sx={{ fontSize: 20, fontWeight: 700, color: spaceColors.textPrimary, lineHeight: 1 }}>
+          <Typography sx={{ fontSize: 20, fontWeight: 700, color: teamColors.textPrimary, lineHeight: 1 }}>
             {summary.total}
           </Typography>
         </Box>
@@ -46,7 +46,7 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
       <Box sx={{ p: 2.25 }}>
         <CumulativeSpeciesChart
           speciesType={speciesType}
-          color={spaceColors.brand}
+          color={teamColors.brand}
           height={240}
           emptyMessage="No data yet"
           onSummary={setSummary}

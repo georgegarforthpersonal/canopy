@@ -1,5 +1,5 @@
 import { AppBar, Toolbar, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, useMediaQuery, useTheme } from '@mui/material';
-import { Assignment, BarChart, Settings, SpaceDashboard, Menu as MenuIcon, Close, Logout } from '@mui/icons-material';
+import { Assignment, BarChart, Settings, Groups, Menu as MenuIcon, Close, Logout } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth, usePermissions } from '../../context/AuthContext';
@@ -27,8 +27,8 @@ export function TopNavBar() {
   const { logout } = useAuth();
   const { canAccessAdmin } = usePermissions();
 
-  // Spaces is a Heal-only beta for now.
-  const showSpaces = getOrgSlug() === 'heal';
+  // Teams is a Heal-only beta for now.
+  const showTeams = getOrgSlug() === 'heal';
 
   const navItems = [
     {
@@ -36,12 +36,12 @@ export function TopNavBar() {
       label: 'Surveys',
       path: '/surveys',
     },
-    ...(showSpaces
+    ...(showTeams
       ? [
           {
-            icon: SpaceDashboard,
-            label: 'Spaces (Beta)',
-            path: '/spaces',
+            icon: Groups,
+            label: 'Teams (Beta)',
+            path: '/teams',
           },
         ]
       : []),
