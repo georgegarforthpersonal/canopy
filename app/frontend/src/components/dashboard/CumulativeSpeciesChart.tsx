@@ -41,10 +41,10 @@ interface CumulativeSpeciesChartProps {
 
 const CHART_MARGIN = { top: 10, right: 10, left: 0, bottom: 0 };
 
-// Year for January, month name for Apr/Jul/Oct.
+// One tick per year, labelled with just the year — mixed month/year ticks
+// read oddly when the data doesn't start in January.
 function formatXAxisTick(timestamp: number): string {
-  const d = dayjs(timestamp);
-  return d.month() === 0 ? d.format('YYYY') : d.format('MMM');
+  return dayjs(timestamp).format('YYYY');
 }
 
 interface PreparedPoint {
@@ -54,7 +54,7 @@ interface PreparedPoint {
   [type: string]: number | string | Record<string, string[]>;
 }
 
-/** Aggregate the raw series by date and compute Jan/Apr/Jul/Oct ticks. */
+/** Aggregate the raw series by date and compute one tick per year. */
 function prepareChartData(data: CumulativeSpeciesDataPoint[]): {
   data: PreparedPoint[];
   types: string[];
@@ -88,15 +88,15 @@ function prepareChartData(data: CumulativeSpeciesDataPoint[]): {
     })
     .sort((a, b) => a.date - b.date);
 
+  // First data point of each year carries that year's tick (the first year's
+  // tick sits wherever its data starts, e.g. April for a mid-year launch).
   const customTicks: number[] = [];
-  const seenMonths = new Set<string>();
+  const seenYears = new Set<number>();
   chartArray.forEach((item) => {
-    const date = new Date(item.date);
-    const month = date.getMonth();
-    const key = `${date.getFullYear()}-${month}`;
-    if ((month === 0 || month === 3 || month === 6 || month === 9) && !seenMonths.has(key)) {
+    const year = new Date(item.date).getFullYear();
+    if (!seenYears.has(year)) {
       customTicks.push(item.date);
-      seenMonths.add(key);
+      seenYears.add(year);
     }
   });
 
