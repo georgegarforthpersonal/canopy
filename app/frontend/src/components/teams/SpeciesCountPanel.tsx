@@ -3,7 +3,7 @@
  * with a Chart/List toggle (same control as the Locations & devices panel's
  * Map/List). Chart is the shared all-time cumulative-species area chart;
  * List is every species identified with its occurrence count and the date
- * it was first observed.
+ * it was first observed, newest discovery first.
  */
 import { useEffect, useState } from 'react';
 import { Box, Paper, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
@@ -43,7 +43,16 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
     let active = true;
     dashboardAPI
       .getSpeciesByCount(speciesType)
-      .then((rows) => active && setSpecies(rows))
+      .then((rows) => {
+        if (!active) return;
+        // Newest discovery first; species with no date (shouldn't happen for
+        // recorded species) sink to the bottom.
+        setSpecies(
+          [...rows].sort((a, b) =>
+            (b.first_observed ?? '').localeCompare(a.first_observed ?? ''),
+          ),
+        );
+      })
       .catch(() => active && setSpecies([]));
     return () => {
       active = false;
