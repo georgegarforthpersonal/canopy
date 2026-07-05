@@ -45,7 +45,11 @@ export default function SurveyWorklistRow({
 }: SurveyWorklistRowProps) {
   const needsSurvey = state === 'needs-survey';
   const dueThisWeek = state === 'due-this-week';
+  const upcoming = state === 'upcoming';
   const recorded = state === 'recorded';
+  // Rows that carry the sign-up toggle (with or without Record survey) crush
+  // the date on phones, so they stack: date + avatars line, actions line.
+  const stacked = dueThisWeek || upcoming;
   // Recording a survey needs editor access; the button is hidden below that.
   // Sign up is the same one-click self toggle for every role — putting other
   // people on a survey is done on the survey itself, not here.
@@ -71,11 +75,9 @@ export default function SurveyWorklistRow({
       onClick={recorded && onOpen ? () => onOpen(survey) : undefined}
       sx={{
         display: 'flex',
-        // A due-this-week row carries two buttons; on phones they'd crush
-        // the date to nothing, so that state stacks: date line, actions line.
-        flexDirection: { xs: dueThisWeek ? 'column' : 'row', sm: 'row' },
-        alignItems: { xs: dueThisWeek ? 'stretch' : 'center', sm: 'center' },
-        gap: { xs: dueThisWeek ? 1 : 1.6, sm: 1.6 },
+        flexDirection: { xs: stacked ? 'column' : 'row', sm: 'row' },
+        alignItems: { xs: stacked ? 'stretch' : 'center', sm: 'center' },
+        gap: { xs: stacked ? 1 : 1.6, sm: 1.6 },
         px: 2.25,
         py: 1.6,
         borderTop: `1px solid ${teamColors.dividerInner}`,
@@ -106,7 +108,7 @@ export default function SurveyWorklistRow({
         </Box>
         {/* On the stacked phone layout the avatars ride with the date (who's
             going is information); the buttons line below is actions only. */}
-        {dueThisWeek && surveyors.length > 0 && (
+        {stacked && surveyors.length > 0 && (
           <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexShrink: 0 }}>
             <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} emptyLabel="" />
           </Box>
@@ -159,8 +161,20 @@ export default function SurveyWorklistRow({
           {recordButton}
         </Box>
       ) : (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
-          <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} />
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 1.25,
+            flexShrink: 0,
+          }}
+        >
+          {/* On xs the avatars already sit on the date line (or, with nobody
+              signed up yet, the empty label stays here beside the button). */}
+          <Box sx={{ display: { xs: surveyors.length > 0 ? 'none' : 'flex', sm: 'flex' } }}>
+            <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} />
+          </Box>
           {assignButton}
         </Box>
       )}
