@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { authAPI } from '../../services/api';
+import { Alert, Box, Button, CircularProgress, Link, TextField, Typography } from '@mui/material';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { ApiError, authAPI } from '../../services/api';
 import type { UserRole } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { MIN_PASSWORD_LENGTH, PasswordField, PasswordRequirement } from '../../components/auth/PasswordField';
@@ -25,6 +25,7 @@ export function AcceptInvitePage() {
 
   const [invite, setInvite] = useState<{ email: string; role: UserRole; organisation: { name: string } } | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [alreadyUsed, setAlreadyUsed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [firstName, setFirstName] = useState('');
@@ -47,7 +48,18 @@ export function AcceptInvitePage() {
     authAPI
       .lookupInvite(token)
       .then(setInvite)
-      .catch(() => setLookupError('This invite is invalid, expired or already used. Ask your admin to send a new one.'))
+      .catch((err) => {
+        // The most common way to land here: re-clicking the invite email
+        // after the account was created. That's not an error — point at
+        // sign-in rather than dead-ending.
+        if (err instanceof ApiError && /already been used/i.test(err.message)) {
+          setAlreadyUsed(true);
+        } else if (err instanceof ApiError && /expired/i.test(err.message)) {
+          setLookupError('This invite has expired. Ask your admin to send a new one.');
+        } else {
+          setLookupError('This invite link is not valid. Ask your admin to send a new one.');
+        }
+      })
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -97,10 +109,34 @@ export function AcceptInvitePage() {
     );
   }
 
+  if (alreadyUsed) {
+    return (
+      <AuthPageLayout title="You're already set up">
+        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+          This invite has already been used to create an account. Just sign in
+          with your email and password.
+        </Typography>
+        <Button variant="contained" fullWidth size="large" sx={{ mt: 3 }} onClick={() => navigate('/login')}>
+          Go to sign in
+        </Button>
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Link component={RouterLink} to="/forgot-password" variant="body2">
+            Forgot your password?
+          </Link>
+        </Box>
+      </AuthPageLayout>
+    );
+  }
+
   if (lookupError || !invite) {
     return (
       <AuthPageLayout title="Invite not valid">
         <Alert severity="error">{lookupError}</Alert>
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Link component={RouterLink} to="/login" variant="body2">
+            Already have an account? Sign in
+          </Link>
+        </Box>
       </AuthPageLayout>
     );
   }

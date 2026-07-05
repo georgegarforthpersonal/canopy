@@ -247,6 +247,21 @@ class TestInvites:
         assert client.delete(f"/api/auth/invites/{invite_id}", headers=admin_headers).status_code == 204
         assert client.get(f"/api/auth/invites/lookup?token={token}").status_code == 404
 
+    def test_lookup_of_used_invite_says_so(self, client: TestClient, login_as):
+        """Re-clicking the invite email after signing up is the most common
+        dead end — the lookup distinguishes it (410) so the page can point
+        at sign-in instead of claiming the link is broken."""
+        admin_headers, _ = login_as(UserRole.admin)
+        token = _token_from_url(self._invite(client, admin_headers)["invite_url"])
+        assert client.post(
+            "/api/auth/accept-invite",
+            json={"token": token, "first_name": "New", "password": "a-strong-password"},
+        ).status_code == 200
+
+        response = client.get(f"/api/auth/invites/lookup?token={token}")
+        assert response.status_code == 410
+        assert "already been used" in response.json()["detail"]
+
     def test_reinviting_replaces_open_invite(self, client: TestClient, login_as):
         admin_headers, _ = login_as(UserRole.admin)
         first_token = _token_from_url(self._invite(client, admin_headers)["invite_url"])

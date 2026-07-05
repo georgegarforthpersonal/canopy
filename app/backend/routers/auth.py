@@ -355,10 +355,20 @@ async def lookup_invite(
     token: str,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Public: validate an invite token for the accept-invite page."""
-    invite = _find_open_invite(db, token)
+    """Public: validate an invite token for the accept-invite page.
+
+    Distinct errors for used vs expired: holding the token IS the
+    capability, so telling its holder what happened isn't a leak — and
+    "already used" means "you have an account, go sign in", which is the
+    single most common way people land here (re-clicking the email link).
+    """
+    invite = db.query(Invite).filter(Invite.token_hash == hash_token(token)).first()
+    if invite and invite.accepted_at is not None:
+        raise HTTPException(status_code=410, detail="This invite has already been used")
+    if invite and invite.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="This invite has expired")
     if not invite:
-        raise HTTPException(status_code=404, detail="This invite is invalid, expired or already used")
+        raise HTTPException(status_code=404, detail="This invite is invalid")
     org = db.get(Organisation, invite.organisation_id)
     return {
         "email": invite.email,
@@ -468,7 +478,10 @@ async def create_invite(
     db.refresh(invite)
 
     invite_url = _invite_url(org, token)
-    email_sent = send_invite_email(email, org.name, invite_url, body.role.value)
+    email_sent = send_invite_email(
+        email, org.name, invite_url, body.role.value,
+        site_url=settings.frontend_url_for(org.slug),
+    )
 
     return {
         "invite": InviteRead.model_validate(invite, from_attributes=True).model_dump(mode="json"),
@@ -499,7 +512,10 @@ async def resend_invite(
     db.commit()
 
     invite_url = _invite_url(org, token)
-    email_sent = send_invite_email(invite.email, org.name, invite_url, UserRole(invite.role).value)
+    email_sent = send_invite_email(
+        invite.email, org.name, invite_url, UserRole(invite.role).value,
+        site_url=settings.frontend_url_for(org.slug),
+    )
     return {"invite_url": invite_url, "email_sent": email_sent}
 
 

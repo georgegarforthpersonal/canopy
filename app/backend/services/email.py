@@ -48,7 +48,7 @@ def send_email(to: str, subject: str, html: str) -> bool:
         return False
 
 
-def send_invite_email(to: str, org_name: str, invite_url: str, role: str) -> bool:
+def send_invite_email(to: str, org_name: str, invite_url: str, role: str, site_url: str) -> bool:
     """Invitation to create an account for an organisation."""
     subject = f"You're invited to join {org_name} on Canopy"
     html = f"""
@@ -57,6 +57,8 @@ def send_invite_email(to: str, org_name: str, invite_url: str, role: str) -> boo
     with <strong>{role}</strong> access.</p>
     <p><a href="{invite_url}">Accept your invitation</a> to choose a password
     and get started. The link is valid for 7 days.</p>
+    <p>After that, sign in any time at
+    <a href="{site_url}">{site_url}</a> — worth a bookmark.</p>
     <p>If you weren't expecting this, you can ignore this email.</p>
     """
     return send_email(to, subject, html)
