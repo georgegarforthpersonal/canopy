@@ -1,8 +1,8 @@
 /**
  * Team detail: the single-screen overview for one survey type. Neutral hero
  * plus two balanced columns — Surveys worklist + Species count (left); Files,
- * Locations & devices (right). On mobile the panels stack in the order
- * Files → Surveys → Locations & devices → Species count.
+ * Routes (right). On mobile the panels stack in the order
+ * Files → Surveys → Routes → Species count.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -13,12 +13,10 @@ import {
   surveysAPI,
   surveyorsAPI,
   locationsAPI,
-  devicesAPI,
   type SurveyTypeWithDetails,
   type Survey,
   type Surveyor,
   type LocationWithBoundary,
-  type Device,
   type SurveyTypeFile,
 } from '../../services/api';
 import { teamColors, TEAM_MAX_WIDTH } from './teamsTokens';
@@ -29,7 +27,7 @@ import TeamBreadcrumb from '../../components/teams/TeamBreadcrumb';
 import TeamHero from '../../components/teams/TeamHero';
 import SurveysPanel from '../../components/teams/SurveysPanel';
 import FilesPanel from '../../components/teams/FilesPanel';
-import LocationsDevicesPanel from '../../components/teams/LocationsDevicesPanel';
+import RoutesPanel from '../../components/teams/RoutesPanel';
 import SpeciesCountPanel from '../../components/teams/SpeciesCountPanel';
 
 export default function TeamDetailPage() {
@@ -42,7 +40,6 @@ export default function TeamDetailPage() {
   const [recordedCount, setRecordedCount] = useState(0);
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [locations, setLocations] = useState<LocationWithBoundary[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
   const [files, setFiles] = useState<SurveyTypeFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [filesLoading, setFilesLoading] = useState(true);
@@ -83,20 +80,17 @@ export default function TeamDetailPage() {
         if (!active) return;
         setSurveyType(details);
 
-        const typeLocationIds = new Set(details.locations.map((l) => l.id));
-
         // The worklist is built from ALL scheduled surveys (upcoming + overdue;
         // truncation would drop exactly the overdue rows, which sort last);
         // the "All surveys" door shows a recorded/scheduled split, so the
         // recorded side needs the completed-only total. The first completed
         // page (date-descending) is kept so the panel can pin any survey
         // already recorded for the current week.
-        const [scheduled, completedPage, surveyorList, withBoundaries, deviceList] = await Promise.all([
+        const [scheduled, completedPage, surveyorList, withBoundaries] = await Promise.all([
           surveysAPI.getAllPages({ survey_type_id: surveyTypeId, survey_status: 'scheduled' }),
           surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'completed', page: 1, limit: 25 }),
           surveyorsAPI.getAll(),
           locationsAPI.getAllWithBoundaries(),
-          devicesAPI.getAll(),
         ]);
         if (!active) return;
 
@@ -133,7 +127,6 @@ export default function TeamDetailPage() {
             };
           }),
         );
-        setDevices(deviceList.filter((d) => d.location_id != null && typeLocationIds.has(d.location_id)));
       } catch (err) {
         // Only a 404 means the team doesn't exist; anything else is a fault.
         if (active) {
@@ -236,7 +229,7 @@ export default function TeamDetailPage() {
               <FilesPanel surveyTypeId={surveyType.id} files={files} loading={filesLoading} />
             </Box>
             <Box sx={{ order: 3, minWidth: 0 }}>
-              <LocationsDevicesPanel locations={locations} devices={devices} />
+              <RoutesPanel locations={locations} />
             </Box>
           </Box>
         </Box>
