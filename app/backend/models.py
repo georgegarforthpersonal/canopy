@@ -1142,6 +1142,7 @@ class SpeciesWithCount(SQLModel):
     scientific_name: Optional[str] = Field(description="Scientific name")
     type: str = Field(description="Species type")
     total_count: int = Field(description="Total occurrence count across all surveys")
+    first_observed: Optional[date_type] = Field(default=None, description="Date of the earliest survey recording this species")
 
 
 # ============================================================================

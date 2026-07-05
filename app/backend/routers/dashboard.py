@@ -267,7 +267,8 @@ async def get_species_by_count(
                 species.name,
                 species.scientific_name,
                 species_type.name as type,
-                COALESCE(SUM(sighting.count), 0) as total_count
+                COALESCE(SUM(sighting.count), 0) as total_count,
+                MIN(CASE WHEN survey.organisation_id = :org_id THEN survey.date END) as first_observed
             FROM species
             JOIN species_type ON species.species_type_id = species_type.id
             LEFT JOIN sighting ON species.id = sighting.species_id
@@ -288,7 +289,8 @@ async def get_species_by_count(
                 name=row.name,
                 scientific_name=row.scientific_name,
                 type=row.type,
-                total_count=row.total_count
+                total_count=row.total_count,
+                first_observed=row.first_observed,
             )
             for row in rows
         ]

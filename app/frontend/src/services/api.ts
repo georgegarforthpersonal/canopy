@@ -600,6 +600,8 @@ export interface SpeciesWithCount {
   scientific_name: string | null;
   type: string;
   total_count: number;
+  /** Date of the earliest survey recording this species (ISO), if any. */
+  first_observed: string | null;
 }
 
 export interface SpeciesSightingLocation {

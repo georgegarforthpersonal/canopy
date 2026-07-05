@@ -4,6 +4,8 @@ Tests for Dashboard Router
 Tests read-only analytics endpoints for the dashboard.
 """
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 
@@ -64,6 +66,30 @@ class TestSpeciesByCount:
             "/api/dashboard/species-by-count", headers=auth_headers
         )
         assert response.status_code == 422  # Validation error
+
+    def test_counts_and_first_observed(
+        self, client: TestClient, auth_headers: dict, create_species, create_survey
+    ):
+        """Occurrences sum across surveys; first_observed is the earliest
+        survey date that recorded the species."""
+        species = create_species(name="Peacock", species_type="butterfly")
+        older = create_survey(survey_date=date(2024, 5, 1))
+        newer = create_survey(survey_date=date(2024, 6, 15))
+        for survey, count in ((newer, 3), (older, 2)):
+            resp = client.post(
+                f"/api/surveys/{survey.id}/sightings",
+                json={"species_id": species.id, "count": count},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 201
+
+        rows = client.get(
+            "/api/dashboard/species-by-count?species_type=butterfly",
+            headers=auth_headers,
+        ).json()
+        row = next(r for r in rows if r["id"] == species.id)
+        assert row["total_count"] == 5
+        assert row["first_observed"] == "2024-05-01"
 
 
 class TestSpeciesOccurrences:
