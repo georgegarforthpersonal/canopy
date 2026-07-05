@@ -63,6 +63,50 @@ interface FieldBoundaryOverlayProps {
 // Dark red used to single out a hovered sector.
 const SECTOR_HOVER_STROKE = '#8A1C28';
 
+// A route stroke is ~5px wide — hopeless as a touch target. Every visible
+// polyline gets an invisible fat twin that does the event handling instead,
+// giving lines a finger-sized hit area without changing how they look.
+const HIT_AREA_WEIGHT = 24;
+
+/**
+ * A polyline whose interactivity lives on an invisible, much wider twin.
+ * The visible line never handles events; tooltips, popups and hover
+ * handlers attach to the twin.
+ */
+function TappablePolyline({
+  positions,
+  pathOptions,
+  interactive,
+  eventHandlers,
+  children,
+}: {
+  positions: LatLngExpression[] | LatLngExpression[][];
+  pathOptions: L.PathOptions;
+  interactive: boolean;
+  eventHandlers?: L.LeafletEventHandlerFnMap;
+  children?: React.ReactNode;
+}) {
+  if (!interactive) {
+    return (
+      <Polyline positions={positions} pathOptions={pathOptions} interactive={false}>
+        {children}
+      </Polyline>
+    );
+  }
+  return (
+    <>
+      <Polyline positions={positions} pathOptions={pathOptions} interactive={false} />
+      <Polyline
+        positions={positions}
+        pathOptions={{ opacity: 0, weight: HIT_AREA_WEIGHT }}
+        eventHandlers={eventHandlers}
+      >
+        {children}
+      </Polyline>
+    </>
+  );
+}
+
 const TYPE_LABEL: Record<LocationType, string> = {
   area: 'Area',
   route: 'Transect',
@@ -290,7 +334,7 @@ export default function FieldBoundaryOverlay({
               const hovered = isInteractive && hoveredSectorId === sector.id;
               const sectorLabel = `${loc.name} · ${sector.name || `Sector ${sector.ordinal}`}`;
               return (
-                <Polyline
+                <TappablePolyline
                   key={`${loc.id}-sector-${sector.id}`}
                   positions={sectorPositions as LatLngExpression[]}
                   pathOptions={{
@@ -318,7 +362,7 @@ export default function FieldBoundaryOverlay({
                     idx === 0 && nameLabel(loc.name, false)
                   )}
                   {renderPopup(loc, geometry)}
-                </Polyline>
+                </TappablePolyline>
               );
             });
             return (
@@ -337,7 +381,7 @@ export default function FieldBoundaryOverlay({
             const hovered = isInteractive && hoveredSectorId === loc.id;
             const label = loc.parent_name ? `${loc.parent_name} · ${loc.name}` : loc.name;
             return (
-              <Polyline
+              <TappablePolyline
                 key={loc.id}
                 positions={ringToLatLngs(geometry.coordinates as Position[]) as LatLngExpression[]}
                 pathOptions={{
@@ -357,7 +401,7 @@ export default function FieldBoundaryOverlay({
               >
                 {nameLabel(label, isInteractive)}
                 {renderPopup(loc, geometry)}
-              </Polyline>
+              </TappablePolyline>
             );
           }
 
@@ -367,7 +411,7 @@ export default function FieldBoundaryOverlay({
               : (geometry.coordinates as Position[][]);
           const positions = lines.map(ringToLatLngs);
           return (
-            <Polyline
+            <TappablePolyline
               key={loc.id}
               positions={positions as LatLngExpression[][]}
               pathOptions={{ color: style.stroke, weight: style.weight }}
@@ -376,7 +420,7 @@ export default function FieldBoundaryOverlay({
               {/* A sector shown as its own location is named after its route. */}
               {nameLabel(locationDisplayName(loc), isInteractive)}
               {renderPopup(loc, geometry)}
-            </Polyline>
+            </TappablePolyline>
           );
         }
 
