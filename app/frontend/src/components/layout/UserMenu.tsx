@@ -13,7 +13,6 @@ import {
   ListItemIcon,
   Menu,
   MenuItem,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -21,6 +20,7 @@ import { Logout, Key } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { authAPI } from '../../services/api';
+import { MIN_PASSWORD_LENGTH, PasswordField, PasswordRequirement } from '../auth/PasswordField';
 
 const ROLE_LABELS: Record<string, string> = {
   viewer: 'Viewer',
@@ -105,20 +105,27 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [newPasswordError, setNewPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Live once there's something to compare — never while the field is empty.
+  const mismatch = confirmPassword.length > 0 && confirmPassword !== newPassword;
+
   const handleSubmit = async () => {
-    if (newPassword !== confirmPassword) {
-      setError('New passwords do not match');
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setNewPasswordError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
       return;
     }
+    if (mismatch || !confirmPassword) return;
     setSubmitting(true);
     setError(null);
     try {
       await authAPI.changePassword(currentPassword, newPassword);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not change password');
+      const message = err instanceof Error ? err.message : 'Could not change password';
+      if (/new password|too common|at least/i.test(message)) setNewPasswordError(message);
+      else setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -133,36 +140,39 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
             {error}
           </Alert>
         )}
-        <TextField
+        <PasswordField
           autoFocus
           margin="normal"
           label="Current password"
-          type="password"
           fullWidth
           autoComplete="current-password"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
           disabled={submitting}
         />
-        <TextField
+        <PasswordField
           margin="normal"
           label="New password"
-          type="password"
           fullWidth
           autoComplete="new-password"
-          helperText="At least 10 characters"
           value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
+          onChange={(e) => {
+            setNewPassword(e.target.value);
+            if (newPasswordError) setNewPasswordError(null);
+          }}
+          error={Boolean(newPasswordError)}
+          helperText={newPasswordError ?? <PasswordRequirement password={newPassword} />}
           disabled={submitting}
         />
-        <TextField
+        <PasswordField
           margin="normal"
           label="Confirm new password"
-          type="password"
           fullWidth
           autoComplete="new-password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
+          error={mismatch}
+          helperText={mismatch ? 'Passwords do not match' : undefined}
           disabled={submitting}
         />
       </DialogContent>
@@ -173,7 +183,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
         <Button
           onClick={handleSubmit}
           variant="contained"
-          disabled={submitting || !currentPassword || newPassword.length < 10 || !confirmPassword}
+          disabled={submitting || !currentPassword}
         >
           {submitting ? 'Saving…' : 'Change password'}
         </Button>

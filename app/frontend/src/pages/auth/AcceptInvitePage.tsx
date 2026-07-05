@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../../services/api';
 import type { UserRole } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { MIN_PASSWORD_LENGTH, PasswordField, PasswordRequirement } from '../../components/auth/PasswordField';
 import { AuthPageLayout } from './AuthPageLayout';
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
@@ -31,7 +32,11 @@ export function AcceptInvitePage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ firstName?: string; password?: string }>({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Live once there's something to compare — never while the field is empty.
+  const mismatch = confirmPassword.length > 0 && confirmPassword !== password;
 
   useEffect(() => {
     if (!token) {
@@ -48,10 +53,16 @@ export function AcceptInvitePage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
+    // Validate on submit and say exactly what's wrong at the field itself —
+    // the button is never silently disabled.
+    const errors: typeof fieldErrors = {};
+    if (!firstName.trim()) errors.firstName = 'First name is required';
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
     }
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0 || mismatch || !confirmPassword) return;
+
     setSubmitting(true);
     setError(null);
     try {
@@ -64,7 +75,13 @@ export function AcceptInvitePage() {
       await refresh();
       navigate('/surveys', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create your account');
+      const message = err instanceof Error ? err.message : 'Could not create your account';
+      // Server-side password rejections (e.g. "too common") belong on the field.
+      if (/password/i.test(message)) {
+        setFieldErrors({ password: message });
+      } else {
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -108,7 +125,12 @@ export function AcceptInvitePage() {
             margin="normal"
             autoFocus
             value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
+            onChange={(e) => {
+              setFirstName(e.target.value);
+              if (fieldErrors.firstName) setFieldErrors({ ...fieldErrors, firstName: undefined });
+            }}
+            error={Boolean(fieldErrors.firstName)}
+            helperText={fieldErrors.firstName}
             disabled={submitting}
           />
           <TextField
@@ -120,25 +142,29 @@ export function AcceptInvitePage() {
             disabled={submitting}
           />
         </Box>
-        <TextField
+        <PasswordField
           label="Password"
-          type="password"
           fullWidth
           margin="normal"
           autoComplete="new-password"
-          helperText="At least 10 characters"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: undefined });
+          }}
+          error={Boolean(fieldErrors.password)}
+          helperText={fieldErrors.password ?? <PasswordRequirement password={password} />}
           disabled={submitting}
         />
-        <TextField
+        <PasswordField
           label="Confirm password"
-          type="password"
           fullWidth
           margin="normal"
           autoComplete="new-password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
+          error={mismatch}
+          helperText={mismatch ? 'Passwords do not match' : undefined}
           disabled={submitting}
         />
         <Button
@@ -146,7 +172,7 @@ export function AcceptInvitePage() {
           variant="contained"
           fullWidth
           size="large"
-          disabled={submitting || !firstName.trim() || password.length < 10 || !confirmPassword}
+          disabled={submitting}
           sx={{ mt: 2 }}
         >
           {submitting ? 'Creating account…' : 'Create account'}
