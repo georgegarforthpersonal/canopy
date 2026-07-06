@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Box, CircularProgress, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
 import {
   ApiError,
   surveyTypesAPI,
@@ -167,7 +167,10 @@ export default function SpaceDetailPage() {
     return (
       <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
         <SpaceBreadcrumb crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: 'Error' }]} />
-        <Alert severity="error">Failed to load this survey space. Please try again.</Alert>
+        <Alert severity="error" sx={{ mb: 2 }}>Failed to load this survey space. Please try again.</Alert>
+        <Button variant="contained" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
       </Box>
     );
   }
