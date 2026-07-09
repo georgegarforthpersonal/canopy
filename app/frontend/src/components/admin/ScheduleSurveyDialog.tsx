@@ -2,7 +2,7 @@
  * Admin "Schedule surveys" dialog: pick a survey type and optional location,
  * then a recurrence rule (start date, frequency, number of occurrences). The
  * rule is expanded into explicit dates and bulk-created as `scheduled` surveys
- * with no surveyors — these are what surface in the Teams worklist for
+ * with no surveyors — these are what surface in the Groups worklist for
  * volunteers to sign up to.
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -32,7 +32,7 @@ import {
 } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { brandColors } from '../../theme';
-import { formatWeekRange } from '../../pages/teams/surveyState';
+import { formatWeekRange } from '../../pages/groups/surveyState';
 import { FREQUENCY_OPTIONS, generateDates, type Frequency } from './recurrence';
 
 interface ScheduleSurveyDialogProps {

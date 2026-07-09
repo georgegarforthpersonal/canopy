@@ -1,7 +1,7 @@
 /**
  * Admin "Scheduled" tab: lists upcoming/overdue scheduled surveys and lets an
  * admin schedule a recurring series or cancel/delete an existing one. Scheduled
- * surveys are what populate the Teams worklist for volunteers to sign up to.
+ * surveys are what populate the Groups worklist for volunteers to sign up to.
  *
  * Heal-only for now (gated by the caller), matching where scheduled surveys
  * currently surface.
@@ -44,8 +44,8 @@ import {
   formatWeekRange,
   hasWindow,
   type SurveyState,
-} from '../../pages/teams/surveyState';
-import SurveyorAvatars from '../teams/SurveyorAvatars';
+} from '../../pages/groups/surveyState';
+import SurveyorAvatars from '../groups/SurveyorAvatars';
 import ScheduleSurveyDialog from './ScheduleSurveyDialog';
 import EntityCard from './EntityCard';
 import { useResponsive } from '../../hooks/useResponsive';

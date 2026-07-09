@@ -1,5 +1,5 @@
 /**
- * "Species count" panel for a team: a headline count + "+N this season"
+ * "Species count" panel for a group: a headline count + "+N this season"
  * with a Chart/List toggle (same control as the Locations & devices panel's
  * Map/List). Chart is the shared all-time cumulative-species area chart;
  * List is every species identified with its occurrence count and the date
@@ -11,7 +11,7 @@ import { BarChart as ChartIcon, ViewList } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { dashboardAPI, type SpeciesWithCount } from '../../services/api';
 import CumulativeSpeciesChart, { type CumulativeSummary } from '../dashboard/CumulativeSpeciesChart';
-import { teamCardSx, teamColors } from '../../pages/teams/teamsTokens';
+import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
 
 interface SpeciesCountPanelProps {
   speciesType: string;
@@ -22,7 +22,7 @@ const headerCellSx = {
   fontWeight: 700,
   letterSpacing: 0.8,
   textTransform: 'uppercase',
-  color: teamColors.textMuted,
+  color: groupColors.textMuted,
 } as const;
 
 const listGridSx = {
@@ -60,12 +60,12 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
   }, [view, species, speciesType]);
 
   return (
-    <Paper sx={teamCardSx}>
+    <Paper sx={groupCardSx}>
       <Box
         sx={{
           px: 2.25,
           py: 1.75,
-          borderBottom: `1px solid ${teamColors.divider}`,
+          borderBottom: `1px solid ${groupColors.divider}`,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -73,15 +73,15 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
-          <Typography sx={{ fontSize: 15, fontWeight: 600, color: teamColors.textPrimary }}>
+          <Typography sx={{ fontSize: 15, fontWeight: 600, color: groupColors.textPrimary }}>
             Species count
           </Typography>
           {summary.seasonDelta > 0 && (
-            <Typography sx={{ fontSize: 12, color: teamColors.brand }} noWrap>
+            <Typography sx={{ fontSize: 12, color: groupColors.brand }} noWrap>
               +{summary.seasonDelta} this season
             </Typography>
           )}
-          <Typography sx={{ fontSize: 20, fontWeight: 700, color: teamColors.textPrimary, lineHeight: 1 }}>
+          <Typography sx={{ fontSize: 20, fontWeight: 700, color: groupColors.textPrimary, lineHeight: 1 }}>
             {summary.total}
           </Typography>
         </Box>
@@ -107,7 +107,7 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
             },
             '& .Mui-selected': {
               bgcolor: '#fff !important',
-              color: `${teamColors.textPrimary} !important`,
+              color: `${groupColors.textPrimary} !important`,
               boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
             },
           }}
@@ -126,7 +126,7 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
       <Box sx={{ p: 2.25, display: view === 'chart' ? 'block' : 'none' }}>
         <CumulativeSpeciesChart
           speciesType={speciesType}
-          color={teamColors.brand}
+          color={groupColors.brand}
           height={240}
           emptyMessage="No data yet"
           onSummary={setSummary}
@@ -136,11 +136,11 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
       {view === 'list' && (
         <Box>
           {species === null ? (
-            <Typography sx={{ fontSize: 13.5, color: teamColors.textMuted, px: 2.25, py: 3 }}>
+            <Typography sx={{ fontSize: 13.5, color: groupColors.textMuted, px: 2.25, py: 3 }}>
               Loading…
             </Typography>
           ) : species.length === 0 ? (
-            <Typography sx={{ fontSize: 13.5, color: teamColors.textMuted, px: 2.25, py: 3 }}>
+            <Typography sx={{ fontSize: 13.5, color: groupColors.textMuted, px: 2.25, py: 3 }}>
               No species recorded yet.
             </Typography>
           ) : (
@@ -158,16 +158,16 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
                       ...listGridSx,
                       alignItems: 'center',
                       py: 0.9,
-                      borderTop: `1px solid ${teamColors.dividerInner}`,
+                      borderTop: `1px solid ${groupColors.dividerInner}`,
                     }}
                   >
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontSize: 13.5, color: teamColors.textPrimary }} noWrap>
+                      <Typography sx={{ fontSize: 13.5, color: groupColors.textPrimary }} noWrap>
                         {s.name ?? s.scientific_name ?? 'Unknown'}
                       </Typography>
                       {s.name && s.scientific_name && (
                         <Typography
-                          sx={{ fontSize: 11.5, color: teamColors.textMuted, fontStyle: 'italic' }}
+                          sx={{ fontSize: 11.5, color: groupColors.textMuted, fontStyle: 'italic' }}
                           noWrap
                         >
                           {s.scientific_name}
@@ -177,14 +177,14 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
                     <Typography
                       sx={{
                         fontSize: 13.5,
-                        color: teamColors.textPrimary,
+                        color: groupColors.textPrimary,
                         textAlign: 'right',
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
                       {s.total_count}
                     </Typography>
-                    <Typography sx={{ fontSize: 12.5, color: teamColors.textMuted, textAlign: 'right' }}>
+                    <Typography sx={{ fontSize: 12.5, color: groupColors.textMuted, textAlign: 'right' }}>
                       {s.first_observed ? dayjs(s.first_observed).format('D MMM YYYY') : '—'}
                     </Typography>
                   </Box>

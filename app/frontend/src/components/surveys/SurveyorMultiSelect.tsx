@@ -1,6 +1,6 @@
 /**
  * Surveyor multi-select: type-to-search Autocomplete with deletable chips for
- * the chosen surveyors. Currently used by the Teams surveyor picker; the
+ * the chosen surveyors. Currently used by the Groups surveyor picker; the
  * older inline Autocompletes (SurveyFormFields, the wizard SetupSteps) could
  * adopt it so every surface picks surveyors the same way.
  */

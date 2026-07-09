@@ -1,15 +1,15 @@
 /**
- * Teams grid (landing). For the Heal beta this shows a single Butterfly card.
+ * Groups grid (landing). For the Heal beta this shows a single Butterfly card.
  * Selecting a card opens that survey type's space.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Typography, CircularProgress } from '@mui/material';
 import { surveyTypesAPI, surveysAPI, dashboardAPI, type Survey, type SurveyTypeWithDetails } from '../../services/api';
-import { teamColors, TEAM_MAX_WIDTH } from './teamsTokens';
+import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
 import { nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, teamPath } from './teamMeta';
-import TeamCard from '../../components/teams/TeamCard';
+import { primarySpeciesType, groupPath } from './groupMeta';
+import GroupCard from '../../components/groups/GroupCard';
 import { PageTitle } from '../../components/layout/PageTitle';
 
 // The survey type the beta surfaces. Matched case-insensitively by name.
@@ -22,7 +22,7 @@ interface CardData {
   nextSurvey: Survey | null;
 }
 
-export default function TeamsPage() {
+export default function GroupsPage() {
   const navigate = useNavigate();
   const [cards, setCards] = useState<CardData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,10 +74,10 @@ export default function TeamsPage() {
   }, []);
 
   return (
-    <Box sx={{ bgcolor: teamColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
-      <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto' }}>
+    <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
+      <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto' }}>
         <PageTitle
-          title="Teams"
+          title="Groups"
           subtitle="Sign-up, instructions, and records for each survey type."
         />
         {loading ? (
@@ -85,10 +85,10 @@ export default function TeamsPage() {
             <CircularProgress />
           </Box>
         ) : error ? (
-          <Alert severity="error">Failed to load teams. Please try again.</Alert>
+          <Alert severity="error">Failed to load groups. Please try again.</Alert>
         ) : cards.length === 0 ? (
-          <Typography sx={{ fontSize: 14, color: teamColors.textMuted }}>
-            No teams are available yet.
+          <Typography sx={{ fontSize: 14, color: groupColors.textMuted }}>
+            No groups are available yet.
           </Typography>
         ) : (
           <Box
@@ -99,13 +99,13 @@ export default function TeamsPage() {
             }}
           >
             {cards.map((c) => (
-              <TeamCard
+              <GroupCard
                 key={c.surveyType.id}
                 surveyType={c.surveyType}
                 surveyCount={c.surveyCount}
                 speciesCount={c.speciesCount}
                 nextSurvey={c.nextSurvey}
-                onOpen={() => navigate(teamPath(c.surveyType))}
+                onOpen={() => navigate(groupPath(c.surveyType))}
               />
             ))}
           </Box>

@@ -4,8 +4,8 @@
  */
 import { Box, Typography } from '@mui/material';
 import type { Surveyor } from '../../services/api';
-import { teamColors } from '../../pages/teams/teamsTokens';
-import { surveyorAvatarColor, surveyorInitials } from '../../pages/teams/teamsTokens';
+import { groupColors } from '../../pages/groups/groupsTokens';
+import { surveyorAvatarColor, surveyorInitials } from '../../pages/groups/groupsTokens';
 
 interface SurveyorAvatarsProps {
   surveyors: Surveyor[];
@@ -42,7 +42,7 @@ export default function SurveyorAvatars({
             width: 28,
             height: 28,
             borderRadius: '50%',
-            bgcolor: greenIds?.has(s.id) ? teamColors.brand : surveyorAvatarColor(s.id),
+            bgcolor: greenIds?.has(s.id) ? groupColors.brand : surveyorAvatarColor(s.id),
             color: '#fff',
             border: '2px solid #fff',
             ml: idx === 0 ? 0 : '-8px',

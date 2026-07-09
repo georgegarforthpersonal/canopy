@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { Location } from 'react-router-dom';
-import { readReturnTo, returnAfterAction, SURVEYS_RETURN } from './returnTo';
+import { readReturnTo, returnAfterAction, returnToHref, SURVEYS_RETURN } from './returnTo';
 
 function locationWith(state: unknown): Location {
   return { pathname: '/surveys/947', search: '', hash: '', state, key: 'k' } as Location;
@@ -20,8 +20,20 @@ describe('readReturnTo', () => {
   });
 
   it('reads a returnTo passed via navigation state', () => {
-    const returnTo = { pathname: '/teams/12', label: 'Heal Butterflies' };
+    const returnTo = { pathname: '/groups/12', label: 'Heal Butterflies' };
     expect(readReturnTo(locationWith({ returnTo }))).toEqual(returnTo);
+  });
+});
+
+describe('returnToHref', () => {
+  it('is just the pathname when there is no view state', () => {
+    expect(returnToHref(SURVEYS_RETURN)).toBe('/surveys');
+  });
+
+  it('appends the origin query string so filters and page are restored', () => {
+    expect(returnToHref({ ...SURVEYS_RETURN, search: '?type=3&page=2' })).toBe(
+      '/surveys?type=3&page=2',
+    );
   });
 });
 
@@ -37,10 +49,17 @@ describe('returnAfterAction', () => {
     });
   });
 
+  it('keeps the origin filter/page params alongside the action param', () => {
+    expect(returnAfterAction({ ...SURVEYS_RETURN, search: '?type=3&page=2' }, 'edited', 947)).toEqual({
+      to: '/surveys?type=3&page=2&edited=947',
+      toastHere: false,
+    });
+  });
+
   it('returns to a space plainly and toasts from the acting page', () => {
-    const space = { pathname: '/teams/12', label: 'Heal Butterflies' };
+    const space = { pathname: '/groups/12', label: 'Heal Butterflies' };
     expect(returnAfterAction(space, 'edited', 947)).toEqual({
-      to: '/teams/12',
+      to: '/groups/12',
       toastHere: true,
     });
   });

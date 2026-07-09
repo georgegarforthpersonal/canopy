@@ -1,5 +1,5 @@
 /**
- * Team detail: the single-screen overview for one survey type. Neutral hero
+ * Group detail: the single-screen overview for one survey type. Neutral hero
  * plus two balanced columns — Surveys worklist + Species count (left); Files,
  * Routes (right). On mobile the panels stack in the order
  * Files → Surveys → Routes → Species count.
@@ -19,18 +19,18 @@ import {
   type LocationWithBoundary,
   type SurveyTypeFile,
 } from '../../services/api';
-import { teamColors, TEAM_MAX_WIDTH } from './teamsTokens';
-import { primarySpeciesType, resolveTeamTypeId } from './teamMeta';
+import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
+import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
 import { recordedThisWeek } from './surveyState';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
-import TeamBreadcrumb from '../../components/teams/TeamBreadcrumb';
-import TeamHero from '../../components/teams/TeamHero';
-import SurveysPanel from '../../components/teams/SurveysPanel';
-import FilesPanel from '../../components/teams/FilesPanel';
-import RoutesPanel from '../../components/teams/RoutesPanel';
-import SpeciesCountPanel from '../../components/teams/SpeciesCountPanel';
+import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
+import GroupHero from '../../components/groups/GroupHero';
+import SurveysPanel from '../../components/groups/SurveysPanel';
+import FilesPanel from '../../components/groups/FilesPanel';
+import RoutesPanel from '../../components/groups/RoutesPanel';
+import SpeciesCountPanel from '../../components/groups/SpeciesCountPanel';
 
-export default function TeamDetailPage() {
+export default function GroupDetailPage() {
   const { typeId } = useParams<{ typeId: string }>();
   const navigate = useNavigate();
 
@@ -61,7 +61,7 @@ export default function TeamDetailPage() {
       try {
         // The route param is a name slug (or a legacy numeric id) — resolve it
         // to the survey type id before anything else can be fetched.
-        const surveyTypeId = await resolveTeamTypeId(typeId);
+        const surveyTypeId = await resolveGroupTypeId(typeId);
         if (!active) return;
         if (surveyTypeId == null) {
           setNotFound(true);
@@ -128,7 +128,7 @@ export default function TeamDetailPage() {
           }),
         );
       } catch (err) {
-        // Only a 404 means the team doesn't exist; anything else is a fault.
+        // Only a 404 means the group doesn't exist; anything else is a fault.
         if (active) {
           if (err instanceof ApiError && err.status === 404) setNotFound(true);
           else setError(true);
@@ -156,19 +156,19 @@ export default function TeamDetailPage() {
 
   if (error) {
     return (
-      <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <TeamBreadcrumb crumbs={[{ label: 'Teams', to: '/teams' }, { label: 'Error' }]} />
-        <Alert severity="error">Failed to load this team. Please try again.</Alert>
+      <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Error' }]} />
+        <Alert severity="error">Failed to load this group. Please try again.</Alert>
       </Box>
     );
   }
 
   if (notFound || !surveyType) {
     return (
-      <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <TeamBreadcrumb crumbs={[{ label: 'Teams', to: '/teams' }, { label: 'Not found' }]} />
-        <Typography sx={{ color: teamColors.textSecondary }}>
-          This team could not be found.
+      <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Not found' }]} />
+        <Typography sx={{ color: groupColors.textSecondary }}>
+          This group could not be found.
         </Typography>
       </Box>
     );
@@ -179,17 +179,17 @@ export default function TeamDetailPage() {
   // scheduled survey completed. A plain open never changes the lifecycle.
   const goToSurvey = (s: Survey, opts?: { record?: boolean }) =>
     navigate(`/surveys/${s.id}${opts?.record ? '?record=true' : ''}`, {
-      state: { returnTo: { pathname: `/teams/${typeId}`, label: surveyType.name } },
+      state: { returnTo: { pathname: `/groups/${typeId}`, label: surveyType.name } },
     });
 
   return (
-    <Box sx={{ bgcolor: teamColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
-      <Box sx={{ maxWidth: TEAM_MAX_WIDTH, mx: 'auto' }}>
-        <TeamBreadcrumb
-          crumbs={[{ label: 'Teams', to: '/teams' }, { label: surveyType.name }]}
+    <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
+      <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto' }}>
+        <GroupBreadcrumb
+          crumbs={[{ label: 'Groups', to: '/groups' }, { label: surveyType.name }]}
         />
 
-        <TeamHero surveyType={surveyType} />
+        <GroupHero surveyType={surveyType} />
 
         {/* On xs the column wrappers become display: contents so the four
             panels stack as direct flex items in their `order`; the md column
@@ -215,7 +215,7 @@ export default function TeamDetailPage() {
                 onAddSurvey={(s) => goToSurvey(s, { record: true })}
                 onSignupSaved={handleSignupSaved}
                 onOpenSurvey={goToSurvey}
-                onViewAll={() => navigate(`/teams/${typeId}/all`)}
+                onViewAll={() => navigate(`/groups/${typeId}/all`)}
               />
             </Box>
             <Box sx={{ order: 4, minWidth: 0 }}>

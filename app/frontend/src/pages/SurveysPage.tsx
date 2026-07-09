@@ -13,6 +13,7 @@ import { useState, useEffect, useRef } from 'react';
 import { surveysAPI, surveyorsAPI, surveyTypesAPI } from '../services/api';
 import type { Survey, Surveyor, PaginationMeta, SurveyType } from '../services/api';
 import { getSurveyorName, getInitials, formatDate } from '../utils/formatters';
+import { SURVEYS_RETURN } from '../utils/returnTo';
 import { SPACING } from '../config/responsive';
 
 /**
@@ -59,9 +60,12 @@ export function SurveysPage() {
   const toast = useToast();
   const { highlight, rowRef, rowSx } = useRowHighlight();
 
-  // Pagination state
-  const [page, setPage] = useState(1);
-  const [limit] = useState(25); // Fixed limit, could make this configurable
+  // Pagination + filter state lives in the URL so the view survives navigating
+  // to a survey and back (the detail page returns via returnTo), refreshes,
+  // and can be shared. A fresh visit to /surveys is still the unfiltered list.
+  const pageParam = parseInt(searchParams.get('page') ?? '', 10);
+  const page = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : 1;
+  const limit = 25;
   const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>({
     page: 1,
     limit: 25,
@@ -69,9 +73,9 @@ export function SurveysPage() {
     total_pages: 0
   });
 
-  // Filter state
   const [surveyTypes, setSurveyTypes] = useState<SurveyType[]>([]);
-  const [selectedSurveyTypeId, setSelectedSurveyTypeId] = useState<number | ''>('');
+  const typeParam = parseInt(searchParams.get('type') ?? '', 10);
+  const selectedSurveyTypeId: number | '' = Number.isFinite(typeParam) ? typeParam : '';
 
   // ============================================================================
   // Data Fetching
@@ -162,8 +166,15 @@ export function SurveysPage() {
         highlight(surveyId);
       }
 
-      // Clear URL parameter immediately to prevent re-trigger on refresh
-      setSearchParams({}, { replace: true });
+      // Clear the action parameter immediately to prevent re-trigger on
+      // refresh, keeping view-state params (filter, page) intact
+      setSearchParams((params) => {
+        const next = new URLSearchParams(params);
+        next.delete('created');
+        next.delete('edited');
+        next.delete('deleted');
+        return next;
+      }, { replace: true });
 
       // Reset processed flag after action completes
       setTimeout(() => {
@@ -177,7 +188,12 @@ export function SurveysPage() {
   // ============================================================================
 
   const handleRowClick = (surveyId: number) => {
-    navigate(`/surveys/${surveyId}`);
+    // Hand the detail page our current view state so "Back to Surveys"
+    // restores the same filter and page
+    const search = searchParams.toString();
+    navigate(`/surveys/${surveyId}`, {
+      state: { returnTo: { ...SURVEYS_RETURN, search: search ? `?${search}` : undefined } },
+    });
   };
 
   const handleCreateClick = () => {
@@ -185,14 +201,30 @@ export function SurveysPage() {
   };
 
   const handlePageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
-    setPage(value);
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      if (value > 1) {
+        next.set('page', String(value));
+      } else {
+        next.delete('page');
+      }
+      return next;
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSurveyTypeFilterChange = (event: SelectChangeEvent<number | ''>) => {
     const value = event.target.value;
-    setSelectedSurveyTypeId(value === '' ? '' : Number(value));
-    setPage(1); // Reset to first page when filter changes
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      if (value === '') {
+        next.delete('type');
+      } else {
+        next.set('type', String(value));
+      }
+      next.delete('page'); // Reset to first page when filter changes
+      return next;
+    });
   };
 
   // ============================================================================

@@ -14,7 +14,7 @@ import { PageTitle } from '../components/layout/PageTitle';
 /**
  * DashboardsPage displays cumulative species and per-species occurrence charts,
  * plus a sightings map. The two top charts are shared components
- * (CumulativeSpeciesChart, SpeciesOccurrenceChart) reused by Teams.
+ * (CumulativeSpeciesChart, SpeciesOccurrenceChart) reused by Groups.
  */
 export function DashboardsPage() {
   // Cannwood-only "GPS tracking" tab alongside the species dashboards

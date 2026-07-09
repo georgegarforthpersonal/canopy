@@ -2,7 +2,7 @@
  * "Return-to-origin" navigation for the survey detail page.
  *
  * The survey detail page is reached from several places: the main surveys list
- * (`/surveys`) and, within Teams, a team overview or its all-surveys
+ * (`/surveys`) and, within Groups, a group overview or its all-surveys
  * list. Its back button and post-save/delete navigation should land back where
  * the user came from — not always dump them on the main list.
  *
@@ -14,6 +14,11 @@ import type { Location } from 'react-router-dom';
 export interface ReturnTo {
   /** Route to return to (back button + after save/delete). */
   pathname: string;
+  /**
+   * Query string (with leading `?`) restoring the origin list's view state —
+   * filters, page — so returning doesn't reset what the user had on screen.
+   */
+  search?: string;
   /** Noun for the back-button label, e.g. "Surveys" → "Back to Surveys". */
   label: string;
 }
@@ -27,12 +32,17 @@ export function readReturnTo(location: Location): ReturnTo {
   return state?.returnTo ?? SURVEYS_RETURN;
 }
 
+/** Full navigable href for the origin, including its view-state query string. */
+export function returnToHref(returnTo: ReturnTo): string {
+  return `${returnTo.pathname}${returnTo.search ?? ''}`;
+}
+
 /**
  * Where to navigate after editing or deleting a survey.
  *
  * The main surveys list announces the change itself (toast + row highlight)
  * via a query param it already consumes, so we keep that battle-tested flow
- * untouched. Any other origin (e.g. a Team page) has no such announcer, so the
+ * untouched. Any other origin (e.g. a Group page) has no such announcer, so the
  * acting page shows the toast and we navigate there plainly.
  */
 export function returnAfterAction(
@@ -41,7 +51,9 @@ export function returnAfterAction(
   surveyId: number,
 ): { to: string; toastHere: boolean } {
   if (returnTo.pathname === SURVEYS_RETURN.pathname) {
-    return { to: `/surveys?${action}=${surveyId}`, toastHere: false };
+    const params = new URLSearchParams(returnTo.search);
+    params.set(action, String(surveyId));
+    return { to: `/surveys?${params.toString()}`, toastHere: false };
   }
-  return { to: returnTo.pathname, toastHere: true };
+  return { to: returnToHref(returnTo), toastHere: true };
 }

@@ -14,7 +14,7 @@ import { Check, Close, PersonAddAlt1 } from '@mui/icons-material';
 import { surveysAPI, type Survey, type Surveyor } from '../../services/api';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { teamColors } from '../../pages/teams/teamsTokens';
+import { groupColors } from '../../pages/groups/groupsTokens';
 
 interface SelfSignupButtonProps {
   survey: Survey;
@@ -104,16 +104,16 @@ export default function SelfSignupButton({ survey, assigned, onSaved }: SelfSign
             }
           : isSignedUp
             ? {
-                color: teamColors.brandDark,
-                borderColor: teamColors.brand,
+                color: groupColors.brandDark,
+                borderColor: groupColors.brand,
                 bgcolor: 'rgba(61,139,86,0.06)',
-                '&:hover': { borderColor: teamColors.brandDark, bgcolor: 'rgba(61,139,86,0.06)' },
+                '&:hover': { borderColor: groupColors.brandDark, bgcolor: 'rgba(61,139,86,0.06)' },
               }
             : {
-                color: teamColors.brand,
-                borderColor: teamColors.brand,
-                '&:hover': { borderColor: teamColors.brandDark, bgcolor: 'rgba(61,139,86,0.04)' },
-                '&.Mui-disabled': { color: teamColors.brand, borderColor: teamColors.brand },
+                color: groupColors.brand,
+                borderColor: groupColors.brand,
+                '&:hover': { borderColor: groupColors.brandDark, bgcolor: 'rgba(61,139,86,0.04)' },
+                '&.Mui-disabled': { color: groupColors.brand, borderColor: groupColors.brand },
               }),
       }}
     >

@@ -17,16 +17,16 @@ import {
   type Survey,
   type Surveyor,
 } from '../../services/api';
-import { recordButtonSx, teamCardSx, teamColors } from './teamsTokens';
-import { primarySpeciesType, resolveTeamTypeId } from './teamMeta';
+import { recordButtonSx, groupCardSx, groupColors } from './groupsTokens';
+import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
 import { deriveSurveyState, formatSurveyDate, type SurveyState } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import TeamBreadcrumb from '../../components/teams/TeamBreadcrumb';
-import SelfSignupButton from '../../components/teams/SelfSignupButton';
-import SurveyorAvatars from '../../components/teams/SurveyorAvatars';
+import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
+import SelfSignupButton from '../../components/groups/SelfSignupButton';
+import SurveyorAvatars from '../../components/groups/SurveyorAvatars';
 
 const PAGE_SIZE = 25;
 
@@ -34,7 +34,7 @@ const STATUS_STYLES: Record<SurveyState, { label: string; color: string; bg: str
   recorded: { label: 'Recorded', color: '#2E6B42', bg: '#DBEDDB' },
   upcoming: { label: 'Upcoming', color: '#454648', bg: '#EBECED' },
   'due-this-week': { label: 'Due this week', color: '#2C5F8A', bg: '#DCE8F2' },
-  'needs-survey': { label: 'Needs survey', color: teamColors.amberMonth, bg: '#FBF3DB' },
+  'needs-survey': { label: 'Needs survey', color: groupColors.amberMonth, bg: '#FBF3DB' },
   cancelled: { label: 'Cancelled', color: '#888888', bg: '#EBECED' },
 };
 
@@ -85,7 +85,7 @@ export default function AllSurveysPage() {
       try {
         // The route param is a name slug (or a legacy numeric id) — resolve it
         // to the survey type id before anything else can be fetched.
-        const surveyTypeId = await resolveTeamTypeId(typeId);
+        const surveyTypeId = await resolveGroupTypeId(typeId);
         if (!active) return;
         if (surveyTypeId == null) {
           setNotFound(true);
@@ -102,7 +102,7 @@ export default function AllSurveysPage() {
         setTotal(page.total);
         setSurveyors(surveyorList);
       } catch (err) {
-        // Only a 404 means the team doesn't exist; anything else is a fault.
+        // Only a 404 means the group doesn't exist; anything else is a fault.
         if (active) {
           if (err instanceof ApiError && err.status === 404) setNotFound(true);
           else setError(true);
@@ -130,7 +130,7 @@ export default function AllSurveysPage() {
   if (error) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <TeamBreadcrumb crumbs={[{ label: 'Teams', to: '/teams' }, { label: 'Error' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Error' }]} />
         <Alert severity="error">Failed to load surveys. Please try again.</Alert>
       </Box>
     );
@@ -139,9 +139,9 @@ export default function AllSurveysPage() {
   if (notFound || !surveyType) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <TeamBreadcrumb crumbs={[{ label: 'Teams', to: '/teams' }, { label: 'Not found' }]} />
-        <Typography sx={{ color: teamColors.textSecondary }}>
-          This team could not be found.
+        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Not found' }]} />
+        <Typography sx={{ color: groupColors.textSecondary }}>
+          This group could not be found.
         </Typography>
       </Box>
     );
@@ -164,7 +164,7 @@ export default function AllSurveysPage() {
     }
   };
 
-  // Open a survey, telling it to return here (the team's survey history)
+  // Open a survey, telling it to return here (the group's survey history)
   // rather than the main surveys list after editing/deleting. Record survey
   // passes record so the form opens in record mode — saving marks the
   // scheduled survey completed; a plain open never changes the lifecycle.
@@ -172,34 +172,34 @@ export default function AllSurveysPage() {
     navigate(`/surveys/${surveyId}${opts?.record ? '?record=true' : ''}`, {
       state: {
         returnTo: {
-          pathname: `/teams/${typeId}/all`,
+          pathname: `/groups/${typeId}/all`,
           label: surveyType?.name ?? 'All surveys',
         },
       },
     });
 
   return (
-    <Box sx={{ bgcolor: teamColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
+    <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
-        <TeamBreadcrumb
+        <GroupBreadcrumb
           crumbs={[
-            { label: 'Teams', to: '/teams' },
-            { label: surveyType?.name ?? 'Survey type', to: `/teams/${typeId}` },
+            { label: 'Groups', to: '/groups' },
+            { label: surveyType?.name ?? 'Survey type', to: `/groups/${typeId}` },
             { label: 'All surveys' },
           ]}
         />
 
-        <Typography sx={{ fontSize: 24, fontWeight: 600, color: teamColors.textPrimary }}>
+        <Typography sx={{ fontSize: 24, fontWeight: 600, color: groupColors.textPrimary }}>
           All surveys
         </Typography>
         <Typography sx={{ fontSize: 13.5, color: '#888', mb: 2 }}>
           {surveyType?.name ?? ''} · {total} survey{total === 1 ? '' : 's'}, most recent first
         </Typography>
 
-        <Paper sx={teamCardSx}>
+        <Paper sx={groupCardSx}>
           {surveys.length === 0 ? (
             <Box sx={{ px: 2.25, py: 3 }}>
-              <Typography sx={{ fontSize: 13.5, color: teamColors.textMuted }}>
+              <Typography sx={{ fontSize: 13.5, color: groupColors.textMuted }}>
                 No surveys yet.
               </Typography>
             </Box>
@@ -217,21 +217,21 @@ export default function AllSurveysPage() {
                     gap: 1.75,
                     px: 2.25,
                     py: 1.6,
-                    borderTop: idx === 0 ? 'none' : `1px solid ${teamColors.dividerInner}`,
-                    bgcolor: state === 'needs-survey' ? teamColors.amberRowBg : 'transparent',
+                    borderTop: idx === 0 ? 'none' : `1px solid ${groupColors.dividerInner}`,
+                    bgcolor: state === 'needs-survey' ? groupColors.amberRowBg : 'transparent',
                     cursor: 'pointer',
-                    '&:hover': { bgcolor: state === 'needs-survey' ? teamColors.amberRowBg : teamColors.page },
+                    '&:hover': { bgcolor: state === 'needs-survey' ? groupColors.amberRowBg : groupColors.page },
                   }}
                   onClick={() => goToSurvey(survey.id)}
                 >
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: teamColors.textPrimary }} noWrap>
+                    <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
                       {formatSurveyDate(survey)}
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
                       <StatusChip state={state} />
                       {survey.location_name && (
-                        <Typography sx={{ fontSize: 13, color: teamColors.textMuted }} noWrap>
+                        <Typography sx={{ fontSize: 13, color: groupColors.textMuted }} noWrap>
                           {survey.location_name}
                         </Typography>
                       )}
@@ -290,12 +290,12 @@ export default function AllSurveysPage() {
           )}
 
           {surveys.length < total && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 1.5, borderTop: `1px solid ${teamColors.dividerInner}` }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 1.5, borderTop: `1px solid ${groupColors.dividerInner}` }}>
               <Button
                 onClick={loadMore}
                 disabled={loadingMore}
                 startIcon={loadingMore ? <CircularProgress size={14} /> : undefined}
-                sx={{ textTransform: 'none', color: teamColors.brand }}
+                sx={{ textTransform: 'none', color: groupColors.brand }}
               >
                 Load more
               </Button>

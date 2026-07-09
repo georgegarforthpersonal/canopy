@@ -1,25 +1,25 @@
 /**
- * Neutral hero band for a team: tinted species icon tile + name + description.
+ * Neutral hero band for a group: tinted species icon tile + name + description.
  * No action button (recording and sign-up live on the survey rows) and no
  * season/coordinator meta (not modelled in the backend for the beta).
  */
 import { Box, Paper, Typography } from '@mui/material';
 import type { SurveyTypeWithDetails } from '../../services/api';
-import { teamColors } from '../../pages/teams/teamsTokens';
-import { accentColors, primarySpeciesType } from '../../pages/teams/teamMeta';
+import { groupColors } from '../../pages/groups/groupsTokens';
+import { accentColors, primarySpeciesType } from '../../pages/groups/groupMeta';
 import SpeciesIconTile from './SpeciesIconTile';
 
-interface TeamHeroProps {
+interface GroupHeroProps {
   surveyType: SurveyTypeWithDetails;
 }
 
-export default function TeamHero({ surveyType }: TeamHeroProps) {
+export default function GroupHero({ surveyType }: GroupHeroProps) {
   const accent = accentColors(surveyType);
   return (
     <Paper
       sx={{
-        bgcolor: teamColors.paper,
-        border: `1px solid ${teamColors.divider}`,
+        bgcolor: groupColors.paper,
+        border: `1px solid ${groupColors.divider}`,
         borderRadius: '12px',
         boxShadow: 'none',
         px: 3,
@@ -37,7 +37,7 @@ export default function TeamHero({ surveyType }: TeamHeroProps) {
         fg={accent.fg}
       />
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 24, fontWeight: 600, color: teamColors.textPrimary, lineHeight: 1.2 }}>
+        <Typography sx={{ fontSize: 24, fontWeight: 600, color: groupColors.textPrimary, lineHeight: 1.2 }}>
           {surveyType.name}
         </Typography>
         {surveyType.description && (

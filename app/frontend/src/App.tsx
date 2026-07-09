@@ -4,6 +4,7 @@ import {
   RouterProvider,
   Navigate,
   Outlet,
+  useLocation,
   useRouteError,
 } from 'react-router-dom';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -26,9 +27,9 @@ import { DashboardsPage } from './pages/DashboardsPage';
 import { AdminPage } from './pages/AdminPage';
 import { NewCameraTrapSurveyPage } from './pages/NewCameraTrapSurveyPage';
 import { NewAudioSurveyPage } from './pages/NewAudioSurveyPage';
-import TeamsPage from './pages/teams/TeamsPage';
-import TeamDetailPage from './pages/teams/TeamDetailPage';
-import AllSurveysPage from './pages/teams/AllSurveysPage';
+import GroupsPage from './pages/groups/GroupsPage';
+import GroupDetailPage from './pages/groups/GroupDetailPage';
+import AllSurveysPage from './pages/groups/AllSurveysPage';
 
 // Set dayjs to use UK locale globally (dd/mm/yyyy format)
 dayjs.locale('en-gb');
@@ -40,6 +41,17 @@ dayjs.locale('en-gb');
  */
 function BubbleRouteError(): never {
   throw useRouteError();
+}
+
+/** "Teams" became "Groups"; old bookmarks and links keep working. */
+function LegacyTeamsRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ ...location, pathname: location.pathname.replace(/^\/teams/, '/groups') }}
+      replace
+    />
+  );
 }
 
 
@@ -72,10 +84,11 @@ const router = createBrowserRouter([
           </RequireAuth>
         ),
         children: [
-          // Teams (beta) — grid, per-type team page, and full survey history
-          { path: '/teams', element: <TeamsPage /> },
-          { path: '/teams/:typeId', element: <TeamDetailPage /> },
-          { path: '/teams/:typeId/all', element: <AllSurveysPage /> },
+          // Groups (beta) — grid, per-type group page, and full survey history
+          { path: '/groups', element: <GroupsPage /> },
+          { path: '/groups/:typeId', element: <GroupDetailPage /> },
+          { path: '/groups/:typeId/all', element: <AllSurveysPage /> },
+          { path: '/teams/*', element: <LegacyTeamsRedirect /> },
 
           // Dashboard page
           { path: '/dashboards', element: <DashboardsPage /> },

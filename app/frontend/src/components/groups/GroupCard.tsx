@@ -1,17 +1,17 @@
 /**
- * A type card on the Teams grid. The whole card is a button that opens the
- * team page. Shows the tinted species icon tile, name + sub-label, and a three-stat
+ * A type card on the Groups grid. The whole card is a button that opens the
+ * group page. Shows the tinted species icon tile, name + sub-label, and a three-stat
  * row (surveys, unique species found, next survey).
  */
 import { Box, Paper, ButtonBase, Typography } from '@mui/material';
 import { ChevronRight } from '@mui/icons-material';
 import type { Survey, SurveyTypeWithDetails } from '../../services/api';
-import { teamColors } from '../../pages/teams/teamsTokens';
-import { accentColors, primarySpeciesType } from '../../pages/teams/teamMeta';
-import { formatSurveyDate } from '../../pages/teams/surveyState';
+import { groupColors } from '../../pages/groups/groupsTokens';
+import { accentColors, primarySpeciesType } from '../../pages/groups/groupMeta';
+import { formatSurveyDate } from '../../pages/groups/surveyState';
 import SpeciesIconTile from './SpeciesIconTile';
 
-interface TeamCardProps {
+interface GroupCardProps {
   surveyType: SurveyTypeWithDetails;
   surveyCount: number;
   /** Distinct species recorded across all surveys of this type. */
@@ -25,7 +25,7 @@ function Stat({ label, value, valueColor }: { label: string; value: string; valu
   return (
     <Box sx={{ minWidth: 0 }}>
       <Typography
-        sx={{ fontSize: 13, fontWeight: 600, color: valueColor ?? teamColors.textPrimary }}
+        sx={{ fontSize: 13, fontWeight: 600, color: valueColor ?? groupColors.textPrimary }}
         noWrap
       >
         {value}
@@ -35,16 +35,16 @@ function Stat({ label, value, valueColor }: { label: string; value: string; valu
   );
 }
 
-export default function TeamCard({
+export default function GroupCard({
   surveyType,
   surveyCount,
   speciesCount,
   nextSurvey,
   onOpen,
-}: TeamCardProps) {
+}: GroupCardProps) {
   const accent = accentColors(surveyType);
   return (
-    <Paper sx={{ border: `1px solid ${teamColors.divider}`, borderRadius: '10px', boxShadow: 'none', overflow: 'hidden' }}>
+    <Paper sx={{ border: `1px solid ${groupColors.divider}`, borderRadius: '10px', boxShadow: 'none', overflow: 'hidden' }}>
       <ButtonBase
         onClick={onOpen}
         sx={{
@@ -65,7 +65,7 @@ export default function TeamCard({
             fg={accent.fg}
           />
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography sx={{ fontSize: 17, fontWeight: 600, color: teamColors.textPrimary }} noWrap>
+            <Typography sx={{ fontSize: 17, fontWeight: 600, color: groupColors.textPrimary }} noWrap>
               {surveyType.name}
             </Typography>
             {surveyType.description && (
@@ -77,7 +77,7 @@ export default function TeamCard({
           <ChevronRight sx={{ color: '#bbb' }} />
         </Box>
 
-        <Box sx={{ height: '1px', bgcolor: teamColors.divider, my: 2 }} />
+        <Box sx={{ height: '1px', bgcolor: groupColors.divider, my: 2 }} />
 
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: 1 }}>
           <Stat label="Surveys" value={String(surveyCount)} />
@@ -85,7 +85,7 @@ export default function TeamCard({
           <Stat
             label="Next survey"
             value={nextSurvey ? formatSurveyDate(nextSurvey) : 'No sessions'}
-            valueColor={nextSurvey ? teamColors.brand : '#888'}
+            valueColor={nextSurvey ? groupColors.brand : '#888'}
           />
         </Box>
       </ButtonBase>

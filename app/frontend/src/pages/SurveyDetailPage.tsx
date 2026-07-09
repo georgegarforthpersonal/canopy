@@ -19,7 +19,7 @@ import { ImageViewerModal, type ImageViewerItem } from '../components/ImageViewe
 import ViewModeToggle from '../components/ViewModeToggle';
 import { SPACING } from '../config/responsive';
 import { useToast } from '../context/ToastContext';
-import { readReturnTo, returnAfterAction } from '../utils/returnTo';
+import { readReturnTo, returnAfterAction, returnToHref } from '../utils/returnTo';
 
 /**
  * Small thumbnail component that lazily loads a presigned URL for a camera trap image
@@ -228,7 +228,7 @@ export function SurveyDetailPage() {
           setDevices([]);
         }
 
-        // Landing with ?record=true ("Record survey" from a Team page) or
+        // Landing with ?record=true ("Record survey" from a Group page) or
         // ?edit=true drops straight into the populated form.
         if (startInEditMode) {
           populateEditState(surveyData, sightingsData, surveyorsData);
@@ -282,7 +282,7 @@ export function SurveyDetailPage() {
         <Alert severity="error" sx={{ mb: 2 }}>
           {error || 'Survey not found'}
         </Alert>
-        <Button variant="contained" onClick={() => navigate(returnTo.pathname)}>
+        <Button variant="contained" onClick={() => navigate(returnToHref(returnTo))}>
           Back to {returnTo.label}
         </Button>
       </Box>
@@ -745,7 +745,7 @@ export function SurveyDetailPage() {
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
       {/* Page Header */}
       <PageHeader
-        backButton={{ label: `Back to ${returnTo.label}`, href: returnTo.pathname }}
+        backButton={{ label: `Back to ${returnTo.label}`, href: returnToHref(returnTo) }}
         actions={
           <>
             {isEditMode ? (

@@ -1,5 +1,5 @@
 /**
- * Files panel for a team: a short list of downloadable reference files
+ * Files panel for a group: a short list of downloadable reference files
  * (methodology PDFs, recording forms, ID sheets) attached to the survey type.
  * Files are managed in Edit Survey Type; this view is download-only.
  */
@@ -10,7 +10,7 @@ import { surveyTypesAPI } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import { formatFileSize } from '../../utils/fileBadges';
 import FileTypeBadge from '../FileTypeBadge';
-import { teamCardSx, teamColors } from '../../pages/teams/teamsTokens';
+import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
 
 interface FilesPanelProps {
   surveyTypeId: number;
@@ -31,9 +31,9 @@ export default function FilesPanel({ surveyTypeId, files, loading }: FilesPanelP
   };
 
   return (
-    <Paper sx={teamCardSx}>
-      <Box sx={{ px: 2.25, py: 1.75, borderBottom: `1px solid ${teamColors.divider}` }}>
-        <Typography sx={{ fontSize: 15, fontWeight: 600, color: teamColors.textPrimary }}>
+    <Paper sx={groupCardSx}>
+      <Box sx={{ px: 2.25, py: 1.75, borderBottom: `1px solid ${groupColors.divider}` }}>
+        <Typography sx={{ fontSize: 15, fontWeight: 600, color: groupColors.textPrimary }}>
           Files
         </Typography>
       </Box>
@@ -44,7 +44,7 @@ export default function FilesPanel({ surveyTypeId, files, loading }: FilesPanelP
         </Box>
       ) : files.length === 0 ? (
         <Box sx={{ px: 2.25, py: 3 }}>
-          <Typography sx={{ fontSize: 13.5, color: teamColors.textMuted }}>
+          <Typography sx={{ fontSize: 13.5, color: groupColors.textMuted }}>
             No files yet.
           </Typography>
         </Box>
@@ -60,14 +60,14 @@ export default function FilesPanel({ surveyTypeId, files, loading }: FilesPanelP
               gap: 1.5,
               px: 2.25,
               py: 1.4,
-              borderTop: `1px solid ${teamColors.dividerInner}`,
+              borderTop: `1px solid ${groupColors.dividerInner}`,
               textAlign: 'left',
-              '&:hover': { bgcolor: teamColors.page },
+              '&:hover': { bgcolor: groupColors.page },
             }}
           >
             <FileTypeBadge filename={file.filename} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 600, color: teamColors.textPrimary }} noWrap>
+              <Typography sx={{ fontSize: 13, fontWeight: 600, color: groupColors.textPrimary }} noWrap>
                 {file.filename}
               </Typography>
               {file.size_bytes != null && (
