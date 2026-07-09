@@ -1,12 +1,12 @@
 /**
- * The Surveys worklist panel, split into labelled sections so the situations
- * read at a glance: "This week" (the current week's survey always has an
- * anchor here — still due or already recorded, it never vanishes), "To record"
- * (every overdue row — the actionable backlog is never hidden), "Upcoming"
- * (the next 3 scheduled rows), and an "All surveys" door whose
- * recorded/scheduled split says exactly what's behind it. To record and
- * Upcoming hide when empty; This week hides only when the panel has nothing
- * at all to show.
+ * The Surveys worklist panel, split into labelled sections ordered
+ * chronologically top to bottom: "To record" (every overdue row, oldest first
+ * — the actionable backlog is never hidden), "This week" (the current week's
+ * survey always has an anchor here — still due or already recorded, it never
+ * vanishes), "Upcoming" (the next 3 scheduled rows), and an "All surveys"
+ * door whose recorded/scheduled split says exactly what's behind it. To
+ * record and Upcoming hide when empty; This week hides only when the panel
+ * has nothing at all to show.
  */
 import { Box, Paper, Typography, ButtonBase } from '@mui/material';
 import { AssignmentTurnedIn, ChevronRight } from '@mui/icons-material';
@@ -86,6 +86,21 @@ export default function SurveysPanel({
         </Box>
       )}
 
+      {overdue.length > 0 && (
+        <SectionHeader label={`To record (${overdue.length})`} color={groupColors.amberText} />
+      )}
+      {overdue.map((s) => (
+        <SurveyWorklistRow
+          key={s.id}
+          survey={s}
+          state="needs-survey"
+          surveyors={resolveSurveyors(s.surveyor_ids)}
+          greenIds={greenIds}
+          onAddSurvey={onAddSurvey}
+          onSignupSaved={onSignupSaved}
+        />
+      ))}
+
       {/* This week: still-due rows first (actionable), then recorded ones. */}
       {!empty && <SectionHeader label="This week" color={groupColors.brandDark} />}
       {dueThisWeek.map((s) => (
@@ -118,21 +133,6 @@ export default function SurveysPanel({
           </Typography>
         </Box>
       )}
-
-      {overdue.length > 0 && (
-        <SectionHeader label={`To record (${overdue.length})`} color={groupColors.amberText} />
-      )}
-      {overdue.map((s) => (
-        <SurveyWorklistRow
-          key={s.id}
-          survey={s}
-          state="needs-survey"
-          surveyors={resolveSurveyors(s.surveyor_ids)}
-          greenIds={greenIds}
-          onAddSurvey={onAddSurvey}
-          onSignupSaved={onSignupSaved}
-        />
-      ))}
 
       {upcoming.length > 0 && (
         <SectionHeader
