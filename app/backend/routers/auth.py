@@ -18,6 +18,7 @@ Endpoints:
   PATCH  /api/auth/users/{id}             - Admin: change role / (de)activate
 """
 
+import logging
 from datetime import datetime
 from typing import Any, List, Optional
 
@@ -64,6 +65,8 @@ from models import (
 )
 from services.accounts import ensure_linked_surveyor
 from services.email import send_invite_email, send_password_reset_email
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -178,9 +181,10 @@ def _claimable_surveyor(db: Session, invite: Invite) -> Optional[Surveyor]:
 
 def _invite_read(db: Session, invite: Invite) -> InviteRead:
     read: InviteRead = InviteRead.model_validate(invite, from_attributes=True)
-    if invite.surveyor_id is not None:
-        surveyor = db.get(Surveyor, invite.surveyor_id)
-        read.surveyor_name = _surveyor_name(surveyor) if surveyor else None
+    # Show the surveyor only while acceptance would actually claim it, so
+    # the admin list never promises a link that has since gone stale.
+    claim = _claimable_surveyor(db, invite)
+    read.surveyor_name = _surveyor_name(claim) if claim else None
     return read
 
 
@@ -442,7 +446,15 @@ async def accept_invite(
     invite.accepted_at = datetime.utcnow()
     db.add(user)
     db.add(invite)
-    claim = db.get(Surveyor, invite.surveyor_id) if invite.surveyor_id else None
+    claim = _claimable_surveyor(db, invite)
+    if invite.surveyor_id is not None and claim is None:
+        # Registration proceeds with a fresh surveyor rather than failing,
+        # but the broken link is worth an operator's attention: the invitee
+        # was told they'd keep the historical row's survey history.
+        logger.warning(
+            f"Invite {invite.id} pointed at surveyor {invite.surveyor_id}, which is no "
+            f"longer claimable — created a fresh surveyor for {invite.email} instead"
+        )
     ensure_linked_surveyor(db, user, invite.organisation_id, claim=claim)
     db.commit()
     db.refresh(user)
@@ -469,7 +481,27 @@ async def list_invites(
         Invite.organisation_id == org.id,
         Invite.accepted_at == None,  # noqa: E711
     ).order_by(col(Invite.created_at).desc()).all()
-    return [_invite_read(db, invite) for invite in invites]
+
+    # One query for every linked surveyor; only still-claimable ones get a
+    # name, so the list never promises a link that has since gone stale.
+    surveyor_ids = {i.surveyor_id for i in invites if i.surveyor_id is not None}
+    claimable = {}
+    if surveyor_ids:
+        claimable = {
+            s.id: s for s in db.query(Surveyor).filter(
+                col(Surveyor.id).in_(surveyor_ids),
+                Surveyor.user_id == None,  # noqa: E711
+                Surveyor.organisation_id == org.id,
+            ).all()
+        }
+
+    reads = []
+    for invite in invites:
+        read: InviteRead = InviteRead.model_validate(invite, from_attributes=True)
+        claim = claimable.get(invite.surveyor_id) if invite.surveyor_id else None
+        read.surveyor_name = _surveyor_name(claim) if claim else None
+        reads.append(read)
+    return reads
 
 
 @router.post("/invites", status_code=201)
@@ -501,10 +533,13 @@ async def create_invite(
             raise HTTPException(status_code=404, detail="Surveyor not found")
         if surveyor.user_id is not None:
             raise HTTPException(status_code=409, detail="This surveyor is already linked to an account")
+        # Open means unused AND unexpired, as in _find_open_invite — an
+        # expired invite can never be accepted, so it must not block.
         clashing = db.query(Invite).filter(
             Invite.organisation_id == org.id,
             Invite.surveyor_id == body.surveyor_id,
             Invite.accepted_at == None,  # noqa: E711
+            Invite.expires_at > datetime.utcnow(),
             func.lower(Invite.email) != email,
         ).first()
         if clashing:

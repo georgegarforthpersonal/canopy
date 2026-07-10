@@ -124,4 +124,9 @@ def backfill() -> None:
 
 
 if __name__ == "__main__":
-    backfill()
+    try:
+        backfill()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        logger.info("Aborted — nothing written.")
+        sys.exit(1)

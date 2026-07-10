@@ -210,6 +210,19 @@ export default function AllSurveysPage() {
               // Due-this-week rows carrying both Sign up and Record survey are
               // too wide for a phone, so they stack: date + chip line, actions line.
               const stacked = state === 'due-this-week' && canEditSurveys;
+              const recordButton = (
+                <Button
+                  variant="contained"
+                  startIcon={<Add sx={{ fontSize: 18 }} />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goToSurvey(survey.id, { record: true });
+                  }}
+                  sx={recordButtonSx}
+                >
+                  Record survey
+                </Button>
+              );
               return (
                 <Box
                   key={survey.id}
@@ -282,35 +295,11 @@ export default function AllSurveysPage() {
                     >
                       <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
                       <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleSignupSaved} />
-                      {state === 'due-this-week' && canEditSurveys && (
-                        <Button
-                          variant="contained"
-                          startIcon={<Add sx={{ fontSize: 18 }} />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            goToSurvey(survey.id, { record: true });
-                          }}
-                          sx={recordButtonSx}
-                        >
-                          Record survey
-                        </Button>
-                      )}
+                      {state === 'due-this-week' && canEditSurveys && recordButton}
                     </Box>
                   )}
 
-                  {state === 'needs-survey' && canEditSurveys && (
-                    <Button
-                      variant="contained"
-                      startIcon={<Add sx={{ fontSize: 18 }} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        goToSurvey(survey.id, { record: true });
-                      }}
-                      sx={recordButtonSx}
-                    >
-                      Record survey
-                    </Button>
-                  )}
+                  {state === 'needs-survey' && canEditSurveys && recordButton}
                 </Box>
               );
             })

@@ -406,6 +406,22 @@ class TestInviteSurveyorLinking:
         # open invite, as for plain invites.
         self._invite(client, admin_headers, email="first@example.org", surveyor_id=surveyor.id)
 
+    def test_expired_invite_does_not_block_relinking(
+        self, client: TestClient, login_as, create_surveyor, db_session
+    ):
+        """Expired invites are inert everywhere else; they must not hold a
+        surveyor hostage either."""
+        admin_headers, _ = login_as(UserRole.admin)
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
+        self._invite(client, admin_headers, email="old-address@example.org", surveyor_id=surveyor.id)
+        invite = db_session.query(Invite).order_by(Invite.id.desc()).first()
+        invite.expires_at = datetime.utcnow() - timedelta(hours=1)
+        db_session.add(invite)
+        db_session.commit()
+
+        # 201, not 409 — the dead invite can never claim the surveyor
+        self._invite(client, admin_headers, email="right-address@example.org", surveyor_id=surveyor.id)
+
     def test_lookup_shows_surveyor_until_claimed(
         self, client: TestClient, login_as, create_surveyor, create_user, db_session
     ):
@@ -427,7 +443,7 @@ class TestInviteSurveyorLinking:
         assert client.get(f"/api/auth/invites/lookup?token={token}").json()["surveyor"] is None
 
     def test_list_invites_exposes_surveyor(
-        self, client: TestClient, login_as, create_surveyor
+        self, client: TestClient, login_as, create_surveyor, create_user, db_session
     ):
         admin_headers, _ = login_as(UserRole.admin)
         surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
@@ -436,6 +452,15 @@ class TestInviteSurveyorLinking:
         rows = client.get("/api/auth/invites", headers=admin_headers).json()
         assert rows[0]["surveyor_id"] == surveyor.id
         assert rows[0]["surveyor_name"] == "Bernie Garforth"
+
+        # Once the surveyor is claimed elsewhere, the list stops promising a
+        # link that acceptance would no longer honour.
+        other = create_user(email="other@example.org")
+        surveyor.user_id = other.id
+        db_session.add(surveyor)
+        db_session.commit()
+        rows = client.get("/api/auth/invites", headers=admin_headers).json()
+        assert rows[0]["surveyor_name"] is None
 
     def test_survey_signup_reuses_registration_surveyor(
         self, client: TestClient, login_as, create_surveyor, create_survey, db_session

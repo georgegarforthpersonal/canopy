@@ -2,17 +2,18 @@
  * Overlapping avatar group for the surveyors assigned to a survey. Falls back to
  * a muted "No surveyors yet" when empty.
  */
+import type { MouseEvent } from 'react';
 import { Box, Tooltip, Typography } from '@mui/material';
 import type { Surveyor } from '../../services/api';
 import { groupColors } from '../../pages/groups/groupsTokens';
 import { surveyorAvatarColor, surveyorInitials } from '../../pages/groups/groupsTokens';
+import { surveyorFullName } from '../../utils/formatters';
 
-function surveyorName(s: Surveyor) {
-  return `${s.first_name}${s.last_name ? ' ' + s.last_name : ''}`;
-}
-
-// enterTouchDelay=0 makes a tap open the tooltip on touch devices.
+// enterTouchDelay=0 makes a tap open the tooltip on touch devices. The tap
+// must not bubble: avatars sit inside clickable rows, and navigating away
+// would close the tooltip the tap just opened.
 const touchProps = { enterTouchDelay: 0, leaveTouchDelay: 3000 } as const;
+const stopClick = (e: MouseEvent) => e.stopPropagation();
 
 interface SurveyorAvatarsProps {
   surveyors: Surveyor[];
@@ -42,8 +43,9 @@ export default function SurveyorAvatars({
   return (
     <Box sx={{ display: 'flex', alignItems: 'center' }}>
       {shown.map((s, idx) => (
-        <Tooltip key={s.id} title={surveyorName(s)} arrow {...touchProps}>
+        <Tooltip key={s.id} title={surveyorFullName(s)} arrow {...touchProps}>
           <Box
+            onClick={stopClick}
             sx={{
               width: 28,
               height: 28,
@@ -66,11 +68,12 @@ export default function SurveyorAvatars({
       ))}
       {overflow > 0 && (
         <Tooltip
-          title={surveyors.slice(max).map(surveyorName).join(', ')}
+          title={surveyors.slice(max).map(surveyorFullName).join(', ')}
           arrow
           {...touchProps}
         >
           <Box
+            onClick={stopClick}
             sx={{
               width: 28,
               height: 28,

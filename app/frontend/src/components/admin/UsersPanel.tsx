@@ -30,6 +30,7 @@ import {
 import { Add, Block, ContentCopy, Refresh, RestoreFromTrash, Send } from '@mui/icons-material';
 import { surveyorsAPI, usersAPI } from '../../services/api';
 import type { OrgInvite, OrgUser, Surveyor, UserRole } from '../../services/api';
+import { surveyorFullName } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
@@ -285,6 +286,7 @@ export function UsersPanel() {
 
       {inviteDialogOpen && (
         <InviteDialog
+          openInvites={invites}
           onClose={() => setInviteDialogOpen(false)}
           onInvited={() => {
             setInviteDialogOpen(false);
@@ -296,27 +298,42 @@ export function UsersPanel() {
   );
 }
 
-const surveyorLabel = (s: Surveyor) =>
-  s.last_name ? `${s.first_name} ${s.last_name}` : s.first_name;
-
-function InviteDialog({ onClose, onInvited }: { onClose: () => void; onInvited: () => void }) {
+function InviteDialog({
+  onClose,
+  onInvited,
+  openInvites,
+}: {
+  onClose: () => void;
+  onInvited: () => void;
+  openInvites: OrgInvite[];
+}) {
   const toast = useToast();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('viewer');
   const [surveyor, setSurveyor] = useState<Surveyor | null>(null);
   const [unclaimedSurveyors, setUnclaimedSurveyors] = useState<Surveyor[]>([]);
+  const [surveyorLoadError, setSurveyorLoadError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
+    // A surveyor already targeted by another live invite would be rejected
+    // with a 409 on submit, so don't offer it in the first place.
+    const heldByOpenInvite = new Set(
+      openInvites
+        .filter((i) => i.surveyor_id != null && new Date(i.expires_at) > new Date())
+        .map((i) => i.surveyor_id)
+    );
     // Include inactive surveyors — claiming one reactivates it
     surveyorsAPI
       .getAll(true)
-      .then((all) => setUnclaimedSurveyors(all.filter((s) => s.user_id == null)))
-      .catch(() => setUnclaimedSurveyors([]));
-  }, []);
+      .then((all) =>
+        setUnclaimedSurveyors(all.filter((s) => s.user_id == null && !heldByOpenInvite.has(s.id)))
+      )
+      .catch(() => setSurveyorLoadError(true));
+  }, [openInvites]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -414,15 +431,21 @@ function InviteDialog({ onClose, onInvited }: { onClose: () => void; onInvited: 
             ))}
           </Select>
         </FormControl>
+        {surveyorLoadError && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Couldn't load the surveyor list, so this invite can't be linked to an
+            existing surveyor. Close the dialog and try again if you need that.
+          </Alert>
+        )}
         {unclaimedSurveyors.length > 0 && (
           <Autocomplete
             options={unclaimedSurveyors}
             value={surveyor}
             onChange={(_, value) => setSurveyor(value)}
-            getOptionLabel={surveyorLabel}
+            getOptionLabel={surveyorFullName}
             renderOption={(props, option) => (
               <li {...props} key={option.id}>
-                {surveyorLabel(option)}
+                {surveyorFullName(option)}
                 {!option.is_active && (
                   <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
                     (inactive)
