@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database.connection import get_db
 from models import Device, DeviceRead, DeviceCreate, DeviceUpdate, Organisation, Location
-from auth import require_admin
+from auth import require_admin_role
 from dependencies import get_current_organisation
 
 router = APIRouter()
@@ -152,7 +152,7 @@ async def get_device(
     return _device_to_read(row)
 
 
-@router.post("", response_model=DeviceRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post("", response_model=DeviceRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin_role)])
 async def create_device(
     device: DeviceCreate,
     org: Organisation = Depends(get_current_organisation),
@@ -193,7 +193,7 @@ async def create_device(
     return await get_device(db_device.id, org, db)  # type: ignore[no-any-return]
 
 
-@router.put("/{id}", response_model=DeviceRead, dependencies=[Depends(require_admin)])
+@router.put("/{id}", response_model=DeviceRead, dependencies=[Depends(require_admin_role)])
 async def update_device(
     id: int,
     device: DeviceUpdate,
@@ -250,7 +250,7 @@ async def update_device(
     return await get_device(id, org, db)  # type: ignore[no-any-return]
 
 
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin_role)])
 async def delete_device(
     id: int,
     org: Organisation = Depends(get_current_organisation),
@@ -269,7 +269,7 @@ async def delete_device(
     return None
 
 
-@router.post("/{id}/deactivate", response_model=DeviceRead, dependencies=[Depends(require_admin)])
+@router.post("/{id}/deactivate", response_model=DeviceRead, dependencies=[Depends(require_admin_role)])
 async def deactivate_device(
     id: int,
     org: Organisation = Depends(get_current_organisation),
@@ -297,7 +297,7 @@ async def deactivate_device(
     return await get_device(id, org, db)  # type: ignore[no-any-return]
 
 
-@router.post("/{id}/reactivate", response_model=DeviceRead, dependencies=[Depends(require_admin)])
+@router.post("/{id}/reactivate", response_model=DeviceRead, dependencies=[Depends(require_admin_role)])
 async def reactivate_device(
     id: int,
     org: Organisation = Depends(get_current_organisation),

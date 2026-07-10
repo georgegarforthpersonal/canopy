@@ -2,16 +2,18 @@ import { Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, Ta
 import type { SelectChangeEvent } from '@mui/material';
 import { CalendarToday, Person, Visibility, Category, FilterList } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useRowHighlight } from '../hooks';
 import { getSpeciesIcon, formatSpeciesCount } from '../config';
+import { PageTitle } from '../components/layout/PageTitle';
 import { SurveyTypeChip } from '../components/SurveyTypeColors';
 import { notionColors, tableSizing } from '../theme';
 import { useState, useEffect, useRef } from 'react';
 import { surveysAPI, surveyorsAPI, surveyTypesAPI } from '../services/api';
 import type { Survey, Surveyor, PaginationMeta, SurveyType } from '../services/api';
 import { getSurveyorName, getInitials, formatDate } from '../utils/formatters';
+import { SURVEYS_RETURN } from '../utils/returnTo';
 import { SPACING } from '../config/responsive';
 
 /**
@@ -44,7 +46,7 @@ import { SPACING } from '../config/responsive';
 export function SurveysPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { requireAuth } = useAuth();
+  const { canEditSurveys } = usePermissions();
 
   // ============================================================================
   // State Management
@@ -58,9 +60,12 @@ export function SurveysPage() {
   const toast = useToast();
   const { highlight, rowRef, rowSx } = useRowHighlight();
 
-  // Pagination state
-  const [page, setPage] = useState(1);
-  const [limit] = useState(25); // Fixed limit, could make this configurable
+  // Pagination + filter state lives in the URL so the view survives navigating
+  // to a survey and back (the detail page returns via returnTo), refreshes,
+  // and can be shared. A fresh visit to /surveys is still the unfiltered list.
+  const pageParam = parseInt(searchParams.get('page') ?? '', 10);
+  const page = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : 1;
+  const limit = 25;
   const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>({
     page: 1,
     limit: 25,
@@ -68,9 +73,9 @@ export function SurveysPage() {
     total_pages: 0
   });
 
-  // Filter state
   const [surveyTypes, setSurveyTypes] = useState<SurveyType[]>([]);
-  const [selectedSurveyTypeId, setSelectedSurveyTypeId] = useState<number | ''>('');
+  const typeParam = parseInt(searchParams.get('type') ?? '', 10);
+  const selectedSurveyTypeId: number | '' = Number.isFinite(typeParam) ? typeParam : '';
 
   // ============================================================================
   // Data Fetching
@@ -161,8 +166,15 @@ export function SurveysPage() {
         highlight(surveyId);
       }
 
-      // Clear URL parameter immediately to prevent re-trigger on refresh
-      setSearchParams({}, { replace: true });
+      // Clear the action parameter immediately to prevent re-trigger on
+      // refresh, keeping view-state params (filter, page) intact
+      setSearchParams((params) => {
+        const next = new URLSearchParams(params);
+        next.delete('created');
+        next.delete('edited');
+        next.delete('deleted');
+        return next;
+      }, { replace: true });
 
       // Reset processed flag after action completes
       setTimeout(() => {
@@ -176,22 +188,43 @@ export function SurveysPage() {
   // ============================================================================
 
   const handleRowClick = (surveyId: number) => {
-    navigate(`/surveys/${surveyId}`);
+    // Hand the detail page our current view state so "Back to Surveys"
+    // restores the same filter and page
+    const search = searchParams.toString();
+    navigate(`/surveys/${surveyId}`, {
+      state: { returnTo: { ...SURVEYS_RETURN, search: search ? `?${search}` : undefined } },
+    });
   };
 
   const handleCreateClick = () => {
-    requireAuth(() => navigate('/surveys/new'));
+    navigate('/surveys/new');
   };
 
   const handlePageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
-    setPage(value);
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      if (value > 1) {
+        next.set('page', String(value));
+      } else {
+        next.delete('page');
+      }
+      return next;
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSurveyTypeFilterChange = (event: SelectChangeEvent<number | ''>) => {
     const value = event.target.value;
-    setSelectedSurveyTypeId(value === '' ? '' : Number(value));
-    setPage(1); // Reset to first page when filter changes
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params);
+      if (value === '') {
+        next.delete('type');
+      } else {
+        next.set('type', String(value));
+      }
+      next.delete('page'); // Reset to first page when filter changes
+      return next;
+    });
   };
 
   // ============================================================================
@@ -223,7 +256,28 @@ export function SurveysPage() {
 
   return (
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
-      {/* Filters and Action Button */}
+      <PageTitle
+        title="Surveys"
+        actions={
+          canEditSurveys ? (
+            <Button
+              variant="contained"
+              size="medium"
+              onClick={handleCreateClick}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                boxShadow: 'none',
+                '&:hover': { boxShadow: 'none' }
+              }}
+            >
+              New
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {/* Filters */}
       <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center" justifyContent="space-between">
         <Stack direction="row" spacing={2} alignItems="center">
           <FilterList sx={{ color: 'text.secondary', fontSize: 20 }} />
@@ -253,19 +307,6 @@ export function SurveysPage() {
             </Select>
           </FormControl>
         </Stack>
-        <Button
-          variant="contained"
-          size="medium"
-          onClick={handleCreateClick}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 600,
-            boxShadow: 'none',
-            '&:hover': { boxShadow: 'none' }
-          }}
-        >
-          New
-        </Button>
       </Stack>
 
       {/* Surveys Table */}

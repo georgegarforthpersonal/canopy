@@ -30,12 +30,15 @@ import {
   MenuItem,
   Divider,
 } from '@mui/material';
-import { Add, Delete, RestoreFromTrash, Edit, Lock, Download } from '@mui/icons-material';
+import { Add, Delete, RestoreFromTrash, Edit, Download } from '@mui/icons-material';
 import { useState, useEffect, type ReactNode, type Ref } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, usePermissions } from '../context/AuthContext';
+import { AccessNotice } from '../components/auth/AccessNotice';
+import { UsersPanel } from '../components/admin/UsersPanel';
 import { useToast } from '../context/ToastContext';
 import SurveyTypeFilesManager from '../components/admin/SurveyTypeFilesManager';
 import { SPACING } from '../config/responsive';
+import { PageTitle } from '../components/layout/PageTitle';
 import { useResponsive } from '../hooks/useResponsive';
 import { useRowHighlight } from '../hooks';
 import {
@@ -102,13 +105,14 @@ function FormSection({ title, children }: { title: string; children: ReactNode }
  * - Survey Types: View, add, edit, deactivate/reactivate survey type configurations
  */
 export function AdminPage() {
-  const { isAuthenticated, isLoading: authLoading, requireAuth } = useAuth();
+  const { isLoading: authLoading } = useAuth();
+  const { canAccessAdmin } = usePermissions();
   const { isMobile } = useResponsive();
   const toast = useToast();
   const surveyorHighlight = useRowHighlight();
   const surveyTypeHighlight = useRowHighlight();
   // Survey scheduling is a Heal-only admin facility for now, matching the
-  // Heal-only Spaces tab where scheduled surveys surface.
+  // Heal-only Groups tab where scheduled surveys surface.
   const showScheduling = getOrgSlug() === 'heal';
   const [tabValue, setTabValue] = useState(0);
 
@@ -580,29 +584,13 @@ export function AdminPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Box sx={{ p: SPACING.PAGE_PADDING, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
-        <Lock sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          Admin Access Required
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
-          You need to enter the admin password to access this page.
-        </Typography>
-        <Button
-          variant="contained"
-          onClick={() => requireAuth(() => {})}
-          sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
-        >
-          Enter Password
-        </Button>
-      </Box>
-    );
+  if (!canAccessAdmin) {
+    return <AccessNotice message="The admin page needs admin access." />;
   }
 
   return (
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
+      <PageTitle title="Admin" />
       {/* Tabs — scrollable on mobile so all five fit without clipping */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs
@@ -616,6 +604,7 @@ export function AdminPage() {
           <Tab label="Locations & Devices" />
           <Tab label="Data" />
           {showScheduling && <Tab label="Scheduled" />}
+          <Tab label="Users" />
         </Tabs>
       </Box>
 
@@ -882,6 +871,11 @@ export function AdminPage() {
           <ScheduledSurveysPanel surveyors={surveyors} surveyTypes={surveyTypes} />
         </TabPanel>
       )}
+
+      {/* Users Tab — accounts, roles and invites */}
+      <TabPanel value={tabValue} index={showScheduling ? 5 : 4}>
+        <UsersPanel />
+      </TabPanel>
 
       {/* Add/Edit Surveyor Dialog */}
       <Dialog

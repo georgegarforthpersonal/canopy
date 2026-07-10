@@ -1,8 +1,8 @@
 /**
- * Space detail: the single-screen overview for one survey type. Neutral hero
+ * Group detail: the single-screen overview for one survey type. Neutral hero
  * plus two balanced columns — Surveys worklist + Species count (left); Files,
- * Locations & devices (right). On mobile the panels stack in the order
- * Files → Surveys → Locations & devices → Species count.
+ * Routes (right). On mobile the panels stack in the order
+ * Files → Surveys → Routes → Species count.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -13,27 +13,24 @@ import {
   surveysAPI,
   surveyorsAPI,
   locationsAPI,
-  devicesAPI,
   type SurveyTypeWithDetails,
   type Survey,
   type Surveyor,
   type LocationWithBoundary,
-  type Device,
   type SurveyTypeFile,
 } from '../../services/api';
-import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
-import { primarySpeciesType, resolveSpaceTypeId } from './spaceMeta';
+import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
+import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
 import { recordedThisWeek } from './surveyState';
-import { useSurveyorLookup } from '../../hooks';
-import SpaceBreadcrumb from '../../components/spaces/SpaceBreadcrumb';
-import SpaceHero from '../../components/spaces/SpaceHero';
-import SurveysPanel from '../../components/spaces/SurveysPanel';
-import FilesPanel from '../../components/spaces/FilesPanel';
-import LocationsDevicesPanel from '../../components/spaces/LocationsDevicesPanel';
-import SpeciesCountPanel from '../../components/spaces/SpeciesCountPanel';
-import SurveyorPickerDialog from '../../components/spaces/SurveyorPickerDialog';
+import { useSignupSaved, useSurveyorLookup } from '../../hooks';
+import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
+import GroupHero from '../../components/groups/GroupHero';
+import SurveysPanel from '../../components/groups/SurveysPanel';
+import FilesPanel from '../../components/groups/FilesPanel';
+import RoutesPanel from '../../components/groups/RoutesPanel';
+import SpeciesCountPanel from '../../components/groups/SpeciesCountPanel';
 
-export default function SpaceDetailPage() {
+export default function GroupDetailPage() {
   const { typeId } = useParams<{ typeId: string }>();
   const navigate = useNavigate();
 
@@ -43,15 +40,12 @@ export default function SpaceDetailPage() {
   const [recordedCount, setRecordedCount] = useState(0);
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [locations, setLocations] = useState<LocationWithBoundary[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
   const [files, setFiles] = useState<SurveyTypeFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [filesLoading, setFilesLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);
 
-  // Surveyor assignment picker state
-  const [assignSurvey, setAssignSurvey] = useState<Survey | null>(null);
   const [greenIds, setGreenIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -67,7 +61,7 @@ export default function SpaceDetailPage() {
       try {
         // The route param is a name slug (or a legacy numeric id) — resolve it
         // to the survey type id before anything else can be fetched.
-        const surveyTypeId = await resolveSpaceTypeId(typeId);
+        const surveyTypeId = await resolveGroupTypeId(typeId);
         if (!active) return;
         if (surveyTypeId == null) {
           setNotFound(true);
@@ -86,20 +80,17 @@ export default function SpaceDetailPage() {
         if (!active) return;
         setSurveyType(details);
 
-        const typeLocationIds = new Set(details.locations.map((l) => l.id));
-
         // The worklist is built from ALL scheduled surveys (upcoming + overdue;
         // truncation would drop exactly the overdue rows, which sort last);
         // the "All surveys" door shows a recorded/scheduled split, so the
         // recorded side needs the completed-only total. The first completed
         // page (date-descending) is kept so the panel can pin any survey
         // already recorded for the current week.
-        const [scheduled, completedPage, surveyorList, withBoundaries, deviceList] = await Promise.all([
+        const [scheduled, completedPage, surveyorList, withBoundaries] = await Promise.all([
           surveysAPI.getAllPages({ survey_type_id: surveyTypeId, survey_status: 'scheduled' }),
           surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'completed', page: 1, limit: 25 }),
           surveyorsAPI.getAll(),
           locationsAPI.getAllWithBoundaries(),
-          devicesAPI.getAll(),
         ]);
         if (!active) return;
 
@@ -136,9 +127,8 @@ export default function SpaceDetailPage() {
             };
           }),
         );
-        setDevices(deviceList.filter((d) => d.location_id != null && typeLocationIds.has(d.location_id)));
       } catch (err) {
-        // Only a 404 means the space doesn't exist; anything else is a fault.
+        // Only a 404 means the group doesn't exist; anything else is a fault.
         if (active) {
           if (err instanceof ApiError && err.status === 404) setNotFound(true);
           else setError(true);
@@ -154,6 +144,7 @@ export default function SpaceDetailPage() {
   }, [typeId]);
 
   const resolveSurveyors = useSurveyorLookup(surveyors);
+  const handleSignupSaved = useSignupSaved(surveys, setSurveys, setGreenIds, surveyors, setSurveyors);
 
   if (loading) {
     return (
@@ -165,54 +156,40 @@ export default function SpaceDetailPage() {
 
   if (error) {
     return (
-      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <SpaceBreadcrumb crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: 'Error' }]} />
-        <Alert severity="error">Failed to load this survey space. Please try again.</Alert>
+      <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Error' }]} />
+        <Alert severity="error">Failed to load this group. Please try again.</Alert>
       </Box>
     );
   }
 
   if (notFound || !surveyType) {
     return (
-      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <SpaceBreadcrumb crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: 'Not found' }]} />
-        <Typography sx={{ color: spaceColors.textSecondary }}>
-          This survey space could not be found.
+      <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
+        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Not found' }]} />
+        <Typography sx={{ color: groupColors.textSecondary }}>
+          This group could not be found.
         </Typography>
       </Box>
     );
   }
 
   const speciesType = primarySpeciesType(surveyType);
-  const goToSurvey = (s: Survey, opts?: { edit?: boolean }) =>
-    navigate(`/surveys/${s.id}${opts?.edit ? '?edit=true' : ''}`, {
-      state: { returnTo: { pathname: `/spaces/${typeId}`, label: surveyType.name } },
+  // `record` opens the survey form in record mode: saving marks the
+  // scheduled survey completed. A plain open never changes the lifecycle.
+  const goToSurvey = (s: Survey, opts?: { record?: boolean }) =>
+    navigate(`/surveys/${s.id}${opts?.record ? '?record=true' : ''}`, {
+      state: { returnTo: { pathname: `/groups/${typeId}`, label: surveyType.name } },
     });
 
-  const handleAssignSaved = (surveyId: number, surveyorIds: number[]) => {
-    setSurveys((prev) =>
-      prev.map((s) => (s.id === surveyId ? { ...s, surveyor_ids: surveyorIds } : s)),
-    );
-    // Highlight any surveyor newly added to this survey in green for the session.
-    const previous = surveys.find((s) => s.id === surveyId)?.surveyor_ids ?? [];
-    const added = surveyorIds.filter((id) => !previous.includes(id));
-    if (added.length > 0) {
-      setGreenIds((prev) => {
-        const next = new Set(prev);
-        added.forEach((id) => next.add(id));
-        return next;
-      });
-    }
-  };
-
   return (
-    <Box sx={{ bgcolor: spaceColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
-      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto' }}>
-        <SpaceBreadcrumb
-          crumbs={[{ label: 'Spaces', to: '/spaces' }, { label: surveyType.name }]}
+    <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
+      <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto' }}>
+        <GroupBreadcrumb
+          crumbs={[{ label: 'Groups', to: '/groups' }, { label: surveyType.name }]}
         />
 
-        <SpaceHero surveyType={surveyType} />
+        <GroupHero surveyType={surveyType} />
 
         {/* On xs the column wrappers become display: contents so the four
             panels stack as direct flex items in their `order`; the md column
@@ -235,10 +212,10 @@ export default function SpaceDetailPage() {
                 resolveSurveyors={resolveSurveyors}
                 recordedCount={recordedCount}
                 greenIds={greenIds}
-                onAddSurvey={(s) => goToSurvey(s, { edit: true })}
-                onAssign={setAssignSurvey}
+                onAddSurvey={(s) => goToSurvey(s, { record: true })}
+                onSignupSaved={handleSignupSaved}
                 onOpenSurvey={goToSurvey}
-                onViewAll={() => navigate(`/spaces/${typeId}/all`)}
+                onViewAll={() => navigate(`/groups/${typeId}/all`)}
               />
             </Box>
             <Box sx={{ order: 4, minWidth: 0 }}>
@@ -252,19 +229,12 @@ export default function SpaceDetailPage() {
               <FilesPanel surveyTypeId={surveyType.id} files={files} loading={filesLoading} />
             </Box>
             <Box sx={{ order: 3, minWidth: 0 }}>
-              <LocationsDevicesPanel locations={locations} devices={devices} />
+              <RoutesPanel locations={locations} />
             </Box>
           </Box>
         </Box>
       </Box>
 
-      <SurveyorPickerDialog
-        open={assignSurvey != null}
-        survey={assignSurvey}
-        surveyors={surveyors}
-        onClose={() => setAssignSurvey(null)}
-        onSaved={handleAssignSaved}
-      />
     </Box>
   );
 }

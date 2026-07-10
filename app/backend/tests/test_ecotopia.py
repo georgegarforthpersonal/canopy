@@ -31,7 +31,7 @@ SAMPLE_DEVICE = {
 
 def _override_org(slug: str) -> None:
     async def _org() -> Organisation:
-        return Organisation(name=slug, slug=slug, admin_password="", is_active=True)
+        return Organisation(name=slug, slug=slug, is_active=True)
 
     app.dependency_overrides[get_current_organisation] = _org
 
@@ -104,14 +104,18 @@ class TestGetEcotopiaDevices:
         response = client.get("/api/ecotopia/devices", headers=auth_headers)
         assert response.status_code == 404
 
-    def test_accessible_without_auth(self, client: TestClient, monkeypatch) -> None:
-        """The Cannwood tracker endpoints are public — no admin auth required."""
+    def test_requires_login_but_no_admin_role(
+        self, client: TestClient, auth_headers: dict, monkeypatch
+    ) -> None:
+        """Tracker endpoints need a signed-in account (like all reads) but no role above viewer."""
         _override_org("cannwood")
         monkeypatch.setattr(settings, "ecotopia_username", "user")
         monkeypatch.setattr(settings, "ecotopia_password", "pass")
         monkeypatch.setattr(EcotopiaClient, "list_devices", lambda self: [SAMPLE_DEVICE])
 
-        response = client.get("/api/ecotopia/devices")  # no auth headers
+        assert client.get("/api/ecotopia/devices").status_code == 401  # anonymous
+
+        response = client.get("/api/ecotopia/devices", headers=auth_headers)
 
         assert response.status_code == 200
 

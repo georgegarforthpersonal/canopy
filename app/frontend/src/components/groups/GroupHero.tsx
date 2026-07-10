@@ -1,25 +1,25 @@
 /**
- * Neutral hero band for a space: tinted species icon tile + name + description.
- * No action button (Add survey lives on the grid header and survey rows) and no
+ * Neutral hero band for a group: tinted species icon tile + name + description.
+ * No action button (recording and sign-up live on the survey rows) and no
  * season/coordinator meta (not modelled in the backend for the beta).
  */
 import { Box, Paper, Typography } from '@mui/material';
 import type { SurveyTypeWithDetails } from '../../services/api';
-import { spaceColors } from '../../pages/spaces/spacesTokens';
-import { accentColors, primarySpeciesType } from '../../pages/spaces/spaceMeta';
+import { groupColors } from '../../pages/groups/groupsTokens';
+import { accentColors, primarySpeciesType } from '../../pages/groups/groupMeta';
 import SpeciesIconTile from './SpeciesIconTile';
 
-interface SpaceHeroProps {
+interface GroupHeroProps {
   surveyType: SurveyTypeWithDetails;
 }
 
-export default function SpaceHero({ surveyType }: SpaceHeroProps) {
+export default function GroupHero({ surveyType }: GroupHeroProps) {
   const accent = accentColors(surveyType);
   return (
     <Paper
       sx={{
-        bgcolor: spaceColors.paper,
-        border: `1px solid ${spaceColors.divider}`,
+        bgcolor: groupColors.paper,
+        border: `1px solid ${groupColors.divider}`,
         borderRadius: '12px',
         boxShadow: 'none',
         px: 3,
@@ -37,7 +37,7 @@ export default function SpaceHero({ surveyType }: SpaceHeroProps) {
         fg={accent.fg}
       />
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: 24, fontWeight: 600, color: spaceColors.textPrimary, lineHeight: 1.2 }}>
+        <Typography sx={{ fontSize: 24, fontWeight: 600, color: groupColors.textPrimary, lineHeight: 1.2 }}>
           {surveyType.name}
         </Typography>
         {surveyType.description && (

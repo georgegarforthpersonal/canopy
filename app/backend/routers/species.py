@@ -25,7 +25,7 @@ from models import (
     SpeciesType,
     SurveyTypeSpeciesTypeLink,
 )
-from auth import require_admin
+from auth import require_admin_role
 
 router = APIRouter()
 
@@ -112,7 +112,7 @@ async def get_species_by_id(
     return _to_species_read(species)
 
 
-@router.post("", response_model=SpeciesRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post("", response_model=SpeciesRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin_role)])
 async def create_species(
     species: SpeciesCreate,
     db: Session = Depends(get_db)
@@ -137,7 +137,7 @@ async def create_species(
     return _to_species_read(db_species)
 
 
-@router.put("/{species_id}", response_model=SpeciesRead, dependencies=[Depends(require_admin)])
+@router.put("/{species_id}", response_model=SpeciesRead, dependencies=[Depends(require_admin_role)])
 async def update_species(
     species_id: int,
     species: SpeciesUpdate,
@@ -163,7 +163,7 @@ async def update_species(
     return _to_species_read(db_species)
 
 
-@router.delete("/{species_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
+@router.delete("/{species_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin_role)])
 async def delete_species(
     species_id: int,
     db: Session = Depends(get_db)

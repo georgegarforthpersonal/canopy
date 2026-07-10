@@ -1,8 +1,9 @@
 import { AppBar, Toolbar, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, useMediaQuery, useTheme } from '@mui/material';
-import { Assignment, BarChart, Settings, SpaceDashboard, Menu as MenuIcon, Close, Lock, LockOpen } from '@mui/icons-material';
+import { Assignment, BarChart, Settings, SpaceDashboard, Menu as MenuIcon, Close, Logout } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, usePermissions } from '../../context/AuthContext';
+import { UserMenu } from './UserMenu';
 import healLogo from '../../assets/heal_logo.jpg';
 import { showLogo } from '../../theme';
 import { getOrgSlug } from '../../services/api';
@@ -23,10 +24,11 @@ export function TopNavBar() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md')); // < 900px
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const { isAuthenticated, logout, requireAuth } = useAuth();
+  const { logout } = useAuth();
+  const { canAccessAdmin } = usePermissions();
 
-  // Spaces is a Heal-only beta for now.
-  const showSpaces = getOrgSlug() === 'heal';
+  // Groups is a Heal-only beta for now.
+  const showGroups = getOrgSlug() === 'heal';
 
   const navItems = [
     {
@@ -34,12 +36,12 @@ export function TopNavBar() {
       label: 'Surveys',
       path: '/surveys',
     },
-    ...(showSpaces
+    ...(showGroups
       ? [
           {
             icon: SpaceDashboard,
-            label: 'Spaces (Beta)',
-            path: '/spaces',
+            label: 'Groups (Beta)',
+            path: '/groups',
           },
         ]
       : []),
@@ -48,11 +50,16 @@ export function TopNavBar() {
       label: 'Dashboards',
       path: '/dashboards',
     },
-    {
-      icon: Settings,
-      label: 'Admin',
-      path: '/admin',
-    },
+    // The Admin tab is hidden (not disabled) below admin access
+    ...(canAccessAdmin
+      ? [
+          {
+            icon: Settings,
+            label: 'Admin',
+            path: '/admin',
+          },
+        ]
+      : []),
   ];
 
   const isActivePath = (path: string) => {
@@ -160,25 +167,8 @@ export function TopNavBar() {
           {/* Spacer */}
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* Auth status / lock toggle */}
-          <Tooltip title={isAuthenticated ? 'Logout (lock editing)' : 'Login (unlock editing)'} arrow>
-            <IconButton
-              onClick={() => {
-                if (isAuthenticated) {
-                  logout();
-                } else {
-                  requireAuth(() => {});
-                }
-              }}
-              sx={{
-                width: 40,
-                height: 40,
-                color: isAuthenticated ? 'success.main' : 'text.disabled',
-              }}
-            >
-              {isAuthenticated ? <LockOpen sx={{ fontSize: 20 }} /> : <Lock sx={{ fontSize: 20 }} />}
-            </IconButton>
-          </Tooltip>
+          {/* Signed-in user menu */}
+          <UserMenu />
         </Toolbar>
       </AppBar>
 
@@ -260,16 +250,13 @@ export function TopNavBar() {
               );
             })}
 
-            {/* Auth toggle */}
+            {/* Sign out */}
             <ListItem disablePadding sx={{ mt: 2 }}>
               <ListItemButton
-                onClick={() => {
-                  if (isAuthenticated) {
-                    logout();
-                  } else {
-                    requireAuth(() => {});
-                  }
+                onClick={async () => {
                   setMobileDrawerOpen(false);
+                  await logout();
+                  navigate('/login');
                 }}
                 sx={{
                   borderRadius: '8px',
@@ -277,11 +264,11 @@ export function TopNavBar() {
                   pl: 2,
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 40, color: isAuthenticated ? 'success.main' : 'text.secondary' }}>
-                  {isAuthenticated ? <LockOpen /> : <Lock />}
+                <ListItemIcon sx={{ minWidth: 40, color: 'text.secondary' }}>
+                  <Logout />
                 </ListItemIcon>
                 <ListItemText
-                  primary={isAuthenticated ? 'Lock Editing' : 'Unlock Editing'}
+                  primary="Sign out"
                   primaryTypographyProps={{
                     fontWeight: 400,
                     color: 'text.secondary',

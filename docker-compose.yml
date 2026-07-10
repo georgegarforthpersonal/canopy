@@ -143,7 +143,6 @@ services:
       DB_NAME: test_db
       DB_USER: postgres
       DB_PASSWORD: postgres
-      SESSION_SECRET_KEY: test-secret-key
     volumes:
       - ./app/backend:/app
     depends_on:

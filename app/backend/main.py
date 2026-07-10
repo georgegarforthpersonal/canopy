@@ -12,10 +12,11 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import sentry_sdk
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from auth import require_user
 from config import settings
 from exceptions import AppException
 from routers import surveys, species, locations, surveyors, dashboard, survey_types, auth, audio, devices, images, export, ecotopia
@@ -112,21 +113,27 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 # Include Routers - Organize endpoints by resource
 # ============================================================================
 
+# The auth router is the only one reachable anonymously (login, invites,
+# password reset). Every data router requires a logged-in account of any
+# role — reads included; write endpoints additionally declare the editor or
+# admin role they need.
+authenticated = [Depends(require_user)]
+
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
-app.include_router(surveys.router, prefix="/api/surveys", tags=["Surveys"])
-app.include_router(audio.router, prefix="/api/surveys", tags=["Audio"])
-app.include_router(audio.download_router, prefix="/api/audio", tags=["Audio"])
-app.include_router(images.router, prefix="/api/surveys", tags=["Images"])
-app.include_router(images.filter_router, prefix="/api/surveys", tags=["Images"])
-app.include_router(images.download_router, prefix="/api/images", tags=["Images"])
-app.include_router(species.router, prefix="/api/species", tags=["Species"])
-app.include_router(locations.router, prefix="/api/locations", tags=["Locations"])
-app.include_router(surveyors.router, prefix="/api/surveyors", tags=["Surveyors"])
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
-app.include_router(survey_types.router, prefix="/api/survey-types", tags=["Survey Types"])
-app.include_router(devices.router, prefix="/api/devices", tags=["Devices"])
-app.include_router(export.router, prefix="/api/export", tags=["Export"])
-app.include_router(ecotopia.router, prefix="/api/ecotopia", tags=["Ecotopia"])
+app.include_router(surveys.router, prefix="/api/surveys", tags=["Surveys"], dependencies=authenticated)
+app.include_router(audio.router, prefix="/api/surveys", tags=["Audio"], dependencies=authenticated)
+app.include_router(audio.download_router, prefix="/api/audio", tags=["Audio"], dependencies=authenticated)
+app.include_router(images.router, prefix="/api/surveys", tags=["Images"], dependencies=authenticated)
+app.include_router(images.filter_router, prefix="/api/surveys", tags=["Images"], dependencies=authenticated)
+app.include_router(images.download_router, prefix="/api/images", tags=["Images"], dependencies=authenticated)
+app.include_router(species.router, prefix="/api/species", tags=["Species"], dependencies=authenticated)
+app.include_router(locations.router, prefix="/api/locations", tags=["Locations"], dependencies=authenticated)
+app.include_router(surveyors.router, prefix="/api/surveyors", tags=["Surveyors"], dependencies=authenticated)
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"], dependencies=authenticated)
+app.include_router(survey_types.router, prefix="/api/survey-types", tags=["Survey Types"], dependencies=authenticated)
+app.include_router(devices.router, prefix="/api/devices", tags=["Devices"], dependencies=authenticated)
+app.include_router(export.router, prefix="/api/export", tags=["Export"], dependencies=authenticated)
+app.include_router(ecotopia.router, prefix="/api/ecotopia", tags=["Ecotopia"], dependencies=authenticated)
 
 # ============================================================================
 # Health Check Endpoint

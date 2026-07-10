@@ -33,7 +33,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 
-from auth import require_admin
+from auth import require_editor
 from database.connection import get_db
 from dependencies import get_current_organisation
 from models import (
@@ -95,7 +95,7 @@ def _build_image_response(image: CameraTrapImage, detection_count: int) -> dict:
     }
 
 
-@filter_router.post("/filter-images")
+@filter_router.post("/filter-images", dependencies=[Depends(require_editor)])
 async def filter_images_for_false_positives(
     files: List[UploadFile] = File(...),
     org: Organisation = Depends(get_current_organisation),
@@ -242,7 +242,7 @@ async def get_image_processing_summary(
     "/{survey_id}/images",
     response_model=List[CameraTrapImageRead],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def upload_images(
     survey_id: int,
@@ -339,7 +339,7 @@ async def upload_images(
 
 @router.post(
     "/{survey_id}/images/{image_id}/process",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def process_image(
     survey_id: int,
@@ -462,7 +462,7 @@ async def get_image_detections(
 @router.delete(
     "/{survey_id}/images/{image_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_editor)],
 )
 async def delete_image(
     survey_id: int,

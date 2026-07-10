@@ -1,7 +1,7 @@
 /**
  * Helpers for rendering reference-file badges (extension glyph + color) and
  * human-readable file sizes. Shared by the admin Files manager and the
- * Survey Spaces Files panel.
+ * Groups Files panel.
  */
 
 export interface FileBadgeColors {

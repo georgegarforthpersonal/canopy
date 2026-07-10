@@ -58,11 +58,12 @@ class TestSurveyStatusTransitions:
         assert resp.status_code == 200
         assert resp.json()["status"] == "completed"
 
-    def test_saving_details_completes_a_scheduled_survey(
-        self, client: TestClient, auth_headers: dict
+    def test_record_flow_sends_fields_and_status_together(
+        self, client: TestClient, auth_headers: dict, create_surveyor
     ):
-        """Saving a scheduled survey's details records it (even a nil count),
-        without the client having to send status explicitly."""
+        """The record flow saves the survey data and the explicit completed
+        status in one PUT."""
+        surveyor = create_surveyor()
         created = client.post(
             "/api/surveys",
             json={"date": "2026-12-01", "status": "scheduled", "surveyor_ids": []},
@@ -71,11 +72,38 @@ class TestSurveyStatusTransitions:
 
         resp = client.put(
             f"/api/surveys/{created['id']}",
-            json={"date": "2026-12-01", "sun_percentage": 50},
+            json={
+                "date": "2026-12-03",
+                "sun_percentage": 80,
+                "surveyor_ids": [surveyor.id],
+                "status": "completed",
+            },
             headers=auth_headers,
         )
         assert resp.status_code == 200
-        assert resp.json()["status"] == "completed"
+        body = resp.json()
+        assert body["status"] == "completed"
+        assert body["surveyor_ids"] == [surveyor.id]
+
+    def test_editing_details_keeps_survey_scheduled(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """Editing a scheduled survey's fields never records it — the
+        scheduled → completed transition only happens on an explicit
+        status in the payload (the record flow sends it)."""
+        created = client.post(
+            "/api/surveys",
+            json={"date": "2026-12-01", "status": "scheduled", "surveyor_ids": []},
+            headers=auth_headers,
+        ).json()
+
+        resp = client.put(
+            f"/api/surveys/{created['id']}",
+            json={"date": "2026-12-02", "sun_percentage": 50, "notes": "moved a day"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "scheduled"
 
     def test_assigning_surveyors_keeps_survey_scheduled(
         self, client: TestClient, auth_headers: dict, create_surveyor

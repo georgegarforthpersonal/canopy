@@ -1,16 +1,16 @@
 /**
- * Spaces grid (landing). For the Heal beta this shows a single Butterfly card.
+ * Groups grid (landing). For the Heal beta this shows a single Butterfly card.
  * Selecting a card opens that survey type's space.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Box, Typography, Button, CircularProgress } from '@mui/material';
-import { Add } from '@mui/icons-material';
+import { Alert, Box, Typography, CircularProgress } from '@mui/material';
 import { surveyTypesAPI, surveysAPI, dashboardAPI, type Survey, type SurveyTypeWithDetails } from '../../services/api';
-import { spaceColors, SPACE_MAX_WIDTH } from './spacesTokens';
+import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
 import { nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, spacePath } from './spaceMeta';
-import SpaceCard from '../../components/spaces/SpaceCard';
+import { primarySpeciesType, groupPath } from './groupMeta';
+import GroupCard from '../../components/groups/GroupCard';
+import { PageTitle } from '../../components/layout/PageTitle';
 
 // The survey type the beta surfaces. Matched case-insensitively by name.
 const BETA_SURVEY_TYPE_NAME = 'butterfly';
@@ -22,7 +22,7 @@ interface CardData {
   nextSurvey: Survey | null;
 }
 
-export default function SpacesPage() {
+export default function GroupsPage() {
   const navigate = useNavigate();
   const [cards, setCards] = useState<CardData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,53 +74,21 @@ export default function SpacesPage() {
   }, []);
 
   return (
-    <Box sx={{ bgcolor: spaceColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
-      <Box sx={{ maxWidth: SPACE_MAX_WIDTH, mx: 'auto' }}>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 2,
-            mb: 3,
-          }}
-        >
-          <Box sx={{ maxWidth: 560 }}>
-            <Typography sx={{ fontSize: 26, fontWeight: 600, color: spaceColors.textPrimary }}>
-              Survey spaces
-            </Typography>
-            <Typography sx={{ fontSize: 14, color: spaceColors.textSecondary, mt: 0.5 }}>
-              Each survey type has its own space — the rules, an open sign-up sheet, the sites
-              and devices in the field, and every recorded survey, all in one place.
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => navigate('/surveys/new')}
-            sx={{
-              bgcolor: spaceColors.brand,
-              '&:hover': { bgcolor: spaceColors.brandHover },
-              textTransform: 'none',
-              borderRadius: '6px',
-              px: 2,
-              height: 40,
-            }}
-          >
-            Add survey
-          </Button>
-        </Box>
-
+    <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
+      <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto' }}>
+        <PageTitle
+          title="Groups"
+          subtitle="Sign-up, instructions, and records for each survey type."
+        />
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
           </Box>
         ) : error ? (
-          <Alert severity="error">Failed to load survey spaces. Please try again.</Alert>
+          <Alert severity="error">Failed to load groups. Please try again.</Alert>
         ) : cards.length === 0 ? (
-          <Typography sx={{ fontSize: 14, color: spaceColors.textMuted }}>
-            No survey spaces are available yet.
+          <Typography sx={{ fontSize: 14, color: groupColors.textMuted }}>
+            No groups are available yet.
           </Typography>
         ) : (
           <Box
@@ -131,13 +99,13 @@ export default function SpacesPage() {
             }}
           >
             {cards.map((c) => (
-              <SpaceCard
+              <GroupCard
                 key={c.surveyType.id}
                 surveyType={c.surveyType}
                 surveyCount={c.surveyCount}
                 speciesCount={c.speciesCount}
                 nextSurvey={c.nextSurvey}
-                onOpen={() => navigate(spacePath(c.surveyType))}
+                onOpen={() => navigate(groupPath(c.surveyType))}
               />
             ))}
           </Box>

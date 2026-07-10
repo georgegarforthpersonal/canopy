@@ -9,7 +9,8 @@ import {
 } from '@mui/material';
 import { Cancel } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, usePermissions } from '../context/AuthContext';
+import { AccessNotice } from '../components/auth/AccessNotice';
 import { useResponsive } from '../hooks/useResponsive';
 import { useAudioWizard, AUDIO_WIZARD_STEPS } from '../hooks/useAudioWizard';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
@@ -25,7 +26,8 @@ import {
 
 export function NewAudioSurveyPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading } = useAuth();
+  const { canEditSurveys } = usePermissions();
   const { isMobile } = useResponsive();
   const wizard = useAudioWizard();
 
@@ -44,12 +46,8 @@ export function NewAudioSurveyPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <Alert severity="warning">Please sign in to create an audio survey.</Alert>
-      </Box>
-    );
+  if (!canEditSurveys) {
+    return <AccessNotice message="Creating audio surveys needs editor access." />;
   }
 
   if (wizard.loading) {

@@ -1,7 +1,8 @@
 """
-Tests for Auth Router
+Tests for Auth Router basics: login, logout, identity.
 
-Tests authentication endpoints: login, logout, status.
+The full account system (roles, invites, resets, user management) is
+covered in test_accounts.py.
 """
 
 from fastapi.testclient import TestClient
@@ -10,11 +11,12 @@ from fastapi.testclient import TestClient
 class TestLogin:
     """Tests for POST /api/auth/login"""
 
-    def test_login_success(self, client: TestClient, test_org):
+    def test_login_success(self, client: TestClient, create_user):
         """Should return token on successful login."""
+        create_user(email="jane@example.org", password="a-strong-password")
         response = client.post(
             "/api/auth/login",
-            json={"password": "test-password"},
+            json={"email": "jane@example.org", "password": "a-strong-password"},
         )
         assert response.status_code == 200
 
@@ -22,50 +24,59 @@ class TestLogin:
         assert data["authenticated"] is True
         assert "token" in data
 
-    def test_login_wrong_password(self, client: TestClient, test_org):
+    def test_login_wrong_password(self, client: TestClient, create_user):
         """Should return 401 for wrong password."""
+        create_user(email="jane@example.org", password="a-strong-password")
         response = client.post(
             "/api/auth/login",
-            json={"password": "wrong-password"},
+            json={"email": "jane@example.org", "password": "wrong-password"},
         )
         assert response.status_code == 401
         assert "incorrect" in response.json()["detail"].lower()
+
+    def test_login_requires_email(self, client: TestClient, test_org):
+        """The legacy password-only body is gone: email is required."""
+        response = client.post(
+            "/api/auth/login",
+            json={"password": "anything"},
+        )
+        assert response.status_code == 422
 
 
 class TestLogout:
     """Tests for POST /api/auth/logout"""
 
-    def test_logout(self, client: TestClient):
+    def test_logout(self, client: TestClient, test_org):
         """Should return authenticated=false on logout."""
         response = client.post("/api/auth/logout")
         assert response.status_code == 200
         assert response.json()["authenticated"] is False
 
 
-class TestAuthStatus:
-    """Tests for GET /api/auth/status"""
+class TestMe:
+    """Tests for GET /api/auth/me"""
 
-    def test_status_authenticated(
+    def test_me_authenticated(
         self, client: TestClient, auth_headers: dict, test_org
     ):
-        """Should return authenticated=true with valid token."""
-        response = client.get("/api/auth/status", headers=auth_headers)
+        """Should return the identity with a valid session."""
+        response = client.get("/api/auth/me", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
         assert data["authenticated"] is True
         assert data["organisation"]["slug"] == test_org.slug
 
-    def test_status_unauthenticated(self, client: TestClient):
-        """Should return authenticated=false without token."""
-        response = client.get("/api/auth/status")
+    def test_me_unauthenticated(self, client: TestClient, test_org):
+        """Should return authenticated=false without a session."""
+        response = client.get("/api/auth/me")
         assert response.status_code == 200
         assert response.json()["authenticated"] is False
 
-    def test_status_invalid_token(self, client: TestClient):
-        """Should return authenticated=false with invalid token."""
+    def test_me_invalid_token(self, client: TestClient, test_org):
+        """Should return authenticated=false with an invalid token."""
         response = client.get(
-            "/api/auth/status",
+            "/api/auth/me",
             headers={"Authorization": "Bearer invalid-token"},
         )
         assert response.status_code == 200

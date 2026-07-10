@@ -9,7 +9,8 @@ import {
 } from '@mui/material';
 import { Cancel } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, usePermissions } from '../context/AuthContext';
+import { AccessNotice } from '../components/auth/AccessNotice';
 import { useResponsive } from '../hooks/useResponsive';
 import { useCameraTrapWizard, WIZARD_STEPS } from '../hooks/useCameraTrapWizard';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
@@ -27,7 +28,8 @@ import {
 
 export function NewCameraTrapSurveyPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading } = useAuth();
+  const { canEditSurveys } = usePermissions();
   const { isMobile } = useResponsive();
   const wizard = useCameraTrapWizard();
 
@@ -46,12 +48,8 @@ export function NewCameraTrapSurveyPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <Alert severity="warning">Please sign in to create a camera trap survey.</Alert>
-      </Box>
-    );
+  if (!canEditSurveys) {
+    return <AccessNotice message="Creating camera trap surveys needs editor access." />;
   }
 
   if (wizard.loading) {

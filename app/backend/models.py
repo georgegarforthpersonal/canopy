@@ -69,7 +69,6 @@ class Organisation(OrganisationBase, table=True):  # type: ignore[call-arg]
     __tablename__ = "organisation"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    admin_password: str = Field(max_length=255, description="Admin password for this organisation")
     is_active: bool = Field(default=True, description="Whether organisation is active")
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -89,6 +88,120 @@ class OrganisationRead(OrganisationBase):
     """Model for reading organisation (public info, no password hash)"""
     id: int
     is_active: bool
+
+
+# ============================================================================
+# User / Account Models
+# ============================================================================
+
+class UserRole(str, PyEnum):
+    """Access level of a user account, strictly ordered.
+
+    - viewer: read access; may sign themselves up to scheduled surveys
+    - editor: viewer + create/edit surveys and media
+    - admin: editor + admin page (devices, locations, survey types,
+      surveyors, species) and user/invite management
+    """
+    viewer = "viewer"
+    editor = "editor"
+    admin = "admin"
+
+
+class UserBase(SQLModel):
+    """Base user fields shared between Create and Read"""
+    email: str = Field(max_length=255, description="Login email (lowercased)")
+    first_name: str = Field(max_length=255, description="User's first name")
+    last_name: Optional[str] = Field(default=None, max_length=255, description="User's last name (optional)")
+
+
+class User(UserBase, table=True):  # type: ignore[call-arg]
+    """User account, scoped to one organisation.
+
+    Named app_user because "user" is a reserved word in Postgres.
+    """
+    __tablename__ = "app_user"
+    __table_args__ = (
+        sa.UniqueConstraint('organisation_id', 'email', name='uq_app_user_org_email'),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organisation_id: int = Field(foreign_key="organisation.id", index=True, description="Organisation this user belongs to")
+    password_hash: str = Field(max_length=255, description="argon2id password hash")
+    role: UserRole = Field(
+        sa_column=sa.Column("role", sa.String(20), nullable=False),
+        description="Access level: viewer, editor or admin",
+    )
+    is_active: bool = Field(default=True, description="Inactive users cannot log in; their sessions are revoked")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
+    )
+    last_login_at: Optional[datetime] = Field(default=None, description="Time of most recent successful login")
+    # One active password reset at a time; hash only, the raw token is emailed
+    password_reset_token_hash: Optional[str] = Field(default=None, max_length=64)
+    password_reset_expires_at: Optional[datetime] = Field(default=None)
+
+
+class UserRead(UserBase):
+    """User as returned to admins and as /auth/me identity"""
+    id: int
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    last_login_at: Optional[datetime] = None
+
+
+class UserSession(SQLModel, table=True):  # type: ignore[call-arg]
+    """Server-side login session; the cookie/bearer token is stored hashed.
+
+    DB-backed (rather than a signed stateless token) so deactivating a user
+    or changing their role takes effect immediately.
+    """
+    __tablename__ = "user_session"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="app_user.id", index=True, ondelete="CASCADE")
+    token_hash: str = Field(max_length=64, unique=True, index=True, description="sha256 of the session token")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
+    )
+    expires_at: datetime = Field(description="Sliding expiry, extended on activity")
+    last_seen_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+
+class Invite(SQLModel, table=True):  # type: ignore[call-arg]
+    """Invitation to create an account, emailed as a single-use link"""
+    __tablename__ = "invite"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organisation_id: int = Field(foreign_key="organisation.id", index=True)
+    email: str = Field(max_length=255, description="Invited email (lowercased)")
+    role: UserRole = Field(
+        sa_column=sa.Column("role", sa.String(20), nullable=False),
+        description="Role the account will get on acceptance",
+    )
+    token_hash: str = Field(max_length=64, unique=True, index=True, description="sha256 of the invite token")
+    invited_by_user_id: Optional[int] = Field(default=None, foreign_key="app_user.id")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
+    )
+    expires_at: datetime = Field(description="Invites are valid for 7 days")
+    accepted_at: Optional[datetime] = Field(default=None, description="Set once used; used invites cannot be reused")
+
+
+class InviteRead(SQLModel):
+    """Invite as listed on the admin Users tab"""
+    id: int
+    email: str
+    role: UserRole
+    created_at: datetime
+    expires_at: datetime
+    accepted_at: Optional[datetime] = None
 
 
 # ============================================================================
@@ -222,6 +335,9 @@ class Surveyor(SurveyorBase, table=True):  # type: ignore[call-arg]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     organisation_id: int = Field(foreign_key="organisation.id", index=True, description="Organisation this surveyor belongs to")
+    # A surveyor may be linked to a user account so that user can sign
+    # themselves up to scheduled surveys. Historical surveyors stay unlinked.
+    user_id: Optional[int] = Field(default=None, foreign_key="app_user.id", unique=True)
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
@@ -250,6 +366,8 @@ class SurveyorRead(SurveyorBase):
     """Model for reading a surveyor (includes ID)"""
     id: int
     is_active: bool
+    # Lets the frontend find the caller's own surveyor for self-signup state
+    user_id: Optional[int] = None
 
 
 # ============================================================================
@@ -1024,6 +1142,7 @@ class SpeciesWithCount(SQLModel):
     scientific_name: Optional[str] = Field(description="Scientific name")
     type: str = Field(description="Species type")
     total_count: int = Field(description="Total occurrence count across all surveys")
+    first_observed: Optional[date_type] = Field(default=None, description="Date of the earliest survey recording this species")
 
 
 # ============================================================================

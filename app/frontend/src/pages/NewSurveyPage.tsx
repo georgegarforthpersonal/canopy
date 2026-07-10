@@ -10,10 +10,11 @@ import {
   Autocomplete,
   TextField,
 } from '@mui/material';
-import { Lock, Save, Cancel, CloudUpload, Delete, PhotoCamera } from '@mui/icons-material';
+import { Save, Cancel, CloudUpload, Delete, PhotoCamera } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, usePermissions } from '../context/AuthContext';
+import { AccessNotice } from '../components/auth/AccessNotice';
 import {
   surveysAPI,
   surveyorsAPI,
@@ -39,7 +40,6 @@ import type { DraftSighting } from '../components/surveys/SightingsEditor';
 import { PageHeader } from '../components/layout/PageHeader';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
-import { brandColors } from '../theme';
 import { SPACING } from '../config/responsive';
 
 /**
@@ -82,7 +82,8 @@ const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
  */
 export function NewSurveyPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading, requireAuth } = useAuth();
+  const { isLoading: authLoading } = useAuth();
+  const { canEditSurveys } = usePermissions();
 
   // ============================================================================
   // Form State - Survey Type
@@ -514,25 +515,8 @@ export function NewSurveyPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Box sx={{ p: SPACING.PAGE_PADDING, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
-        <Lock sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          Admin Access Required
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
-          You need to enter the admin password to create a new survey.
-        </Typography>
-        <Button
-          variant="contained"
-          onClick={() => requireAuth(() => {})}
-          sx={{ bgcolor: brandColors.main, '&:hover': { bgcolor: brandColors.hover } }}
-        >
-          Enter Password
-        </Button>
-      </Box>
-    );
+  if (!canEditSurveys) {
+    return <AccessNotice message="Creating surveys needs editor access." />;
   }
 
   if (loading) {

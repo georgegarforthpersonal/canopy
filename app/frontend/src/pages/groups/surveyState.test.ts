@@ -128,9 +128,9 @@ describe('buildWorklist', () => {
     survey({ id: 9, date: '2026-07-19', status: 'scheduled' }), // upcoming (4th, dropped)
   ];
 
-  it('never caps overdue, most recent first', () => {
+  it('never caps overdue, oldest first so the panel reads chronologically', () => {
     const { overdue } = buildWorklist(surveys, TODAY);
-    expect(overdue.map((s) => s.id)).toEqual([1, 2, 3, 4]);
+    expect(overdue.map((s) => s.id)).toEqual([4, 3, 2, 1]);
   });
 
   it('caps upcoming at 3 (soonest first) but reports the true total', () => {

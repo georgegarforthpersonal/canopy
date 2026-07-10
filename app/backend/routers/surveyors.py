@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from database.connection import get_db
 from models import Surveyor, SurveyorRead, SurveyorCreate, SurveyorUpdate, Organisation
-from auth import require_admin
+from auth import require_admin_role, require_editor
 from dependencies import get_current_organisation
 
 router = APIRouter()
@@ -104,7 +104,7 @@ async def get_surveyor(
     return surveyor  # type: ignore[no-any-return]
 
 
-@router.post("", response_model=SurveyorRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post("", response_model=SurveyorRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_editor)])
 async def create_surveyor(
     surveyor: SurveyorCreate,
     org: Organisation = Depends(get_current_organisation),
@@ -134,7 +134,7 @@ async def create_surveyor(
     return db_surveyor
 
 
-@router.put("/{surveyor_id}", response_model=SurveyorRead, dependencies=[Depends(require_admin)])
+@router.put("/{surveyor_id}", response_model=SurveyorRead, dependencies=[Depends(require_editor)])
 async def update_surveyor(
     surveyor_id: int,
     surveyor: SurveyorUpdate,
@@ -175,7 +175,7 @@ async def update_surveyor(
     return db_surveyor  # type: ignore[no-any-return]
 
 
-@router.delete("/{surveyor_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
+@router.delete("/{surveyor_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin_role)])
 async def delete_surveyor(
     surveyor_id: int,
     org: Organisation = Depends(get_current_organisation),
@@ -194,7 +194,7 @@ async def delete_surveyor(
     return None
 
 
-@router.post("/{surveyor_id}/deactivate", response_model=SurveyorRead, dependencies=[Depends(require_admin)])
+@router.post("/{surveyor_id}/deactivate", response_model=SurveyorRead, dependencies=[Depends(require_admin_role)])
 async def deactivate_surveyor(
     surveyor_id: int,
     org: Organisation = Depends(get_current_organisation),
@@ -222,7 +222,7 @@ async def deactivate_surveyor(
     return db_surveyor  # type: ignore[no-any-return]
 
 
-@router.post("/{surveyor_id}/reactivate", response_model=SurveyorRead, dependencies=[Depends(require_admin)])
+@router.post("/{surveyor_id}/reactivate", response_model=SurveyorRead, dependencies=[Depends(require_admin_role)])
 async def reactivate_surveyor(
     surveyor_id: int,
     org: Organisation = Depends(get_current_organisation),

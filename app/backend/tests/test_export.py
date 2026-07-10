@@ -12,7 +12,7 @@ from models import Sighting
 from routers.export import EXPORT_TABLES, RECORD_HEADERS
 
 # Tables that intentionally should NOT be in the export
-INTERNAL_TABLES = {"organisation"}
+INTERNAL_TABLES = {"organisation", "app_user", "user_session", "invite"}
 
 
 def _make_sighting(

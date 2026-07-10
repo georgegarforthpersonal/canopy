@@ -9,11 +9,12 @@ import { DeviceTrackerMap } from '../components/dashboard/DeviceTrackerMap';
 import { speciesTypes, getSpeciesIcon, getSpeciesDisplayName } from '../config';
 import { notionColors, brandColors } from '../theme';
 import { SPACING } from '../config/responsive';
+import { PageTitle } from '../components/layout/PageTitle';
 
 /**
  * DashboardsPage displays cumulative species and per-species occurrence charts,
  * plus a sightings map. The two top charts are shared components
- * (CumulativeSpeciesChart, SpeciesOccurrenceChart) reused by Survey Spaces.
+ * (CumulativeSpeciesChart, SpeciesOccurrenceChart) reused by Groups.
  */
 export function DashboardsPage() {
   // Cannwood-only "GPS tracking" tab alongside the species dashboards
@@ -99,6 +100,7 @@ export function DashboardsPage() {
 
   return (
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
+      <PageTitle title="Dashboards" />
       {isCannwood && (
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={activeTab} onChange={(_e, v) => setActiveTab(v)}>

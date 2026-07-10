@@ -15,7 +15,7 @@ from typing import List, Union
 from sqlmodel import col
 from sqlalchemy.orm import Session
 from database.connection import get_db
-from auth import require_admin
+from auth import require_admin_role
 from dependencies import get_current_organisation
 from models import (
     SurveyType, SurveyTypeRead, SurveyTypeCreate, SurveyTypeUpdate, SurveyTypeWithDetails,
@@ -189,7 +189,7 @@ async def get_survey_type(
     )
 
 
-@router.post("", response_model=SurveyTypeRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+@router.post("", response_model=SurveyTypeRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin_role)])
 async def create_survey_type(
     survey_type: SurveyTypeCreate,
     org: Organisation = Depends(get_current_organisation),
@@ -264,7 +264,7 @@ async def create_survey_type(
     return db_survey_type
 
 
-@router.put("/{survey_type_id}", response_model=SurveyTypeRead, dependencies=[Depends(require_admin)])
+@router.put("/{survey_type_id}", response_model=SurveyTypeRead, dependencies=[Depends(require_admin_role)])
 async def update_survey_type(
     survey_type_id: int,
     survey_type: SurveyTypeUpdate,
@@ -339,7 +339,7 @@ async def update_survey_type(
     return db_survey_type  # type: ignore[no-any-return]
 
 
-@router.delete("/{survey_type_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
+@router.delete("/{survey_type_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin_role)])
 async def delete_survey_type(
     survey_type_id: int,
     org: Organisation = Depends(get_current_organisation),
@@ -363,7 +363,7 @@ async def delete_survey_type(
     return None
 
 
-@router.post("/{survey_type_id}/reactivate", response_model=SurveyTypeRead, dependencies=[Depends(require_admin)])
+@router.post("/{survey_type_id}/reactivate", response_model=SurveyTypeRead, dependencies=[Depends(require_admin_role)])
 async def reactivate_survey_type(
     survey_type_id: int,
     org: Organisation = Depends(get_current_organisation),
@@ -408,7 +408,7 @@ async def list_survey_type_files(
     "/{survey_type_id}/files",
     response_model=SurveyTypeFileRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_role)],
 )
 async def upload_survey_type_file(
     survey_type_id: int,
@@ -498,7 +498,7 @@ async def get_survey_type_file_download_url(
 @router.delete(
     "/{survey_type_id}/files/{file_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_role)],
 )
 async def delete_survey_type_file(
     survey_type_id: int,

@@ -1,5 +1,5 @@
 /**
- * Survey state derivation for Survey Spaces.
+ * Survey state derivation for Groups.
  *
  * There is no separate "session" concept: every Survey row carries an explicit
  * lifecycle `status`, and we map it (plus the date for scheduled rows) to a
@@ -38,11 +38,6 @@ export function deriveSurveyState(survey: Survey, today: string = todayIso()): S
   return survey.date > today ? 'upcoming' : 'needs-survey';
 }
 
-/** Compact "next session" label, e.g. "Sat 27 Jun". */
-export function formatSessionDate(isoDate: string): string {
-  return dayjs(isoDate).format('ddd D MMM');
-}
-
 /** Whether a survey is scheduled for a whole week (weekly cadence) rather than a day. */
 export function hasWindow(survey: Survey): boolean {
   return Boolean(survey.scheduled_window_start && survey.scheduled_window_end);
@@ -78,10 +73,10 @@ export function formatWeekRange(startIso: string, endIso: string): string {
 }
 
 /**
- * Build the worklist for the Surveys panel, split by section: the current
- * week's still-due rows (`dueThisWeek` — the panel pins these at the top so
- * this week always has an anchor), every overdue row (`overdue`, most recent
- * first — the actionable backlog is never hidden), then the next 3 upcoming
+ * Build the worklist for the Surveys panel, split by section and ordered so
+ * the panel reads chronologically top to bottom: every overdue row
+ * (`overdue`, oldest first — the actionable backlog is never hidden), the
+ * current week's still-due rows (`dueThisWeek`), then the next 3 upcoming
  * rows (soonest first; future weeks are effectively endless, so they stay
  * capped). `upcomingTotal` carries the true upcoming count so the panel can
  * say how many the cap hid.
@@ -93,7 +88,7 @@ export function buildWorklist(surveys: Survey[], today: string = todayIso()) {
 
   const overdue = surveys
     .filter((s) => deriveSurveyState(s, today) === 'needs-survey')
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   const allUpcoming = surveys
     .filter((s) => deriveSurveyState(s, today) === 'upcoming')
