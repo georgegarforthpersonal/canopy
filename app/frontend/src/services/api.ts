@@ -143,8 +143,9 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       ...options,
       credentials: 'include',
       headers: {
@@ -152,7 +153,24 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
         ...options?.headers,
       },
     });
+  } catch (error) {
+    // fetch() only rejects when the request never reached a server — the
+    // device or this specific host is unreachable (offline, DNS failure,
+    // server restarting, CORS preflight rejected). Not actionable here.
+    console.error('API request failed:', {
+      endpoint,
+      method: options?.method || 'GET',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    reportApiError(error, {
+      endpoint,
+      method: options?.method || 'GET',
+      unreachable: true,
+    });
+    throw error;
+  }
 
+  try {
     if (!response.ok) {
       let errorMessage = `API error: ${response.status}`;
       try {

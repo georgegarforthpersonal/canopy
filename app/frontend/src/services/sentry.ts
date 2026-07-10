@@ -29,6 +29,10 @@ interface ApiErrorContext {
   endpoint: string;
   method: string;
   status?: number;
+  // Set when fetch() itself rejected, before any response was received —
+  // the device or the specific host was unreachable (offline, DNS failure,
+  // server down, CORS preflight rejected). Not the same as a 4xx/5xx.
+  unreachable?: boolean;
 }
 
 /**
@@ -36,7 +40,7 @@ interface ApiErrorContext {
  *
  * Skips errors that are expected and not actionable:
  * - aborted requests (user navigated away / component unmounted)
- * - network failures while the browser knows it is offline
+ * - connectivity failures (device offline, or the target host unreachable)
  * - 4xx responses (validation, auth, not-found — surfaced to the user in-app)
  *
  * Sentry marks each error object it captures, so an error reported here will
@@ -49,9 +53,9 @@ export function reportApiError(error: unknown, context: ApiErrorContext): void {
   if (context.status !== undefined && context.status < 500) {
     return;
   }
-  // A fetch that rejects (no status) while offline is just "user has no
-  // signal" — there is nothing to fix, so don't report it.
-  if (context.status === undefined && !navigator.onLine) {
+  // The request never reached a server, so there is nothing actionable in
+  // the frontend — the outage (or offline device) is the thing to fix.
+  if (context.unreachable) {
     return;
   }
 
