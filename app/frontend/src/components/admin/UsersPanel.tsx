@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -27,8 +28,8 @@ import {
   Typography,
 } from '@mui/material';
 import { Add, Block, ContentCopy, Refresh, RestoreFromTrash, Send } from '@mui/icons-material';
-import { usersAPI } from '../../services/api';
-import type { OrgInvite, OrgUser, UserRole } from '../../services/api';
+import { surveyorsAPI, usersAPI } from '../../services/api';
+import type { OrgInvite, OrgUser, Surveyor, UserRole } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
@@ -219,6 +220,7 @@ export function UsersPanel() {
                 <TableRow>
                   <TableCell>Email</TableCell>
                   <TableCell>Role</TableCell>
+                  <TableCell>Linked surveyor</TableCell>
                   <TableCell>Expires</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
@@ -232,6 +234,7 @@ export function UsersPanel() {
                       <TableCell>
                         <Chip size="small" label={invite.role} color={ROLE_CHIP_COLOR[invite.role]} />
                       </TableCell>
+                      <TableCell>{invite.surveyor_name ?? '—'}</TableCell>
                       <TableCell>
                         {expired ? (
                           <Chip size="small" label="Expired" color="warning" />
@@ -293,20 +296,33 @@ export function UsersPanel() {
   );
 }
 
+const surveyorLabel = (s: Surveyor) =>
+  s.last_name ? `${s.first_name} ${s.last_name}` : s.first_name;
+
 function InviteDialog({ onClose, onInvited }: { onClose: () => void; onInvited: () => void }) {
   const toast = useToast();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('viewer');
+  const [surveyor, setSurveyor] = useState<Surveyor | null>(null);
+  const [unclaimedSurveyors, setUnclaimedSurveyors] = useState<Surveyor[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
 
+  useEffect(() => {
+    // Include inactive surveyors — claiming one reactivates it
+    surveyorsAPI
+      .getAll(true)
+      .then((all) => setUnclaimedSurveyors(all.filter((s) => s.user_id == null)))
+      .catch(() => setUnclaimedSurveyors([]));
+  }, []);
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await usersAPI.createInvite(email.trim().toLowerCase(), role);
+      const result = await usersAPI.createInvite(email.trim().toLowerCase(), role, surveyor?.id ?? null);
       setInviteUrl(result.invite_url);
       setEmailSent(result.email_sent);
       if (result.email_sent) {
@@ -398,6 +414,33 @@ function InviteDialog({ onClose, onInvited }: { onClose: () => void; onInvited: 
             ))}
           </Select>
         </FormControl>
+        {unclaimedSurveyors.length > 0 && (
+          <Autocomplete
+            options={unclaimedSurveyors}
+            value={surveyor}
+            onChange={(_, value) => setSurveyor(value)}
+            getOptionLabel={surveyorLabel}
+            renderOption={(props, option) => (
+              <li {...props} key={option.id}>
+                {surveyorLabel(option)}
+                {!option.is_active && (
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                    (inactive)
+                  </Typography>
+                )}
+              </li>
+            )}
+            disabled={submitting}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                margin="normal"
+                label="Link to existing surveyor (optional)"
+                helperText="If they already appear in the surveyor list, pick them here — their account will keep that survey history instead of creating a duplicate."
+              />
+            )}
+          />
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={submitting}>

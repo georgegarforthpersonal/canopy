@@ -475,6 +475,11 @@ export function AdminPage() {
     />
   );
 
+  const accountChip = (surveyor: Surveyor) =>
+    surveyor.user_id != null ? (
+      <Chip label="Account" size="small" variant="outlined" title="Linked to a user account" />
+    ) : null;
+
   const surveyorActions = (surveyor: Surveyor) => (
     <>
       <IconButton
@@ -645,7 +650,7 @@ export function AdminPage() {
                       {surveyor.first_name}{surveyor.last_name ? ` ${surveyor.last_name}` : ''}
                     </Typography>
                   }
-                  chips={statusChip(surveyor.is_active)}
+                  chips={<>{statusChip(surveyor.is_active)}{accountChip(surveyor)}</>}
                   actions={surveyorActions(surveyor)}
                 />
               ))}
@@ -686,7 +691,12 @@ export function AdminPage() {
                           {surveyor.first_name}{surveyor.last_name ? ` ${surveyor.last_name}` : ''}
                         </Typography>
                       </TableCell>
-                      <TableCell>{statusChip(surveyor.is_active)}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1}>
+                          {statusChip(surveyor.is_active)}
+                          {accountChip(surveyor)}
+                        </Stack>
+                      </TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={1} justifyContent="flex-end">
                           {surveyorActions(surveyor)}

@@ -192,6 +192,12 @@ class Invite(SQLModel, table=True):  # type: ignore[call-arg]
     )
     expires_at: datetime = Field(description="Invites are valid for 7 days")
     accepted_at: Optional[datetime] = Field(default=None, description="Set once used; used invites cannot be reused")
+    surveyor_id: Optional[int] = Field(
+        default=None,
+        foreign_key="surveyor.id",
+        ondelete="SET NULL",
+        description="Existing surveyor row the account will claim on acceptance",
+    )
 
 
 class InviteRead(SQLModel):
@@ -202,6 +208,8 @@ class InviteRead(SQLModel):
     created_at: datetime
     expires_at: datetime
     accepted_at: Optional[datetime] = None
+    surveyor_id: Optional[int] = None
+    surveyor_name: Optional[str] = None
 
 
 # ============================================================================

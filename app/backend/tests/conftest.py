@@ -242,12 +242,14 @@ def create_surveyor(db_session: Session, test_org: Organisation):
         first_name: str = "Test",
         last_name: str = "Surveyor",
         is_active: bool = True,
+        user_id: int = None,
     ) -> Surveyor:
         surveyor = Surveyor(
             first_name=first_name,
             last_name=last_name,
             organisation_id=test_org.id,
             is_active=is_active,
+            user_id=user_id,
         )
         db_session.add(surveyor)
         db_session.commit()

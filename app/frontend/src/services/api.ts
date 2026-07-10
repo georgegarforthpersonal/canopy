@@ -1583,6 +1583,8 @@ export interface OrgInvite {
   created_at: string;
   expires_at: string;
   accepted_at: string | null;
+  surveyor_id: number | null;
+  surveyor_name: string | null;
 }
 
 interface LoginResponse {
@@ -1633,7 +1635,12 @@ export const authAPI = {
     storeSession(response);
   },
 
-  lookupInvite: (token: string): Promise<{ email: string; role: UserRole; organisation: { name: string; slug: string } }> => {
+  lookupInvite: (token: string): Promise<{
+    email: string;
+    role: UserRole;
+    organisation: { name: string; slug: string };
+    surveyor: { id: number; first_name: string; last_name: string | null } | null;
+  }> => {
     return fetchAPI(`/auth/invites/lookup?token=${encodeURIComponent(token)}`);
   },
 
@@ -1685,10 +1692,10 @@ export const usersAPI = {
     return fetchAPI('/auth/invites');
   },
 
-  createInvite: (email: string, role: UserRole): Promise<{ invite: OrgInvite; invite_url: string; email_sent: boolean }> => {
+  createInvite: (email: string, role: UserRole, surveyorId?: number | null): Promise<{ invite: OrgInvite; invite_url: string; email_sent: boolean }> => {
     return fetchAPI('/auth/invites', {
       method: 'POST',
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, role, surveyor_id: surveyorId ?? null }),
     });
   },
 

@@ -151,9 +151,11 @@ class TestRoleEnforcement:
 # ============================================================================
 
 class TestInvites:
-    def _invite(self, client, headers, email="new@example.org", role="viewer"):
+    def _invite(self, client, headers, email="new@example.org", role="viewer", surveyor_id=None):
         response = client.post(
-            "/api/auth/invites", json={"email": email, "role": role}, headers=headers
+            "/api/auth/invites",
+            json={"email": email, "role": role, "surveyor_id": surveyor_id},
+            headers=headers,
         )
         assert response.status_code == 201, response.text
         return response.json()
@@ -269,6 +271,189 @@ class TestInvites:
 
         assert client.get(f"/api/auth/invites/lookup?token={first_token}").status_code == 404
         assert client.get(f"/api/auth/invites/lookup?token={second_token}").status_code == 200
+
+
+# ============================================================================
+# Invite-time surveyor linking
+# ============================================================================
+
+class TestInviteSurveyorLinking:
+    _invite = TestInvites._invite
+
+    def _accept(self, client, invite_url, first_name="Nell", last_name="Woods"):
+        response = client.post(
+            "/api/auth/accept-invite",
+            json={
+                "token": _token_from_url(invite_url),
+                "first_name": first_name,
+                "last_name": last_name,
+                "password": "a-strong-password",
+            },
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def test_plain_accept_creates_fresh_linked_surveyor(
+        self, client: TestClient, login_as, db_session
+    ):
+        """The surveyor exists as soon as the account does — no survey
+        signup needed."""
+        admin_headers, _ = login_as(UserRole.admin)
+        invited = self._invite(client, admin_headers)
+        accepted = self._accept(client, invited["invite_url"])
+
+        surveyor = db_session.query(Surveyor).filter(
+            Surveyor.user_id == accepted["user"]["id"]
+        ).one()
+        assert surveyor.first_name == "Nell"
+        assert surveyor.last_name == "Woods"
+
+    def test_accept_claims_linked_surveyor(
+        self, client: TestClient, login_as, create_surveyor, db_session
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        existing = create_surveyor(first_name="Bernie", last_name="Garforth", is_active=False)
+        invited = self._invite(client, admin_headers, surveyor_id=existing.id)
+
+        # Registrant types a different name; the surveyor row keeps the
+        # historical one (it labels past surveys), the account keeps theirs.
+        accepted = self._accept(client, invited["invite_url"], first_name="Bernard")
+
+        db_session.refresh(existing)
+        assert existing.user_id == accepted["user"]["id"]
+        assert existing.is_active is True  # claiming reactivates
+        assert existing.first_name == "Bernie"
+        linked = db_session.query(Surveyor).filter(
+            Surveyor.user_id == accepted["user"]["id"]
+        ).all()
+        assert [s.id for s in linked] == [existing.id]  # no duplicate created
+
+    def test_accept_falls_back_when_surveyor_claimed_meanwhile(
+        self, client: TestClient, login_as, create_surveyor, create_user, db_session
+    ):
+        """A stale invite must not fail registration or steal the row."""
+        admin_headers, _ = login_as(UserRole.admin)
+        existing = create_surveyor(first_name="Bernie", last_name="Garforth")
+        invited = self._invite(client, admin_headers, surveyor_id=existing.id)
+
+        other = create_user(email="other@example.org")
+        existing.user_id = other.id
+        db_session.add(existing)
+        db_session.commit()
+
+        accepted = self._accept(client, invited["invite_url"])
+        db_session.refresh(existing)
+        assert existing.user_id == other.id  # untouched
+        fresh = db_session.query(Surveyor).filter(
+            Surveyor.user_id == accepted["user"]["id"]
+        ).one()
+        assert fresh.id != existing.id
+
+    def test_invite_rejects_unknown_surveyor(self, client: TestClient, login_as):
+        admin_headers, _ = login_as(UserRole.admin)
+        response = client.post(
+            "/api/auth/invites",
+            json={"email": "new@example.org", "role": "viewer", "surveyor_id": 99999},
+            headers=admin_headers,
+        )
+        assert response.status_code == 404
+
+    def test_invite_rejects_other_orgs_surveyor(
+        self, client: TestClient, login_as, db_session
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        other_org = Organisation(name="Other", slug="other")
+        db_session.add(other_org)
+        db_session.commit()
+        foreign = Surveyor(first_name="Far", last_name="Away", organisation_id=other_org.id)
+        db_session.add(foreign)
+        db_session.commit()
+
+        response = client.post(
+            "/api/auth/invites",
+            json={"email": "new@example.org", "role": "viewer", "surveyor_id": foreign.id},
+            headers=admin_headers,
+        )
+        assert response.status_code == 404
+
+    def test_invite_rejects_already_linked_surveyor(
+        self, client: TestClient, login_as, create_surveyor, create_user
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        user = create_user(email="linked@example.org")
+        linked = create_surveyor(first_name="Al", last_name="Ready", user_id=user.id)
+        response = client.post(
+            "/api/auth/invites",
+            json={"email": "new@example.org", "role": "viewer", "surveyor_id": linked.id},
+            headers=admin_headers,
+        )
+        assert response.status_code == 409
+
+    def test_invite_rejects_surveyor_on_another_open_invite(
+        self, client: TestClient, login_as, create_surveyor
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
+        self._invite(client, admin_headers, email="first@example.org", surveyor_id=surveyor.id)
+
+        response = client.post(
+            "/api/auth/invites",
+            json={"email": "second@example.org", "role": "viewer", "surveyor_id": surveyor.id},
+            headers=admin_headers,
+        )
+        assert response.status_code == 409
+        # Re-inviting the SAME email with the same surveyor replaces the
+        # open invite, as for plain invites.
+        self._invite(client, admin_headers, email="first@example.org", surveyor_id=surveyor.id)
+
+    def test_lookup_shows_surveyor_until_claimed(
+        self, client: TestClient, login_as, create_surveyor, create_user, db_session
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
+        token = _token_from_url(
+            self._invite(client, admin_headers, surveyor_id=surveyor.id)["invite_url"]
+        )
+
+        looked_up = client.get(f"/api/auth/invites/lookup?token={token}")
+        assert looked_up.json()["surveyor"] == {
+            "id": surveyor.id, "first_name": "Bernie", "last_name": "Garforth",
+        }
+
+        other = create_user(email="other@example.org")
+        surveyor.user_id = other.id
+        db_session.add(surveyor)
+        db_session.commit()
+        assert client.get(f"/api/auth/invites/lookup?token={token}").json()["surveyor"] is None
+
+    def test_list_invites_exposes_surveyor(
+        self, client: TestClient, login_as, create_surveyor
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
+        self._invite(client, admin_headers, surveyor_id=surveyor.id)
+
+        rows = client.get("/api/auth/invites", headers=admin_headers).json()
+        assert rows[0]["surveyor_id"] == surveyor.id
+        assert rows[0]["surveyor_name"] == "Bernie Garforth"
+
+    def test_survey_signup_reuses_registration_surveyor(
+        self, client: TestClient, login_as, create_surveyor, create_survey, db_session
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        existing = create_surveyor(first_name="Bernie", last_name="Garforth")
+        invited = self._invite(client, admin_headers, surveyor_id=existing.id)
+        accepted = self._accept(client, invited["invite_url"])
+
+        survey = create_survey()
+        survey.status = "scheduled"
+        db_session.add(survey)
+        db_session.commit()
+
+        headers = {"Authorization": f"Bearer {accepted['token']}"}
+        response = client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
+        assert response.status_code == 200
+        assert response.json()["surveyor_id"] == existing.id
 
 
 # ============================================================================
