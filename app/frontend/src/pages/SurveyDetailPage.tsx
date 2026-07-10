@@ -166,6 +166,65 @@ export function SurveyDetailPage() {
   }, [surveyType?.allow_sighting_device_selection, devices, sightings]);
 
 
+  /**
+   * Populate the edit form from a survey and enter edit mode. Takes the data
+   * explicitly (rather than reading component state) so it can also run
+   * straight after the initial fetch when the page is opened with ?edit=true.
+   *
+   * Declared before the fetch effect that calls it: the first render bails at
+   * the loading early-return below, so a declaration placed after that return
+   * would still be uninitialized (TDZ) when the effect's fetch completes.
+   */
+  const populateEditState = (
+    surveyData: SurveyDetail,
+    sightingsData: Sighting[],
+    surveyorList: Surveyor[],
+  ) => {
+    setEditDate(dayjs(surveyData.date));
+    setEditLocationId(surveyData.location_id);
+    setEditSelectedSurveyors(
+      surveyorList.filter((s) => surveyData.surveyor_ids.includes(s.id))
+    );
+    setEditNotes(surveyData.notes || '');
+    setEditStartTime(surveyData.start_time ? dayjs(surveyData.start_time, 'HH:mm:ss') : null);
+    setEditEndTime(surveyData.end_time ? dayjs(surveyData.end_time, 'HH:mm:ss') : null);
+    setEditSunPercentage(surveyData.sun_percentage != null ? String(surveyData.sun_percentage) : '');
+    setEditTemperatureCelsius(surveyData.temperature_celsius != null ? String(surveyData.temperature_celsius) : '');
+
+    // Convert existing sightings to DraftSighting format
+    // Note: sightings may include individuals array from API (SightingWithIndividuals)
+    const draftSightings: DraftSighting[] = sightingsData.map((sighting: any) => ({
+      tempId: `existing-${sighting.id}`,
+      species_id: sighting.species_id,
+      count: sighting.count,
+      id: sighting.id, // Keep the real ID for updates/deletes
+      // Include location_id for sighting-level location
+      location_id: sighting.location_id,
+      // Include device_id for device-attached sightings
+      device_id: sighting.device_id,
+      // Include notes for this sighting
+      notes: sighting.notes,
+      // Include individuals if present (from SightingWithIndividuals)
+      individuals: sighting.individuals?.map((ind: any) => ({
+        ...ind,
+        tempId: `existing-ind-${ind.id}`,
+      })),
+      // Include existing image IDs for photo management
+      existingImageIds: sighting.image_ids || [],
+    }));
+
+    // Add one empty row at the end
+    draftSightings.push({
+      tempId: `temp-${Date.now()}`,
+      species_id: null,
+      count: 1,
+    });
+
+    setEditDraftSightings(draftSightings);
+    setValidationErrors({});
+    setIsEditMode(true);
+  };
+
   // ============================================================================
   // Data Fetching
   // ============================================================================
@@ -347,61 +406,6 @@ export function SurveyDetailPage() {
   // ============================================================================
   // Event Handlers
   // ============================================================================
-
-  /**
-   * Populate the edit form from a survey and enter edit mode. Takes the data
-   * explicitly (rather than reading component state) so it can also run
-   * straight after the initial fetch when the page is opened with ?edit=true.
-   */
-  const populateEditState = (
-    surveyData: SurveyDetail,
-    sightingsData: Sighting[],
-    surveyorList: Surveyor[],
-  ) => {
-    setEditDate(dayjs(surveyData.date));
-    setEditLocationId(surveyData.location_id);
-    setEditSelectedSurveyors(
-      surveyorList.filter((s) => surveyData.surveyor_ids.includes(s.id))
-    );
-    setEditNotes(surveyData.notes || '');
-    setEditStartTime(surveyData.start_time ? dayjs(surveyData.start_time, 'HH:mm:ss') : null);
-    setEditEndTime(surveyData.end_time ? dayjs(surveyData.end_time, 'HH:mm:ss') : null);
-    setEditSunPercentage(surveyData.sun_percentage != null ? String(surveyData.sun_percentage) : '');
-    setEditTemperatureCelsius(surveyData.temperature_celsius != null ? String(surveyData.temperature_celsius) : '');
-
-    // Convert existing sightings to DraftSighting format
-    // Note: sightings may include individuals array from API (SightingWithIndividuals)
-    const draftSightings: DraftSighting[] = sightingsData.map((sighting: any) => ({
-      tempId: `existing-${sighting.id}`,
-      species_id: sighting.species_id,
-      count: sighting.count,
-      id: sighting.id, // Keep the real ID for updates/deletes
-      // Include location_id for sighting-level location
-      location_id: sighting.location_id,
-      // Include device_id for device-attached sightings
-      device_id: sighting.device_id,
-      // Include notes for this sighting
-      notes: sighting.notes,
-      // Include individuals if present (from SightingWithIndividuals)
-      individuals: sighting.individuals?.map((ind: any) => ({
-        ...ind,
-        tempId: `existing-ind-${ind.id}`,
-      })),
-      // Include existing image IDs for photo management
-      existingImageIds: sighting.image_ids || [],
-    }));
-
-    // Add one empty row at the end
-    draftSightings.push({
-      tempId: `temp-${Date.now()}`,
-      species_id: null,
-      count: 1,
-    });
-
-    setEditDraftSightings(draftSightings);
-    setValidationErrors({});
-    setIsEditMode(true);
-  };
 
   const handleEditClick = () => {
     if (!survey) return;
