@@ -552,6 +552,89 @@ class TestInviteSurveyorLinking:
             headers=admin_headers,
         ).status_code == 404
 
+    def test_link_surveyor_to_existing_user(
+        self, client: TestClient, login_as, create_user, create_surveyor, db_session
+    ):
+        """Accounts that predate registration-time surveyor creation can be
+        linked directly."""
+        admin_headers, _ = login_as(UserRole.admin)
+        user = create_user(email="bernie@example.org")
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth", is_active=False)
+
+        response = client.post(
+            f"/api/auth/users/{user.id}/link-surveyor",
+            json={"surveyor_id": surveyor.id},
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["surveyor_name"] == "Bernie Garforth"
+        db_session.refresh(surveyor)
+        assert surveyor.user_id == user.id
+        assert surveyor.is_active is True
+
+    def test_link_user_replaces_empty_auto_surveyor(
+        self, client: TestClient, login_as, create_user, create_surveyor, db_session
+    ):
+        """A fresh, surveyless auto-created row gives way to the historical
+        one instead of blocking the link."""
+        admin_headers, _ = login_as(UserRole.admin)
+        user = create_user(email="bernie@example.org")
+        auto = create_surveyor(first_name="Bernie", last_name="Garforth", user_id=user.id)
+        historical = create_surveyor(first_name="Bernie", last_name="Garforth")
+
+        response = client.post(
+            f"/api/auth/users/{user.id}/link-surveyor",
+            json={"surveyor_id": historical.id},
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        db_session.expire_all()
+        assert db_session.get(Surveyor, auto.id) is None
+        db_session.refresh(historical)
+        assert historical.user_id == user.id
+
+    def test_link_user_refuses_when_current_surveyor_has_history(
+        self, client: TestClient, login_as, create_user, create_surveyor,
+        create_survey, db_session
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        user = create_user(email="bernie@example.org")
+        current = create_surveyor(first_name="Bernie", last_name="Garforth", user_id=user.id)
+        survey = create_survey()
+        db_session.add(SurveySurveyor(survey_id=survey.id, surveyor_id=current.id))
+        db_session.commit()
+        historical = create_surveyor(first_name="Bernie", last_name="Garforth")
+
+        response = client.post(
+            f"/api/auth/users/{user.id}/link-surveyor",
+            json={"surveyor_id": historical.id},
+            headers=admin_headers,
+        )
+        assert response.status_code == 409
+        assert "merge" in response.json()["detail"]
+
+    def test_link_user_rejects_claimed_or_invite_held_surveyor(
+        self, client: TestClient, login_as, create_user, create_surveyor
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        user = create_user(email="bernie@example.org")
+
+        other = create_user(email="other@example.org")
+        claimed = create_surveyor(first_name="Al", last_name="Ready", user_id=other.id)
+        assert client.post(
+            f"/api/auth/users/{user.id}/link-surveyor",
+            json={"surveyor_id": claimed.id},
+            headers=admin_headers,
+        ).status_code == 409
+
+        held = create_surveyor(first_name="Held", last_name="ByInvite")
+        self._invite(client, admin_headers, email="invitee@example.org", surveyor_id=held.id)
+        assert client.post(
+            f"/api/auth/users/{user.id}/link-surveyor",
+            json={"surveyor_id": held.id},
+            headers=admin_headers,
+        ).status_code == 409
+
     def test_survey_signup_reuses_registration_surveyor(
         self, client: TestClient, login_as, create_surveyor, create_survey, db_session
     ):

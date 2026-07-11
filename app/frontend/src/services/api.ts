@@ -1699,6 +1699,13 @@ export const usersAPI = {
     });
   },
 
+  linkSurveyor: (userId: number, surveyorId: number): Promise<{ user_id: number; surveyor_id: number; surveyor_name: string }> => {
+    return fetchAPI(`/auth/users/${userId}/link-surveyor`, {
+      method: 'POST',
+      body: JSON.stringify({ surveyor_id: surveyorId }),
+    });
+  },
+
   updateInvite: (inviteId: number, surveyorId: number | null): Promise<OrgInvite> => {
     return fetchAPI(`/auth/invites/${inviteId}`, {
       method: 'PATCH',
