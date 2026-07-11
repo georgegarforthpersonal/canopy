@@ -462,6 +462,96 @@ class TestInviteSurveyorLinking:
         rows = client.get("/api/auth/invites", headers=admin_headers).json()
         assert rows[0]["surveyor_name"] is None
 
+    def test_link_surveyor_to_pending_invite(
+        self, client: TestClient, login_as, create_surveyor, db_session
+    ):
+        """A plain invite can gain a surveyor link any time before
+        acceptance — and acceptance then claims it."""
+        admin_headers, _ = login_as(UserRole.admin)
+        invited = self._invite(client, admin_headers)
+        assert invited["invite"]["surveyor_id"] is None
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
+
+        patched = client.patch(
+            f"/api/auth/invites/{invited['invite']['id']}",
+            json={"surveyor_id": surveyor.id},
+            headers=admin_headers,
+        )
+        assert patched.status_code == 200
+        assert patched.json()["surveyor_name"] == "Bernie Garforth"
+
+        accepted = self._accept(client, invited["invite_url"])
+        db_session.refresh(surveyor)
+        assert surveyor.user_id == accepted["user"]["id"]
+
+    def test_unlink_surveyor_from_pending_invite(
+        self, client: TestClient, login_as, create_surveyor
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
+        invited = self._invite(client, admin_headers, surveyor_id=surveyor.id)
+
+        patched = client.patch(
+            f"/api/auth/invites/{invited['invite']['id']}",
+            json={"surveyor_id": None},
+            headers=admin_headers,
+        )
+        assert patched.status_code == 200
+        assert patched.json()["surveyor_id"] is None
+
+    def test_update_invite_keeps_own_surveyor_and_validates_clashes(
+        self, client: TestClient, login_as, create_surveyor, create_user
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
+        invited = self._invite(client, admin_headers, surveyor_id=surveyor.id)
+        invite_id = invited["invite"]["id"]
+
+        # Re-linking its own surveyor is a no-op, not a clash with itself
+        assert client.patch(
+            f"/api/auth/invites/{invite_id}",
+            json={"surveyor_id": surveyor.id},
+            headers=admin_headers,
+        ).status_code == 200
+
+        # Another live invite's surveyor still clashes
+        other_surveyor = create_surveyor(first_name="Someone", last_name="Else")
+        self._invite(client, admin_headers, email="second@example.org", surveyor_id=other_surveyor.id)
+        assert client.patch(
+            f"/api/auth/invites/{invite_id}",
+            json={"surveyor_id": other_surveyor.id},
+            headers=admin_headers,
+        ).status_code == 409
+
+        # A claimed surveyor is rejected
+        user = create_user(email="claimed@example.org")
+        claimed = create_surveyor(first_name="Al", last_name="Ready", user_id=user.id)
+        assert client.patch(
+            f"/api/auth/invites/{invite_id}",
+            json={"surveyor_id": claimed.id},
+            headers=admin_headers,
+        ).status_code == 409
+
+    def test_update_invite_rejects_accepted_or_unknown(
+        self, client: TestClient, login_as, create_surveyor
+    ):
+        admin_headers, _ = login_as(UserRole.admin)
+        surveyor = create_surveyor(first_name="Bernie", last_name="Garforth")
+        invited = self._invite(client, admin_headers)
+        self._accept(client, invited["invite_url"])
+
+        # Accepted invites can no longer be edited; unknown ids 404 too
+        assert client.patch(
+            f"/api/auth/invites/{invited['invite']['id']}",
+            json={"surveyor_id": surveyor.id},
+            headers=admin_headers,
+        ).status_code == 404
+        assert client.patch(
+            "/api/auth/invites/99999",
+            json={"surveyor_id": surveyor.id},
+            headers=admin_headers,
+        ).status_code == 404
+
     def test_survey_signup_reuses_registration_surveyor(
         self, client: TestClient, login_as, create_surveyor, create_survey, db_session
     ):
