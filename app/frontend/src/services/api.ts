@@ -1699,6 +1699,13 @@ export const usersAPI = {
     });
   },
 
+  updateInvite: (inviteId: number, surveyorId: number | null): Promise<OrgInvite> => {
+    return fetchAPI(`/auth/invites/${inviteId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ surveyor_id: surveyorId }),
+    });
+  },
+
   resendInvite: (inviteId: number): Promise<{ invite_url: string; email_sent: boolean }> => {
     return fetchAPI(`/auth/invites/${inviteId}/resend`, {
       method: 'POST',

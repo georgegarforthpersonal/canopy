@@ -12,6 +12,7 @@ Endpoints:
   POST   /api/auth/accept-invite          - Create an account from an invite
   GET    /api/auth/invites                - Admin: list open invites
   POST   /api/auth/invites                - Admin: invite a user (email + role)
+  PATCH  /api/auth/invites/{id}           - Admin: link/unlink a surveyor on a pending invite
   POST   /api/auth/invites/{id}/resend    - Admin: regenerate + resend an invite
   DELETE /api/auth/invites/{id}           - Admin: revoke an invite
   GET    /api/auth/users                  - Admin: list users
@@ -101,6 +102,11 @@ class InviteCreate(BaseModel):
     surveyor_id: Optional[int] = None
 
 
+class InviteUpdate(BaseModel):
+    # None unlinks; the link can change any time before acceptance
+    surveyor_id: Optional[int] = None
+
+
 class AcceptInviteRequest(BaseModel):
     token: str
     first_name: str
@@ -186,6 +192,45 @@ def _invite_read(db: Session, invite: Invite) -> InviteRead:
     claim = _claimable_surveyor(db, invite)
     read.surveyor_name = _surveyor_name(claim) if claim else None
     return read
+
+
+def _check_surveyor_linkable(
+    db: Session,
+    org_id: int,
+    surveyor_id: int,
+    email: str,
+    exclude_invite_id: Optional[int] = None,
+) -> Surveyor:
+    """404/409 unless this surveyor can be linked to an invite for ``email``.
+
+    Open means unused AND unexpired, as in _find_open_invite — an expired
+    invite can never be accepted, so it must not block. ``exclude_invite_id``
+    lets an invite being edited keep or swap its own surveyor.
+    """
+    surveyor = db.query(Surveyor).filter(
+        Surveyor.id == surveyor_id,
+        Surveyor.organisation_id == org_id,
+    ).first()
+    if not surveyor:
+        raise HTTPException(status_code=404, detail="Surveyor not found")
+    if surveyor.user_id is not None:
+        raise HTTPException(status_code=409, detail="This surveyor is already linked to an account")
+    clash_query = db.query(Invite).filter(
+        Invite.organisation_id == org_id,
+        Invite.surveyor_id == surveyor_id,
+        Invite.accepted_at == None,  # noqa: E711
+        Invite.expires_at > datetime.utcnow(),
+        func.lower(Invite.email) != email,
+    )
+    if exclude_invite_id is not None:
+        clash_query = clash_query.filter(Invite.id != exclude_invite_id)
+    clashing = clash_query.first()
+    if clashing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"An open invite for {clashing.email} already links this surveyor — revoke it first",
+        )
+    return surveyor  # type: ignore[no-any-return]
 
 
 def _find_open_invite(db: Session, token: str) -> Optional[Invite]:
@@ -525,28 +570,7 @@ async def create_invite(
         raise HTTPException(status_code=409, detail="A user with this email already exists")
 
     if body.surveyor_id is not None:
-        surveyor = db.query(Surveyor).filter(
-            Surveyor.id == body.surveyor_id,
-            Surveyor.organisation_id == org.id,
-        ).first()
-        if not surveyor:
-            raise HTTPException(status_code=404, detail="Surveyor not found")
-        if surveyor.user_id is not None:
-            raise HTTPException(status_code=409, detail="This surveyor is already linked to an account")
-        # Open means unused AND unexpired, as in _find_open_invite — an
-        # expired invite can never be accepted, so it must not block.
-        clashing = db.query(Invite).filter(
-            Invite.organisation_id == org.id,
-            Invite.surveyor_id == body.surveyor_id,
-            Invite.accepted_at == None,  # noqa: E711
-            Invite.expires_at > datetime.utcnow(),
-            func.lower(Invite.email) != email,
-        ).first()
-        if clashing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"An open invite for {clashing.email} already links this surveyor — revoke it first",
-            )
+        _check_surveyor_linkable(db, org.id, body.surveyor_id, email)  # type: ignore[arg-type]
 
     # Replace any open invite for the same email rather than stacking them
     db.query(Invite).filter(
@@ -580,6 +604,39 @@ async def create_invite(
         "invite_url": invite_url,
         "email_sent": email_sent,
     }
+
+
+@router.patch("/invites/{invite_id}", response_model=InviteRead)
+async def update_invite(
+    invite_id: int,
+    body: InviteUpdate,
+    db: Session = Depends(get_db),
+    org: Organisation = Depends(get_current_organisation),
+    principal: Principal = Depends(require_admin_role),
+) -> InviteRead:
+    """Admin: link (or unlink) a surveyor on a pending invite.
+
+    The link only takes effect at acceptance, so it can be added or changed
+    any time before the invitee signs up — no need to revoke and re-invite.
+    """
+    invite = db.query(Invite).filter(
+        Invite.id == invite_id,
+        Invite.organisation_id == org.id,
+        Invite.accepted_at == None,  # noqa: E711
+    ).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    if body.surveyor_id is not None:
+        _check_surveyor_linkable(
+            db, org.id, body.surveyor_id, invite.email.lower(),  # type: ignore[arg-type]
+            exclude_invite_id=invite.id,
+        )
+    invite.surveyor_id = body.surveyor_id
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+    return _invite_read(db, invite)
 
 
 @router.post("/invites/{invite_id}/resend")

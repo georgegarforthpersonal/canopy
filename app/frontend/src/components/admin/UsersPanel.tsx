@@ -58,6 +58,7 @@ export function UsersPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [linkInvite, setLinkInvite] = useState<OrgInvite | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -235,7 +236,18 @@ export function UsersPanel() {
                       <TableCell>
                         <Chip size="small" label={invite.role} color={ROLE_CHIP_COLOR[invite.role]} />
                       </TableCell>
-                      <TableCell>{invite.surveyor_name ?? '—'}</TableCell>
+                      <TableCell>
+                        {/* The link can change any time before acceptance */}
+                        <Tooltip title="Link to an existing surveyor — they'll keep that survey history" arrow>
+                          <Button
+                            size="small"
+                            onClick={() => setLinkInvite(invite)}
+                            sx={{ textTransform: 'none', px: 0.75, minWidth: 0 }}
+                          >
+                            {invite.surveyor_name ?? 'Link…'}
+                          </Button>
+                        </Tooltip>
+                      </TableCell>
                       <TableCell>
                         {expired ? (
                           <Chip size="small" label="Expired" color="warning" />
@@ -294,7 +306,88 @@ export function UsersPanel() {
           }}
         />
       )}
+
+      {linkInvite && (
+        <LinkSurveyorDialog
+          invite={linkInvite}
+          openInvites={invites}
+          onClose={() => setLinkInvite(null)}
+          onSaved={() => {
+            setLinkInvite(null);
+            load();
+          }}
+        />
+      )}
     </Stack>
+  );
+}
+
+/** Surveyors an invite could claim: unclaimed, and not already targeted by
+ * another live invite (which would 409 on save). */
+function useUnclaimedSurveyors(openInvites: OrgInvite[], excludeInviteId?: number) {
+  const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    const heldByOtherInvite = new Set(
+      openInvites
+        .filter(
+          (i) =>
+            i.id !== excludeInviteId &&
+            i.surveyor_id != null &&
+            new Date(i.expires_at) > new Date()
+        )
+        .map((i) => i.surveyor_id)
+    );
+    // Include inactive surveyors — claiming one reactivates it
+    surveyorsAPI
+      .getAll(true)
+      .then((all) =>
+        setSurveyors(all.filter((s) => s.user_id == null && !heldByOtherInvite.has(s.id)))
+      )
+      .catch(() => setLoadError(true));
+  }, [openInvites, excludeInviteId]);
+
+  return { surveyors, loadError };
+}
+
+function SurveyorLinkPicker({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: Surveyor[];
+  value: Surveyor | null;
+  onChange: (surveyor: Surveyor | null) => void;
+  disabled: boolean;
+}) {
+  return (
+    <Autocomplete
+      options={options}
+      value={value}
+      onChange={(_, newValue) => onChange(newValue)}
+      getOptionLabel={surveyorFullName}
+      renderOption={(props, option) => (
+        <li {...props} key={option.id}>
+          {surveyorFullName(option)}
+          {!option.is_active && (
+            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+              (inactive)
+            </Typography>
+          )}
+        </li>
+      )}
+      disabled={disabled}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          margin="normal"
+          label="Link to existing surveyor (optional)"
+          helperText="If they already appear in the surveyor list, pick them here — their account will keep that survey history instead of creating a duplicate."
+        />
+      )}
+    />
   );
 }
 
@@ -311,29 +404,12 @@ function InviteDialog({
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('viewer');
   const [surveyor, setSurveyor] = useState<Surveyor | null>(null);
-  const [unclaimedSurveyors, setUnclaimedSurveyors] = useState<Surveyor[]>([]);
-  const [surveyorLoadError, setSurveyorLoadError] = useState(false);
+  const { surveyors: unclaimedSurveyors, loadError: surveyorLoadError } =
+    useUnclaimedSurveyors(openInvites);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
-
-  useEffect(() => {
-    // A surveyor already targeted by another live invite would be rejected
-    // with a 409 on submit, so don't offer it in the first place.
-    const heldByOpenInvite = new Set(
-      openInvites
-        .filter((i) => i.surveyor_id != null && new Date(i.expires_at) > new Date())
-        .map((i) => i.surveyor_id)
-    );
-    // Include inactive surveyors — claiming one reactivates it
-    surveyorsAPI
-      .getAll(true)
-      .then((all) =>
-        setUnclaimedSurveyors(all.filter((s) => s.user_id == null && !heldByOpenInvite.has(s.id)))
-      )
-      .catch(() => setSurveyorLoadError(true));
-  }, [openInvites]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -438,30 +514,11 @@ function InviteDialog({
           </Alert>
         )}
         {unclaimedSurveyors.length > 0 && (
-          <Autocomplete
+          <SurveyorLinkPicker
             options={unclaimedSurveyors}
             value={surveyor}
-            onChange={(_, value) => setSurveyor(value)}
-            getOptionLabel={surveyorFullName}
-            renderOption={(props, option) => (
-              <li {...props} key={option.id}>
-                {surveyorFullName(option)}
-                {!option.is_active && (
-                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                    (inactive)
-                  </Typography>
-                )}
-              </li>
-            )}
+            onChange={setSurveyor}
             disabled={submitting}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                margin="normal"
-                label="Link to existing surveyor (optional)"
-                helperText="If they already appear in the surveyor list, pick them here — their account will keep that survey history instead of creating a duplicate."
-              />
-            )}
           />
         )}
       </DialogContent>
@@ -476,6 +533,76 @@ function InviteDialog({
           disabled={submitting || !email.includes('@')}
         >
           {submitting ? 'Creating…' : 'Send invite'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function LinkSurveyorDialog({
+  invite,
+  openInvites,
+  onClose,
+  onSaved,
+}: {
+  invite: OrgInvite;
+  openInvites: OrgInvite[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const { surveyors: unclaimedSurveyors, loadError } = useUnclaimedSurveyors(openInvites, invite.id);
+  const [surveyor, setSurveyor] = useState<Surveyor | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Preselect the invite's current surveyor once the options arrive
+  useEffect(() => {
+    setSurveyor(unclaimedSurveyors.find((s) => s.id === invite.surveyor_id) ?? null);
+  }, [unclaimedSurveyors, invite.surveyor_id]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await usersAPI.updateInvite(invite.id, surveyor?.id ?? null);
+      toast.success(
+        surveyor
+          ? `Invite for ${invite.email} linked to ${surveyorFullName(surveyor)}`
+          : `Surveyor link removed from ${invite.email}'s invite`
+      );
+      onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update invite');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onClose={() => !saving && onClose()} maxWidth="sm" fullWidth>
+      <DialogTitle>Link surveyor</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          When <strong>{invite.email}</strong> accepts their invite, their account
+          will claim the surveyor picked here.
+        </Typography>
+        {loadError ? (
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            Couldn't load the surveyor list. Close the dialog and try again.
+          </Alert>
+        ) : (
+          <SurveyorLinkPicker
+            options={unclaimedSurveyors}
+            value={surveyor}
+            onChange={setSurveyor}
+            disabled={saving}
+          />
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button onClick={handleSave} variant="contained" disabled={saving || loadError}>
+          {saving ? 'Saving…' : 'Save'}
         </Button>
       </DialogActions>
     </Dialog>
