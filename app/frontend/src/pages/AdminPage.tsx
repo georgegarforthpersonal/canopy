@@ -115,6 +115,17 @@ export function AdminPage() {
   // Heal-only Groups tab where scheduled surveys surface.
   const showScheduling = getOrgSlug() === 'heal';
   const [tabValue, setTabValue] = useState(0);
+  // Panels look their index up by key, so the conditional Scheduled tab
+  // can't silently shift the ones after it.
+  const adminTabs = [
+    { key: 'users', label: 'Users' },
+    { key: 'survey-types', label: 'Survey Types' },
+    ...(showScheduling ? [{ key: 'scheduled', label: 'Scheduled' }] : []),
+    { key: 'locations', label: 'Locations & Devices' },
+    { key: 'surveyors', label: 'Surveyors' },
+    { key: 'data', label: 'Data' },
+  ];
+  const tabIndex = (key: string) => adminTabs.findIndex((t) => t.key === key);
 
   // Surveyors state
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
@@ -596,7 +607,7 @@ export function AdminPage() {
   return (
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
       <PageTitle title="Admin" />
-      {/* Tabs — scrollable on mobile so all five fit without clipping */}
+      {/* Tabs — scrollable on mobile so they all fit without clipping */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs
           value={tabValue}
@@ -604,17 +615,14 @@ export function AdminPage() {
           variant={isMobile ? 'scrollable' : 'standard'}
           allowScrollButtonsMobile
         >
-          <Tab label="Surveyors" />
-          <Tab label="Survey Types" />
-          <Tab label="Locations & Devices" />
-          <Tab label="Data" />
-          {showScheduling && <Tab label="Scheduled" />}
-          <Tab label="Users" />
+          {adminTabs.map((tab) => (
+            <Tab key={tab.key} label={tab.label} />
+          ))}
         </Tabs>
       </Box>
 
       {/* Surveyors Tab */}
-      <TabPanel value={tabValue} index={0}>
+      <TabPanel value={tabValue} index={tabIndex('surveyors')}>
         <Box sx={{ mb: { xs: 2, md: 3 }, display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
@@ -712,7 +720,7 @@ export function AdminPage() {
       </TabPanel>
 
       {/* Survey Types Tab */}
-      <TabPanel value={tabValue} index={1}>
+      <TabPanel value={tabValue} index={tabIndex('survey-types')}>
         <Box sx={{ mb: { xs: 2, md: 3 }, display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             variant="contained"
@@ -835,12 +843,12 @@ export function AdminPage() {
       </TabPanel>
 
       {/* Locations & Devices Tab */}
-      <TabPanel value={tabValue} index={2}>
+      <TabPanel value={tabValue} index={tabIndex('locations')}>
         <LocationsDevicesManager />
       </TabPanel>
 
       {/* Data Tab — export sections stacked instead of a second row of nested tabs */}
-      <TabPanel value={tabValue} index={3}>
+      <TabPanel value={tabValue} index={tabIndex('data')}>
         <Stack spacing={{ xs: 2, md: 3 }} sx={{ maxWidth: 600 }}>
           <RecordsExportPanel />
 
@@ -877,13 +885,13 @@ export function AdminPage() {
 
       {/* Scheduled Tab (Heal-only) */}
       {showScheduling && (
-        <TabPanel value={tabValue} index={4}>
+        <TabPanel value={tabValue} index={tabIndex('scheduled')}>
           <ScheduledSurveysPanel surveyors={surveyors} surveyTypes={surveyTypes} />
         </TabPanel>
       )}
 
       {/* Users Tab — accounts, roles and invites */}
-      <TabPanel value={tabValue} index={showScheduling ? 5 : 4}>
+      <TabPanel value={tabValue} index={tabIndex('users')}>
         <UsersPanel />
       </TabPanel>
 
