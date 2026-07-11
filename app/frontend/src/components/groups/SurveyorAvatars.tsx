@@ -30,10 +30,14 @@ export default function SurveyorAvatars({
   greenIds,
 }: SurveyorAvatarsProps) {
   if (surveyors.length === 0) {
+    // Occupy the same 28px-tall right-aligned slot as the circles, so rows
+    // with and without surveyors line up.
     return (
-      <Typography variant="caption" sx={{ color: '#999', fontStyle: 'italic' }}>
-        {emptyLabel}
-      </Typography>
+      <Box sx={{ height: 28, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <Typography variant="caption" sx={{ color: '#999', fontStyle: 'italic' }}>
+          {emptyLabel}
+        </Typography>
+      </Box>
     );
   }
 
