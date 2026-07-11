@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -55,16 +55,23 @@ export function UsersPanel() {
 
   const [users, setUsers] = useState<OrgUser[]>([]);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
+  const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [linkInvite, setLinkInvite] = useState<OrgInvite | null>(null);
+  const [linkUser, setLinkUser] = useState<OrgUser | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [userList, inviteList] = await Promise.all([usersAPI.getAll(), usersAPI.getInvites()]);
+      const [userList, inviteList, surveyorList] = await Promise.all([
+        usersAPI.getAll(),
+        usersAPI.getInvites(),
+        surveyorsAPI.getAll(true),
+      ]);
       setUsers(userList);
       setInvites(inviteList);
+      setSurveyors(surveyorList);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
@@ -76,6 +83,10 @@ export function UsersPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const surveyorByUserId = new Map(
+    surveyors.filter((s) => s.user_id != null).map((s) => [s.user_id, s])
+  );
 
   const handleRoleChange = async (user: OrgUser, role: UserRole) => {
     try {
@@ -146,6 +157,7 @@ export function UsersPanel() {
               <TableCell>Name</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Role</TableCell>
+              <TableCell>Surveyor</TableCell>
               <TableCell>Last sign-in</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -184,6 +196,23 @@ export function UsersPanel() {
                     )}
                   </TableCell>
                   <TableCell>
+                    <Tooltip
+                      title="Link this account to an existing surveyor — it takes over that survey history"
+                      arrow
+                    >
+                      <Button
+                        size="small"
+                        onClick={() => setLinkUser(user)}
+                        sx={{ textTransform: 'none', px: 0.75, minWidth: 0 }}
+                      >
+                        {(() => {
+                          const linked = surveyorByUserId.get(user.id);
+                          return linked ? surveyorFullName(linked) : 'Link…';
+                        })()}
+                      </Button>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell>
                     {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('en-GB') : 'Never'}
                   </TableCell>
                   <TableCell align="right">
@@ -200,7 +229,7 @@ export function UsersPanel() {
             })}
             {users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
                     No accounts yet — invite the first user to get started.
                   </Typography>
@@ -309,12 +338,61 @@ export function UsersPanel() {
 
       {linkInvite && (
         <LinkSurveyorDialog
-          invite={linkInvite}
+          description={
+            <>
+              When <strong>{linkInvite.email}</strong> accepts their invite, their
+              account will claim the surveyor picked here.
+            </>
+          }
+          currentSurveyorId={linkInvite.surveyor_id}
           openInvites={invites}
+          excludeInviteId={linkInvite.id}
+          allowClear
           onClose={() => setLinkInvite(null)}
-          onSaved={() => {
-            setLinkInvite(null);
-            load();
+          onSave={async (surveyor) => {
+            try {
+              await usersAPI.updateInvite(linkInvite.id, surveyor?.id ?? null);
+              toast.success(
+                surveyor
+                  ? `Invite for ${linkInvite.email} linked to ${surveyorFullName(surveyor)}`
+                  : `Surveyor link removed from ${linkInvite.email}'s invite`
+              );
+              setLinkInvite(null);
+              load();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Could not update invite');
+              throw err;
+            }
+          }}
+        />
+      )}
+
+      {linkUser && (
+        <LinkSurveyorDialog
+          description={
+            <>
+              <strong>
+                {[linkUser.first_name, linkUser.last_name].filter(Boolean).join(' ')}
+              </strong>
+              's account will be linked to the surveyor picked here and take over
+              that survey history.
+            </>
+          }
+          currentSurveyorId={surveyorByUserId.get(linkUser.id)?.id ?? null}
+          openInvites={invites}
+          allowClear={false}
+          onClose={() => setLinkUser(null)}
+          onSave={async (surveyor) => {
+            if (!surveyor) return;
+            try {
+              await usersAPI.linkSurveyor(linkUser.id, surveyor.id);
+              toast.success(`${linkUser.first_name} linked to ${surveyorFullName(surveyor)}`);
+              setLinkUser(null);
+              load();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Could not link surveyor');
+              throw err;
+            }
           }}
         />
       )}
@@ -539,40 +617,44 @@ function InviteDialog({
   );
 }
 
+/** Pick an unclaimed surveyor to link — to a pending invite or directly to
+ * an account. The caller owns the save (API call, toasts, closing). */
 function LinkSurveyorDialog({
-  invite,
+  description,
+  currentSurveyorId,
   openInvites,
+  excludeInviteId,
+  allowClear,
   onClose,
-  onSaved,
+  onSave,
 }: {
-  invite: OrgInvite;
+  description: ReactNode;
+  currentSurveyorId: number | null;
   openInvites: OrgInvite[];
+  excludeInviteId?: number;
+  /** Whether saving with nothing selected removes an existing link */
+  allowClear: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSave: (surveyor: Surveyor | null) => Promise<void>;
 }) {
-  const toast = useToast();
-  const { surveyors: unclaimedSurveyors, loadError } = useUnclaimedSurveyors(openInvites, invite.id);
+  const { surveyors: unclaimedSurveyors, loadError } = useUnclaimedSurveyors(
+    openInvites,
+    excludeInviteId
+  );
   const [surveyor, setSurveyor] = useState<Surveyor | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Preselect the invite's current surveyor once the options arrive
+  // Preselect the current surveyor once the options arrive
   useEffect(() => {
-    setSurveyor(unclaimedSurveyors.find((s) => s.id === invite.surveyor_id) ?? null);
-  }, [unclaimedSurveyors, invite.surveyor_id]);
+    setSurveyor(unclaimedSurveyors.find((s) => s.id === currentSurveyorId) ?? null);
+  }, [unclaimedSurveyors, currentSurveyorId]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await usersAPI.updateInvite(invite.id, surveyor?.id ?? null);
-      toast.success(
-        surveyor
-          ? `Invite for ${invite.email} linked to ${surveyorFullName(surveyor)}`
-          : `Surveyor link removed from ${invite.email}'s invite`
-      );
-      onSaved();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not update invite');
-      setSaving(false);
+      await onSave(surveyor);
+    } catch {
+      setSaving(false); // the caller has already shown the error
     }
   };
 
@@ -581,8 +663,7 @@ function LinkSurveyorDialog({
       <DialogTitle>Link surveyor</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          When <strong>{invite.email}</strong> accepts their invite, their account
-          will claim the surveyor picked here.
+          {description}
         </Typography>
         {loadError ? (
           <Alert severity="warning" sx={{ mt: 1 }}>
@@ -601,7 +682,11 @@ function LinkSurveyorDialog({
         <Button onClick={onClose} disabled={saving}>
           Cancel
         </Button>
-        <Button onClick={handleSave} variant="contained" disabled={saving || loadError}>
+        <Button
+          onClick={handleSave}
+          variant="contained"
+          disabled={saving || loadError || (!surveyor && !allowClear)}
+        >
           {saving ? 'Saving…' : 'Save'}
         </Button>
       </DialogActions>

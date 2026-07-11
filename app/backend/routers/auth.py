@@ -17,6 +17,7 @@ Endpoints:
   DELETE /api/auth/invites/{id}           - Admin: revoke an invite
   GET    /api/auth/users                  - Admin: list users
   PATCH  /api/auth/users/{id}             - Admin: change role / (de)activate
+  POST   /api/auth/users/{id}/link-surveyor - Admin: link an account to a historical surveyor
 """
 
 import logging
@@ -59,6 +60,7 @@ from models import (
     InviteRead,
     Organisation,
     Surveyor,
+    SurveySurveyor,
     User,
     UserRead,
     UserRole,
@@ -105,6 +107,10 @@ class InviteCreate(BaseModel):
 class InviteUpdate(BaseModel):
     # None unlinks; the link can change any time before acceptance
     surveyor_id: Optional[int] = None
+
+
+class LinkSurveyorRequest(BaseModel):
+    surveyor_id: int
 
 
 class AcceptInviteRequest(BaseModel):
@@ -740,3 +746,56 @@ async def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/users/{user_id}/link-surveyor")
+async def link_user_surveyor(
+    user_id: int,
+    body: LinkSurveyorRequest,
+    db: Session = Depends(get_db),
+    org: Organisation = Depends(get_current_organisation),
+    principal: Principal = Depends(require_admin_role),
+) -> dict[str, Any]:
+    """Admin: link an existing account to a historical surveyor.
+
+    The account-side counterpart of invite-time linking, for users who
+    registered before their surveyor was linked. If the account already
+    has an (empty, auto-created) surveyor it is replaced; one with
+    recorded surveys is refused — that is a merge, done deliberately via
+    scripts/merge_surveyors.py.
+    """
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.organisation_id == org.id,
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    target = _check_surveyor_linkable(db, org.id, body.surveyor_id, user.email.lower())  # type: ignore[arg-type]
+
+    current = db.query(Surveyor).filter(Surveyor.user_id == user.id).first()
+    if current:
+        has_history = db.query(SurveySurveyor).filter(
+            SurveySurveyor.surveyor_id == current.id
+        ).first()
+        if has_history:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{user.first_name} is already linked to a surveyor with recorded "
+                    "surveys — merge the two surveyors instead of relinking"
+                ),
+            )
+        db.delete(current)
+        db.flush()
+
+    target.user_id = user.id
+    target.is_active = True
+    db.add(target)
+    db.commit()
+    db.refresh(target)
+    return {
+        "user_id": user.id,
+        "surveyor_id": target.id,
+        "surveyor_name": _surveyor_name(target),
+    }
