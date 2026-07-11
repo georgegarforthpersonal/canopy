@@ -106,11 +106,12 @@ export default function SurveyWorklistRow({
             </Box>
           )}
         </Box>
-        {/* On the stacked phone layout the avatars ride with the date (who's
-            going is information); the buttons line below is actions only. */}
-        {stacked && surveyors.length > 0 && (
+        {/* On the stacked phone layout the date line's top-right slot always
+            carries who's going — avatars, or "No surveyors yet" when empty;
+            the buttons line below is actions only. */}
+        {stacked && (
           <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexShrink: 0 }}>
-            <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} emptyLabel="" />
+            <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} />
           </Box>
         )}
       </Box>
@@ -170,9 +171,8 @@ export default function SurveyWorklistRow({
             flexShrink: 0,
           }}
         >
-          {/* On xs the avatars already sit on the date line (or, with nobody
-              signed up yet, the empty label stays here beside the button). */}
-          <Box sx={{ display: { xs: surveyors.length > 0 ? 'none' : 'flex', sm: 'flex' } }}>
+          {/* On xs the date line's slot carries the avatars/empty label */}
+          <Box sx={{ display: { xs: 'none', sm: 'flex' } }}>
             <SurveyorAvatars surveyors={surveyors} greenIds={greenIds} />
           </Box>
           {assignButton}

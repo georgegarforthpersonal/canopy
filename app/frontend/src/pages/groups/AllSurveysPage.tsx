@@ -207,9 +207,10 @@ export default function AllSurveysPage() {
             surveys.map((survey, idx) => {
               const state = deriveSurveyState(survey);
               const assigned = resolveSurveyors(survey.surveyor_ids);
-              // Due-this-week rows carrying both Sign up and Record survey are
-              // too wide for a phone, so they stack: date + chip line, actions line.
-              const stacked = state === 'due-this-week' && canEditSurveys;
+              // Rows carrying the sign-up toggle are too wide for a phone, so
+              // they stack — same rule as SurveyWorklistRow: date + chip line
+              // with avatars top right, actions line below.
+              const stacked = state === 'due-this-week' || state === 'upcoming';
               const recordButton = (
                 <Button
                   variant="contained"
@@ -240,18 +241,27 @@ export default function AllSurveysPage() {
                   }}
                   onClick={() => goToSurvey(survey.id)}
                 >
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
-                      {formatSurveyDate(survey)}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
-                      <StatusChip state={state} />
-                      {survey.location_name && (
-                        <Typography sx={{ fontSize: 13, color: groupColors.textMuted }} noWrap>
-                          {survey.location_name}
-                        </Typography>
-                      )}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
+                        {formatSurveyDate(survey)}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
+                        <StatusChip state={state} />
+                        {survey.location_name && (
+                          <Typography sx={{ fontSize: 13, color: groupColors.textMuted }} noWrap>
+                            {survey.location_name}
+                          </Typography>
+                        )}
+                      </Box>
                     </Box>
+                    {/* On phones the date line's top-right slot carries who's
+                        going — avatars, or "No surveyors yet" when empty. */}
+                    {stacked && (
+                      <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexShrink: 0 }}>
+                        <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
+                      </Box>
+                    )}
                   </Box>
 
                   {/* Right cell varies by status */}
@@ -293,7 +303,10 @@ export default function AllSurveysPage() {
                         flexShrink: 0,
                       }}
                     >
-                      <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
+                      {/* On xs the date line's slot carries the avatars/empty label */}
+                      <Box sx={{ display: { xs: 'none', sm: 'flex' } }}>
+                        <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
+                      </Box>
                       <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleSignupSaved} />
                       {state === 'due-this-week' && canEditSurveys && recordButton}
                     </Box>
