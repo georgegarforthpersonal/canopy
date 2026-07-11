@@ -1,8 +1,11 @@
 /**
- * All surveys: the full chronological history/forward-schedule for a survey
- * type. Status-only rows (no titles); the date — a single day or a week range,
- * with the year — heads each row and is the identifier (no calendar tile). The
- * server returns surveys date-descending (upcoming on top), paged via Load more.
+ * All surveys: the full history/forward-schedule for a survey type, split into
+ * the same labelled sections as the Surveys panel — To record, This week,
+ * Upcoming — followed by Recorded (the full history, most recent first). The
+ * section carries the status meaning, so rows have no status chip. The date —
+ * a single day or a week range, with the year — heads each row and is the
+ * identifier (no calendar tile). The server returns surveys date-descending,
+ * paged via Load more (older history arrives at the bottom).
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -19,41 +22,34 @@ import {
 } from '../../services/api';
 import { recordButtonSx, groupCardSx, groupColors } from './groupsTokens';
 import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
-import { deriveSurveyState, formatSurveyDate, type SurveyState } from './surveyState';
+import { deriveSurveyState, formatSurveyDate, recordedThisWeek } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
+import SectionHeader from '../../components/groups/SectionHeader';
 import SelfSignupButton from '../../components/groups/SelfSignupButton';
 import SurveyorAvatars from '../../components/groups/SurveyorAvatars';
 
 const PAGE_SIZE = 25;
 
-const STATUS_STYLES: Record<SurveyState, { label: string; color: string; bg: string }> = {
-  recorded: { label: 'Recorded', color: '#2E6B42', bg: '#DBEDDB' },
-  upcoming: { label: 'Upcoming', color: '#454648', bg: '#EBECED' },
-  'due-this-week': { label: 'Due this week', color: '#2C5F8A', bg: '#DCE8F2' },
-  'needs-survey': { label: 'Needs survey', color: groupColors.amberMonth, bg: '#FBF3DB' },
-  cancelled: { label: 'Cancelled', color: '#888888', bg: '#EBECED' },
-};
-
-function StatusChip({ state }: { state: SurveyState }) {
-  const s = STATUS_STYLES[state];
+/** Cancelled rows sit inside the Recorded history and need their own marker. */
+function CancelledChip() {
   return (
     <Box
       sx={{
         px: 1.25,
         py: 0.4,
         borderRadius: '6px',
-        bgcolor: s.bg,
-        color: s.color,
+        bgcolor: '#EBECED',
+        color: '#888888',
         fontSize: 12.5,
         fontWeight: 600,
         flexShrink: 0,
       }}
     >
-      {s.label}
+      Cancelled
     </Box>
   );
 }
@@ -178,6 +174,143 @@ export default function AllSurveysPage() {
       },
     });
 
+  // The same sections as the Surveys panel, computed over the loaded pages.
+  // The server streams date-descending, so Upcoming and This week arrive on
+  // the first page and Load more extends the Recorded history; any overdue
+  // rows on later pages surface into To record as they load.
+  const toRecord = surveys
+    .filter((s) => deriveSurveyState(s) === 'needs-survey')
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const dueNow = surveys
+    .filter((s) => deriveSurveyState(s) === 'due-this-week')
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const doneThisWeek = recordedThisWeek(surveys);
+  const thisWeek = [...dueNow, ...doneThisWeek];
+  const upcoming = surveys
+    .filter((s) => deriveSurveyState(s) === 'upcoming')
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const doneThisWeekIds = new Set(doneThisWeek.map((s) => s.id));
+  const history = surveys.filter((s) => {
+    const state = deriveSurveyState(s);
+    return (state === 'recorded' && !doneThisWeekIds.has(s.id)) || state === 'cancelled';
+  });
+
+  const renderRow = (survey: Survey) => {
+    const state = deriveSurveyState(survey);
+    const assigned = resolveSurveyors(survey.surveyor_ids);
+    // Rows carrying the sign-up toggle are too wide for a phone, so they
+    // stack — same rule as SurveyWorklistRow: date line with avatars top
+    // right, actions line below.
+    const stacked = state === 'due-this-week' || state === 'upcoming';
+    const recordButton = (
+      <Button
+        variant="contained"
+        startIcon={<Add sx={{ fontSize: 18 }} />}
+        onClick={(e) => {
+          e.stopPropagation();
+          goToSurvey(survey.id, { record: true });
+        }}
+        sx={recordButtonSx}
+      >
+        Record survey
+      </Button>
+    );
+    return (
+      <Box
+        key={survey.id}
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: stacked ? 'column' : 'row', sm: 'row' },
+          alignItems: { xs: stacked ? 'stretch' : 'center', sm: 'center' },
+          gap: { xs: stacked ? 1 : 1.75, sm: 1.75 },
+          px: 2.25,
+          py: 1.6,
+          borderTop: `1px solid ${groupColors.dividerInner}`,
+          bgcolor: state === 'needs-survey' ? groupColors.amberRowBg : 'transparent',
+          cursor: 'pointer',
+          '&:hover': { bgcolor: state === 'needs-survey' ? groupColors.amberRowBg : groupColors.page },
+        }}
+        onClick={() => goToSurvey(survey.id)}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
+              {formatSurveyDate(survey)}
+            </Typography>
+            {/* The section header carries the status; this line is place only */}
+            {(survey.location_name || state === 'cancelled') && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
+                {state === 'cancelled' && <CancelledChip />}
+                {survey.location_name && (
+                  <Typography sx={{ fontSize: 13, color: groupColors.textMuted }} noWrap>
+                    {survey.location_name}
+                  </Typography>
+                )}
+              </Box>
+            )}
+          </Box>
+          {/* On phones the date line's top-right slot carries who's going —
+              avatars, or "No surveyors yet" when empty. */}
+          {stacked && (
+            <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexShrink: 0 }}>
+              <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
+            </Box>
+          )}
+        </Box>
+
+        {/* Right cell varies by status */}
+        {state === 'recorded' && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                px: 1,
+                py: 0.4,
+                borderRadius: '6px',
+                bgcolor: '#EBECED',
+                color: '#454648',
+                fontSize: 12.5,
+                fontWeight: 600,
+              }}
+            >
+              <SpeciesIcon sx={{ fontSize: 15 }} />
+              {survey.sightings_count}
+            </Box>
+            <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
+          </Box>
+        )}
+
+        {/* Sign-up is open for future weeks and the current week alike — the
+            same one-click self toggle for every role. The record button rides
+            in the same cell so stacked rows keep every action on one
+            wrappable line. */}
+        {(state === 'upcoming' || state === 'due-this-week') && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              flexWrap: 'wrap',
+              gap: 1.25,
+              flexShrink: 0,
+            }}
+          >
+            {/* On xs the date line's slot carries the avatars/empty label */}
+            <Box sx={{ display: { xs: 'none', sm: 'flex' } }}>
+              <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
+            </Box>
+            <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleSignupSaved} />
+            {state === 'due-this-week' && canEditSurveys && recordButton}
+          </Box>
+        )}
+
+        {state === 'needs-survey' && canEditSurveys && recordButton}
+      </Box>
+    );
+  };
+
   return (
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
@@ -193,7 +326,7 @@ export default function AllSurveysPage() {
           All surveys
         </Typography>
         <Typography sx={{ fontSize: 13.5, color: '#888', mb: 2 }}>
-          {surveyType?.name ?? ''} · {total} survey{total === 1 ? '' : 's'}, most recent first
+          {surveyType?.name ?? ''} · {total} survey{total === 1 ? '' : 's'}
         </Typography>
 
         <Paper sx={groupCardSx}>
@@ -204,118 +337,31 @@ export default function AllSurveysPage() {
               </Typography>
             </Box>
           ) : (
-            surveys.map((survey, idx) => {
-              const state = deriveSurveyState(survey);
-              const assigned = resolveSurveyors(survey.surveyor_ids);
-              // Rows carrying the sign-up toggle are too wide for a phone, so
-              // they stack — same rule as SurveyWorklistRow: date + chip line
-              // with avatars top right, actions line below.
-              const stacked = state === 'due-this-week' || state === 'upcoming';
-              const recordButton = (
-                <Button
-                  variant="contained"
-                  startIcon={<Add sx={{ fontSize: 18 }} />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    goToSurvey(survey.id, { record: true });
-                  }}
-                  sx={recordButtonSx}
-                >
-                  Record survey
-                </Button>
-              );
-              return (
-                <Box
-                  key={survey.id}
-                  sx={{
-                    display: 'flex',
-                    flexDirection: { xs: stacked ? 'column' : 'row', sm: 'row' },
-                    alignItems: { xs: stacked ? 'stretch' : 'center', sm: 'center' },
-                    gap: { xs: stacked ? 1 : 1.75, sm: 1.75 },
-                    px: 2.25,
-                    py: 1.6,
-                    borderTop: idx === 0 ? 'none' : `1px solid ${groupColors.dividerInner}`,
-                    bgcolor: state === 'needs-survey' ? groupColors.amberRowBg : 'transparent',
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: state === 'needs-survey' ? groupColors.amberRowBg : groupColors.page },
-                  }}
-                  onClick={() => goToSurvey(survey.id)}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1 }}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
-                        {formatSurveyDate(survey)}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
-                        <StatusChip state={state} />
-                        {survey.location_name && (
-                          <Typography sx={{ fontSize: 13, color: groupColors.textMuted }} noWrap>
-                            {survey.location_name}
-                          </Typography>
-                        )}
-                      </Box>
-                    </Box>
-                    {/* On phones the date line's top-right slot carries who's
-                        going — avatars, or "No surveyors yet" when empty. */}
-                    {stacked && (
-                      <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexShrink: 0 }}>
-                        <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
-                      </Box>
-                    )}
-                  </Box>
+            <>
+              {toRecord.length > 0 && (
+                <SectionHeader label={`To record (${toRecord.length})`} color={groupColors.amberText} />
+              )}
+              {toRecord.map(renderRow)}
 
-                  {/* Right cell varies by status */}
-                  {state === 'recorded' && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.5,
-                          px: 1,
-                          py: 0.4,
-                          borderRadius: '6px',
-                          bgcolor: '#EBECED',
-                          color: '#454648',
-                          fontSize: 12.5,
-                          fontWeight: 600,
-                        }}
-                      >
-                        <SpeciesIcon sx={{ fontSize: 15 }} />
-                        {survey.sightings_count}
-                      </Box>
-                      <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
-                    </Box>
-                  )}
+              {thisWeek.length > 0 && (
+                <SectionHeader label="This week" color={groupColors.brandDark} />
+              )}
+              {thisWeek.map(renderRow)}
 
-                  {/* Sign-up is open for future weeks and the current week alike —
-                      the same one-click self toggle for every role. The record
-                      button rides in the same cell so stacked rows keep every
-                      action on one wrappable line. */}
-                  {(state === 'upcoming' || state === 'due-this-week') && (
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'flex-end',
-                        flexWrap: 'wrap',
-                        gap: 1.25,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {/* On xs the date line's slot carries the avatars/empty label */}
-                      <Box sx={{ display: { xs: 'none', sm: 'flex' } }}>
-                        <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
-                      </Box>
-                      <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleSignupSaved} />
-                      {state === 'due-this-week' && canEditSurveys && recordButton}
-                    </Box>
-                  )}
+              {upcoming.length > 0 && (
+                <SectionHeader label={`Upcoming (${upcoming.length})`} color={groupColors.textMuted} />
+              )}
+              {upcoming.map(renderRow)}
 
-                  {state === 'needs-survey' && canEditSurveys && recordButton}
-                </Box>
-              );
-            })
+              {history.length > 0 && (
+                <SectionHeader
+                  label="Recorded"
+                  color={groupColors.textMuted}
+                  suffix="most recent first"
+                />
+              )}
+              {history.map(renderRow)}
+            </>
           )}
 
           {surveys.length < total && (
