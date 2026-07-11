@@ -207,14 +207,30 @@ export default function AllSurveysPage() {
             surveys.map((survey, idx) => {
               const state = deriveSurveyState(survey);
               const assigned = resolveSurveyors(survey.surveyor_ids);
-              const actionable = state === 'needs-survey' || state === 'due-this-week';
+              // Due-this-week rows carrying both Sign up and Record survey are
+              // too wide for a phone, so they stack: date + chip line, actions line.
+              const stacked = state === 'due-this-week' && canEditSurveys;
+              const recordButton = (
+                <Button
+                  variant="contained"
+                  startIcon={<Add sx={{ fontSize: 18 }} />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goToSurvey(survey.id, { record: true });
+                  }}
+                  sx={recordButtonSx}
+                >
+                  Record survey
+                </Button>
+              );
               return (
                 <Box
                   key={survey.id}
                   sx={{
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.75,
+                    flexDirection: { xs: stacked ? 'column' : 'row', sm: 'row' },
+                    alignItems: { xs: stacked ? 'stretch' : 'center', sm: 'center' },
+                    gap: { xs: stacked ? 1 : 1.75, sm: 1.75 },
                     px: 2.25,
                     py: 1.6,
                     borderTop: idx === 0 ? 'none' : `1px solid ${groupColors.dividerInner}`,
@@ -263,27 +279,27 @@ export default function AllSurveysPage() {
                   )}
 
                   {/* Sign-up is open for future weeks and the current week alike —
-                      the same one-click self toggle for every role. */}
+                      the same one-click self toggle for every role. The record
+                      button rides in the same cell so stacked rows keep every
+                      action on one wrappable line. */}
                   {(state === 'upcoming' || state === 'due-this-week') && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        flexWrap: 'wrap',
+                        gap: 1.25,
+                        flexShrink: 0,
+                      }}
+                    >
                       <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
                       <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleSignupSaved} />
+                      {state === 'due-this-week' && canEditSurveys && recordButton}
                     </Box>
                   )}
 
-                  {actionable && canEditSurveys && (
-                    <Button
-                      variant="contained"
-                      startIcon={<Add sx={{ fontSize: 18 }} />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        goToSurvey(survey.id, { record: true });
-                      }}
-                      sx={recordButtonSx}
-                    >
-                      Record survey
-                    </Button>
-                  )}
+                  {state === 'needs-survey' && canEditSurveys && recordButton}
                 </Box>
               );
             })

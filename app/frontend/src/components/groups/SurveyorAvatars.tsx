@@ -2,10 +2,18 @@
  * Overlapping avatar group for the surveyors assigned to a survey. Falls back to
  * a muted "No surveyors yet" when empty.
  */
-import { Box, Typography } from '@mui/material';
+import type { MouseEvent } from 'react';
+import { Box, Tooltip, Typography } from '@mui/material';
 import type { Surveyor } from '../../services/api';
 import { groupColors } from '../../pages/groups/groupsTokens';
 import { surveyorAvatarColor, surveyorInitials } from '../../pages/groups/groupsTokens';
+import { surveyorFullName } from '../../utils/formatters';
+
+// enterTouchDelay=0 makes a tap open the tooltip on touch devices. The tap
+// must not bubble: avatars sit inside clickable rows, and navigating away
+// would close the tooltip the tap just opened.
+const touchProps = { enterTouchDelay: 0, leaveTouchDelay: 3000 } as const;
+const stopClick = (e: MouseEvent) => e.stopPropagation();
 
 interface SurveyorAvatarsProps {
   surveyors: Surveyor[];
@@ -35,47 +43,55 @@ export default function SurveyorAvatars({
   return (
     <Box sx={{ display: 'flex', alignItems: 'center' }}>
       {shown.map((s, idx) => (
-        <Box
-          key={s.id}
-          title={`${s.first_name}${s.last_name ? ' ' + s.last_name : ''}`}
-          sx={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            bgcolor: greenIds?.has(s.id) ? groupColors.brand : surveyorAvatarColor(s.id),
-            color: '#fff',
-            border: '2px solid #fff',
-            ml: idx === 0 ? 0 : '-8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 10.5,
-            fontWeight: 600,
-            flexShrink: 0,
-          }}
-        >
-          {surveyorInitials(s.first_name, s.last_name)}
-        </Box>
+        <Tooltip key={s.id} title={surveyorFullName(s)} arrow {...touchProps}>
+          <Box
+            onClick={stopClick}
+            sx={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              bgcolor: greenIds?.has(s.id) ? groupColors.brand : surveyorAvatarColor(s.id),
+              color: '#fff',
+              border: '2px solid #fff',
+              ml: idx === 0 ? 0 : '-8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10.5,
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            {surveyorInitials(s.first_name, s.last_name)}
+          </Box>
+        </Tooltip>
       ))}
       {overflow > 0 && (
-        <Box
-          sx={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            bgcolor: '#e0e0e0',
-            color: '#555',
-            border: '2px solid #fff',
-            ml: '-8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 10.5,
-            fontWeight: 600,
-          }}
+        <Tooltip
+          title={surveyors.slice(max).map(surveyorFullName).join(', ')}
+          arrow
+          {...touchProps}
         >
-          +{overflow}
-        </Box>
+          <Box
+            onClick={stopClick}
+            sx={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              bgcolor: '#e0e0e0',
+              color: '#555',
+              border: '2px solid #fff',
+              ml: '-8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10.5,
+              fontWeight: 600,
+            }}
+          >
+            +{overflow}
+          </Box>
+        </Tooltip>
       )}
     </Box>
   );

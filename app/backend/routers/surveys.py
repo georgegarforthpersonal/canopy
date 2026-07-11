@@ -38,6 +38,7 @@ from models import (
     SurveyType,
     Organisation
 )
+from services.accounts import ensure_linked_surveyor
 from services.r2_storage import delete_media_file
 
 logger = logging.getLogger(__name__)
@@ -586,25 +587,12 @@ def _get_scheduled_survey_for_signup(db: Session, survey_id: int, org_id: int) -
 
 
 def _get_or_create_own_surveyor(db: Session, principal: Principal, org_id: int) -> Surveyor:
-    """The surveyor linked to the caller's account, created on first use.
+    """The surveyor linked to the caller's account.
 
-    Deliberately NO name-matching against existing surveyor rows: a wrong
-    guess mis-attributes someone else's survey history, whereas a duplicate
-    row is visible and can be merged deliberately (repoint survey_surveyor
-    at the linked surveyor, then delete the historical one).
+    Normally created at registration (accept-invite); this is a safety net
+    for accounts that predate that, e.g. bootstrap admins or backfilled users.
     """
-    user = principal.user
-    surveyor = db.query(Surveyor).filter(Surveyor.user_id == user.id).first()
-    if surveyor:
-        return surveyor  # type: ignore[no-any-return]
-
-    surveyor = Surveyor(
-        first_name=user.first_name,
-        last_name=user.last_name,
-        organisation_id=org_id,
-        user_id=user.id,
-    )
-    db.add(surveyor)
+    surveyor = ensure_linked_surveyor(db, principal.user, org_id)
     db.commit()
     db.refresh(surveyor)
     return surveyor

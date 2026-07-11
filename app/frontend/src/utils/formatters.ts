@@ -7,6 +7,12 @@
 import type { Surveyor } from '../services/api';
 
 /**
+ * A surveyor's full display name (first + last, last optional).
+ */
+export const surveyorFullName = (s: Pick<Surveyor, 'first_name' | 'last_name'>): string =>
+  s.last_name ? `${s.first_name} ${s.last_name}` : s.first_name;
+
+/**
  * Get surveyor's full name from a list of surveyors by ID.
  *
  * @param id - Surveyor ID to look up
@@ -15,10 +21,7 @@ import type { Surveyor } from '../services/api';
  */
 export const getSurveyorName = (id: number, surveyors: Surveyor[]): string => {
   const surveyor = surveyors.find(s => s.id === id);
-  if (!surveyor) return 'Unknown';
-  return surveyor.last_name
-    ? `${surveyor.first_name} ${surveyor.last_name}`
-    : surveyor.first_name;
+  return surveyor ? surveyorFullName(surveyor) : 'Unknown';
 };
 
 /**

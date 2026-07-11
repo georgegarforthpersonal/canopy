@@ -23,7 +23,12 @@ export function AcceptInvitePage() {
   const navigate = useNavigate();
   const { refresh } = useAuth();
 
-  const [invite, setInvite] = useState<{ email: string; role: UserRole; organisation: { name: string } } | null>(null);
+  const [invite, setInvite] = useState<{
+    email: string;
+    role: UserRole;
+    organisation: { name: string };
+    surveyor: { id: number; first_name: string; last_name: string | null } | null;
+  } | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [alreadyUsed, setAlreadyUsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -47,7 +52,15 @@ export function AcceptInvitePage() {
     }
     authAPI
       .lookupInvite(token)
-      .then(setInvite)
+      .then((result) => {
+        setInvite(result);
+        // Prefill from the linked surveyor — this is who the admin says
+        // the invitee is, and matching names avoids confusion later.
+        if (result.surveyor) {
+          setFirstName(result.surveyor.first_name);
+          setLastName(result.surveyor.last_name ?? '');
+        }
+      })
       .catch((err) => {
         // The most common way to land here: re-clicking the invite email
         // after the account was created. That's not an error — point at
@@ -147,6 +160,15 @@ export function AcceptInvitePage() {
         You're joining as <strong>{invite.email}</strong> with {invite.role} access.{' '}
         {ROLE_DESCRIPTIONS[invite.role]}
       </Typography>
+      {invite.surveyor && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
+          Your account will be linked to the existing surveyor{' '}
+          <strong>
+            {[invite.surveyor.first_name, invite.surveyor.last_name].filter(Boolean).join(' ')}
+          </strong>
+          , keeping their survey history.
+        </Typography>
+      )}
 
       <Box component="form" onSubmit={handleSubmit}>
         {error && (

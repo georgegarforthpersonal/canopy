@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from auth import MIN_PASSWORD_LENGTH, hash_password
 from database.connection import get_engine
 from models import Organisation, User, UserRole
+from services.accounts import ensure_linked_surveyor
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -66,8 +67,9 @@ def create_admin(org_slug: str, email: str, first_name: str, last_name: str | No
             created_at=datetime.utcnow(),
         )
         db.add(user)
+        surveyor = ensure_linked_surveyor(db, user, org.id)
         db.commit()
-        logger.info(f"Created admin {email} for {org.name} (id={user.id})")
+        logger.info(f"Created admin {email} for {org.name} (id={user.id}, surveyor id={surveyor.id})")
 
 
 def main() -> None:
