@@ -392,3 +392,121 @@ class TestSightingDeviceAttach:
             headers=auth_headers,
         )
         assert response.status_code == 400
+
+
+class TestClientUuidIdempotency:
+    """Retried creates carrying a client_uuid must not insert duplicates.
+
+    Field clients retry saves whose responses were lost on flaky signal; the
+    create endpoints return the already-created row when they have seen the
+    UUID before.
+    """
+
+    def test_create_survey_retry_returns_same_survey(
+        self, client: TestClient, auth_headers: dict, create_surveyor
+    ):
+        surveyor = create_surveyor()
+        payload = {
+            "date": "2026-07-01",
+            "surveyor_ids": [surveyor.id],
+            "client_uuid": "11111111-1111-4111-8111-111111111111",
+        }
+
+        first = client.post("/api/surveys", json=payload, headers=auth_headers)
+        assert first.status_code == 201
+        retry = client.post("/api/surveys", json=payload, headers=auth_headers)
+        assert retry.status_code == 201
+
+        assert retry.json()["id"] == first.json()["id"]
+        assert retry.json()["client_uuid"] == payload["client_uuid"]
+        assert surveyor.id in retry.json()["surveyor_ids"]
+
+        listing = client.get("/api/surveys", headers=auth_headers)
+        assert listing.json()["total"] == 1
+
+    def test_create_survey_distinct_uuids_create_distinct_surveys(
+        self, client: TestClient, auth_headers: dict, create_surveyor
+    ):
+        surveyor = create_surveyor()
+        base = {"date": "2026-07-01", "surveyor_ids": [surveyor.id]}
+
+        a = client.post(
+            "/api/surveys",
+            json={**base, "client_uuid": "22222222-2222-4222-8222-222222222222"},
+            headers=auth_headers,
+        )
+        b = client.post(
+            "/api/surveys",
+            json={**base, "client_uuid": "33333333-3333-4333-8333-333333333333"},
+            headers=auth_headers,
+        )
+        assert a.json()["id"] != b.json()["id"]
+
+    def test_create_survey_without_uuid_still_duplicates(
+        self, client: TestClient, auth_headers: dict, create_surveyor
+    ):
+        """Legacy behaviour is unchanged when no client_uuid is sent."""
+        surveyor = create_surveyor()
+        payload = {"date": "2026-07-01", "surveyor_ids": [surveyor.id]}
+
+        a = client.post("/api/surveys", json=payload, headers=auth_headers)
+        b = client.post("/api/surveys", json=payload, headers=auth_headers)
+        assert a.json()["id"] != b.json()["id"]
+
+    def test_create_sighting_retry_returns_same_sighting(
+        self, client: TestClient, auth_headers: dict,
+        create_survey, create_surveyor, create_species
+    ):
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id])
+        species = create_species(name="Comma")
+        payload = {
+            "species_id": species.id,
+            "count": 3,
+            "notes": "by the gate",
+            "client_uuid": "44444444-4444-4444-8444-444444444444",
+        }
+
+        first = client.post(
+            f"/api/surveys/{survey.id}/sightings", json=payload, headers=auth_headers
+        )
+        assert first.status_code == 201
+        retry = client.post(
+            f"/api/surveys/{survey.id}/sightings", json=payload, headers=auth_headers
+        )
+        assert retry.status_code == 201
+
+        assert retry.json()["id"] == first.json()["id"]
+        assert retry.json()["client_uuid"] == payload["client_uuid"]
+        assert retry.json()["count"] == 3
+        assert retry.json()["notes"] == "by the gate"
+
+        listing = client.get(
+            f"/api/surveys/{survey.id}/sightings", headers=auth_headers
+        )
+        assert len(listing.json()) == 1
+        assert listing.json()[0]["client_uuid"] == payload["client_uuid"]
+
+    def test_same_sighting_uuid_on_different_surveys_is_independent(
+        self, client: TestClient, auth_headers: dict,
+        create_survey, create_surveyor, create_species
+    ):
+        """Sighting uuids are scoped to their survey, not global."""
+        surveyor = create_surveyor()
+        survey_a = create_survey(surveyor_ids=[surveyor.id])
+        survey_b = create_survey(surveyor_ids=[surveyor.id])
+        species = create_species(name="Brimstone")
+        payload = {
+            "species_id": species.id,
+            "count": 1,
+            "client_uuid": "55555555-5555-4555-8555-555555555555",
+        }
+
+        a = client.post(
+            f"/api/surveys/{survey_a.id}/sightings", json=payload, headers=auth_headers
+        )
+        b = client.post(
+            f"/api/surveys/{survey_b.id}/sightings", json=payload, headers=auth_headers
+        )
+        assert a.status_code == 201 and b.status_code == 201
+        assert a.json()["id"] != b.json()["id"]
