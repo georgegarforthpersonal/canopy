@@ -5,8 +5,11 @@ import './index.css'
 import App from './App.tsx'
 import { initSentry } from './services/sentry'
 import { ORG_SLUG } from './services/api'
+import { requestPersistentStorage } from './services/draftStore'
 
 initSentry(ORG_SLUG)
+// Survey drafts live in IndexedDB; ask the browser not to evict them.
+requestPersistentStorage()
 
 const errorFallback = (
   <div style={{ padding: '3rem', textAlign: 'center', fontFamily: 'sans-serif' }}>

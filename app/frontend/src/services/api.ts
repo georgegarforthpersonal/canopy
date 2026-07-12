@@ -29,6 +29,18 @@ export class ApiError extends Error {
 const statusOf = (error: unknown): number | undefined =>
   error instanceof ApiError ? error.status : undefined;
 
+/**
+ * Whether a failed request is worth retrying automatically: network failures
+ * (fetch rejects with a TypeError when offline or the connection drops) and
+ * transient server statuses. 4xx responses are real answers — never retried.
+ */
+export const isRetryableError = (error: unknown): boolean => {
+  if (error instanceof ApiError) {
+    return error.status >= 500 || error.status === 408 || error.status === 429;
+  }
+  return error instanceof TypeError || !navigator.onLine;
+};
+
 // API base URL - uses environment variable if available, otherwise falls back to auto-detection
 const getApiBaseUrl = () => {
   // First check if environment variable is set (for production deployments)
@@ -411,6 +423,9 @@ export type SurveyStatus = 'scheduled' | 'completed' | 'cancelled';
 export interface Survey {
   id: number;
   date: string;
+  // Client-minted idempotency uuid; a retried create with the same uuid
+  // returns this survey instead of inserting a duplicate.
+  client_uuid?: string | null;
   status: SurveyStatus;
   // Weekly-cadence surveys carry an inclusive window they may be carried out in;
   // null for day-precise schedules (where `date` is the scheduled day).
@@ -504,6 +519,7 @@ export interface Sighting {
   notes?: string | null; // Optional notes for this sighting
   image_ids?: number[]; // Linked camera trap image IDs
   audio_clips?: SightingAudioClip[]; // Linked audio detection clips
+  client_uuid?: string | null; // Client-minted idempotency uuid (see Survey.client_uuid)
 }
 
 /**
@@ -529,6 +545,7 @@ export interface IndividualLocation {
   breeding_status_code?: string | null;
   notes?: string | null;
   camera_trap_image_id?: number | null;
+  client_uuid?: string | null; // Client-minted idempotency uuid (see Survey.client_uuid)
 }
 
 /**
@@ -559,6 +576,7 @@ export interface SightingCreateRequest {
   notes?: string | null; // Optional notes for this sighting
   image_ids?: number[]; // Camera trap image IDs to link
   audio_detections?: AudioDetectionCreateRequest[]; // Bird detections to link
+  client_uuid?: string; // Client-minted idempotency uuid; retries return the existing sighting
 }
 
 /**
@@ -2051,6 +2069,40 @@ export const imagesAPI = {
       reportApiError(error, { endpoint, method: 'POST', status: statusOf(error) });
       throw error;
     });
+  },
+
+  /**
+   * Upload files, recovering from "File already exists" 400s.
+   *
+   * A previous save attempt may have uploaded some of these files and lost
+   * the response on flaky signal; the backend dedupes by filename within a
+   * survey and rejects the retry. Resolve by looking up the already-uploaded
+   * images and uploading only the genuinely missing files, so retried saves
+   * converge instead of failing forever.
+   */
+  uploadFilesRecoveringDuplicates: async (
+    surveyId: number,
+    files: File[],
+    timestamps?: Record<string, string>,
+    skipProcessing?: boolean
+  ): Promise<CameraTrapImage[]> => {
+    try {
+      return await imagesAPI.uploadFilesWithMetadata(surveyId, files, timestamps, skipProcessing);
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 400 || !err.message.includes('already exists')) {
+        throw err;
+      }
+      const existing = await imagesAPI.getImages(surveyId);
+      const byName = new Map(existing.map((img) => [img.filename, img]));
+      const missing = files.filter((f) => !byName.has(f.name));
+      const uploaded = missing.length
+        ? await imagesAPI.uploadFilesWithMetadata(surveyId, missing, timestamps, skipProcessing)
+        : [];
+      const uploadedByName = new Map(uploaded.map((img) => [img.filename, img]));
+      return files
+        .map((f) => byName.get(f.name) ?? uploadedByName.get(f.name))
+        .filter((img): img is CameraTrapImage => img != null);
+    }
   },
 
   /**

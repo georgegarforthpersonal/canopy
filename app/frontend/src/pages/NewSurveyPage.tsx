@@ -23,6 +23,7 @@ import {
   surveyTypesAPI,
   imagesAPI,
   devicesAPI,
+  isRetryableError,
 } from '../services/api';
 import type {
   Survey,
@@ -39,7 +40,18 @@ import { SightingsEditor } from '../components/surveys/SightingsEditor';
 import type { DraftSighting } from '../components/surveys/SightingsEditor';
 import { PageHeader } from '../components/layout/PageHeader';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
+import { ResumeDraftDialog } from '../components/surveys/ResumeDraftDialog';
+import { SyncStatusBanner } from '../components/surveys/SyncStatusBanner';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { useDraftAutosave, useOnlineStatus, useSyncRetry } from '../hooks';
+import {
+  loadSurveyDraft,
+  deleteSurveyDraft,
+  saveSurveyDraft,
+  NEW_SURVEY_DRAFT_KEY,
+} from '../services/draftStore';
+import type { SurveyDraftRecord } from '../services/draftStore';
+import { ensureClientUuids, fileKey, mintClientUuid } from '../utils/surveyDraftSync';
 import { SPACING } from '../config/responsive';
 
 /**
@@ -66,9 +78,6 @@ function emptySaveResumeState(): SaveResumeState {
     surveyImagesUploaded: false,
   };
 }
-
-/** Stable identity for a File across renders (Files aren't JSON-serialisable) */
-const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
 
 /**
  * NewSurveyPage - Full-page form for creating surveys with inline sightings
@@ -155,25 +164,76 @@ export function NewSurveyPage() {
   }>({});
 
   // ============================================================================
-  // Unsaved Changes Guard
+  // Unsaved Changes Guard + Field Resilience (local draft, retryable save)
   // ============================================================================
 
   // Flipped synchronously just before the post-save navigation so the
   // unsaved-changes guard does not block it (state would be one render stale).
   const saveCompleteRef = useRef(false);
 
+  // Set when a save failed on connectivity: entries are safe on this device
+  // and the save re-runs automatically when the connection returns.
+  const [pendingSync, setPendingSync] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  // A stored draft found on load, awaiting the user's resume/discard choice.
+  const [resumeDraft, setResumeDraft] = useState<SurveyDraftRecord | null>(null);
+  const online = useOnlineStatus();
+  // Idempotency uuid for the survey create; survives retries (and reloads,
+  // via the stored draft) so a re-sent create can never duplicate the survey.
+  const surveyClientUuidRef = useRef<string | null>(null);
+  const savingRef = useRef(false);
+  savingRef.current = saving;
+  const handleSaveRef = useRef<() => void>(() => {});
+
   // Dirty once the user has entered anything beyond the defaults, until the
-  // survey is saved. Blocks Cancel, the back link, and browser back; the
-  // confirmation dialog below lets the user proceed or stay.
-  const blocker = useUnsavedChangesGuard(
-    () =>
-      !saveCompleteRef.current &&
-      (notes.trim() !== '' ||
-        pendingImageFiles.length > 0 ||
-        locationId !== null ||
-        selectedSurveyors.length > 0 ||
-        draftSightings.some((s) => s.species_id !== null)),
-  );
+  // survey is saved. Drives the local draft backup, and blocks Cancel, the
+  // back link, and browser back via the confirmation dialog below.
+  const isDirty =
+    !saveCompleteRef.current &&
+    (notes.trim() !== '' ||
+      pendingImageFiles.length > 0 ||
+      locationId !== null ||
+      selectedSurveyors.length > 0 ||
+      draftSightings.some((s) => s.species_id !== null));
+  const isDirtyRef = useRef(false);
+  isDirtyRef.current = isDirty;
+
+  const blocker = useUnsavedChangesGuard(() => isDirtyRef.current);
+
+  const activeDraft: SurveyDraftRecord | null = isDirty
+    ? {
+        key: NEW_SURVEY_DRAFT_KEY,
+        savedAt: 0,
+        mode: 'new',
+        form: {
+          date: date?.isValid() ? date.format('YYYY-MM-DD') : null,
+          locationId,
+          surveyorIds: selectedSurveyors.map((s) => s.id),
+          notes,
+          startTime: startTime?.isValid() ? startTime.format('HH:mm:ss') : null,
+          endTime: endTime?.isValid() ? endTime.format('HH:mm:ss') : null,
+          sunPercentage,
+          temperatureCelsius,
+          surveyTypeId: selectedSurveyType?.id ?? null,
+        },
+        sightings: draftSightings,
+        pendingImageFiles: pendingImageFiles.length > 0 ? pendingImageFiles : undefined,
+        surveyClientUuid: surveyClientUuidRef.current ?? undefined,
+      }
+    : null;
+  const { clearDraft } = useDraftAutosave(activeDraft, setDraftSavedAt);
+
+  /** Delete the stored draft and stop autosaving for this session. */
+  const removeDraft = () => {
+    clearDraft();
+    deleteSurveyDraft(NEW_SURVEY_DRAFT_KEY).catch(() => {});
+  };
+
+  // No Background Sync on iOS: retries happen in the foreground, when the
+  // connection returns or the app becomes visible (plus the Sync now button).
+  useSyncRetry(pendingSync, () => {
+    if (!savingRef.current) handleSaveRef.current();
+  });
 
   // ============================================================================
   // Data Fetching - Initial Load
@@ -198,6 +258,15 @@ export function NewSurveyPage() {
         setSurveyors(surveyorsData);
         setBreedingCodes(breedingCodesData);
         setLocationsWithBoundaries(boundariesData);
+
+        // A stored draft means a survey was being entered on this device and
+        // never uploaded (tab killed, failed save). Offer to resume it.
+        try {
+          const storedDraft = await loadSurveyDraft(NEW_SURVEY_DRAFT_KEY);
+          if (storedDraft) setResumeDraft(storedDraft);
+        } catch {
+          // Local storage unavailable (e.g. private browsing) — nothing to resume.
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load form data');
         console.error('Error fetching data:', err);
@@ -343,6 +412,41 @@ export function NewSurveyPage() {
   };
 
   // ============================================================================
+  // Draft Resume
+  // ============================================================================
+
+  const handleResumeDraft = () => {
+    if (!resumeDraft) return;
+    const d = resumeDraft;
+    // Setting the survey type directly (not via handleSurveyTypeChange) skips
+    // the wizard redirects; drafts only exist for the plain form. The
+    // type-change effect then re-fetches locations/species and re-validates
+    // the restored location and species ids against them.
+    setSelectedSurveyType(surveyTypes.find((t) => t.id === d.form.surveyTypeId) ?? null);
+    setDate(d.form.date ? dayjs(d.form.date) : null);
+    setLocationId(d.form.locationId);
+    setSelectedSurveyors(surveyors.filter((s) => d.form.surveyorIds.includes(s.id)));
+    setNotes(d.form.notes);
+    setStartTime(d.form.startTime ? dayjs(d.form.startTime, 'HH:mm:ss') : null);
+    setEndTime(d.form.endTime ? dayjs(d.form.endTime, 'HH:mm:ss') : null);
+    setSunPercentage(d.form.sunPercentage);
+    setTemperatureCelsius(d.form.temperatureCelsius);
+    setDraftSightings(
+      d.sightings.length > 0
+        ? d.sightings
+        : [{ tempId: `temp-${Date.now()}`, species_id: null, count: 1 }]
+    );
+    setPendingImageFiles(d.pendingImageFiles ?? []);
+    if (d.surveyClientUuid) surveyClientUuidRef.current = d.surveyClientUuid;
+    setResumeDraft(null);
+  };
+
+  const handleDiscardDraft = () => {
+    deleteSurveyDraft(NEW_SURVEY_DRAFT_KEY).catch(() => {});
+    setResumeDraft(null);
+  };
+
+  // ============================================================================
   // Form Submission
   // ============================================================================
 
@@ -356,6 +460,22 @@ export function NewSurveyPage() {
     setSaving(true);
     setError(null);
 
+    // Idempotency uuids for everything this save will create, minted once and
+    // persisted to the local draft BEFORE any request: a retry — even after a
+    // reload — re-sends the same uuids, so the server never duplicates the
+    // survey or its sightings.
+    surveyClientUuidRef.current = surveyClientUuidRef.current ?? mintClientUuid();
+    const sightingsWithUuids = ensureClientUuids(draftSightings);
+    setDraftSightings(sightingsWithUuids);
+    if (activeDraft) {
+      await saveSurveyDraft({
+        ...activeDraft,
+        savedAt: Date.now(),
+        sightings: sightingsWithUuids,
+        surveyClientUuid: surveyClientUuidRef.current,
+      }).catch(() => {});
+    }
+
     try {
       const surveyData: Partial<Survey> & { survey_type_id?: number } = {
         date: date!.format('YYYY-MM-DD'),
@@ -366,6 +486,7 @@ export function NewSurveyPage() {
         end_time: endTime?.isValid() ? endTime.format('HH:mm:ss') : null,
         sun_percentage: sunPercentage !== '' ? Number(sunPercentage) : null,
         temperature_celsius: temperatureCelsius !== '' ? temperatureCelsius : null,
+        client_uuid: surveyClientUuidRef.current,
       };
 
       // Only include location_id if NOT at sighting level
@@ -373,7 +494,7 @@ export function NewSurveyPage() {
         surveyData.location_id = locationId ?? undefined;
       }
 
-      const validSightings = draftSightings.filter(
+      const validSightings = sightingsWithUuids.filter(
         (s) => s.species_id !== null && s.count > 0
       );
 
@@ -405,7 +526,7 @@ export function NewSurveyPage() {
           validSightings
             .filter((s) => s.pendingPhotos && s.pendingPhotos.length > 0 && !sightingPhotoMap.has(s.tempId))
             .map(async (sighting) => {
-              const uploaded = await imagesAPI.uploadFilesWithMetadata(
+              const uploaded = await imagesAPI.uploadFilesRecoveringDuplicates(
                 surveyId,
                 sighting.pendingPhotos!,
                 undefined,
@@ -428,6 +549,8 @@ export function NewSurveyPage() {
               location_id: locationAtSightingLevel ? sighting.location_id : undefined,
               device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
               notes: sighting.notes,
+              // Retried creates with the same uuid return the existing row
+              client_uuid: sighting.client_uuid,
               // Include individual locations with count and breeding status codes
               individuals: sighting.individuals?.map((ind) => ({
                 latitude: ind.latitude,
@@ -435,6 +558,7 @@ export function NewSurveyPage() {
                 count: ind.count,
                 breeding_status_code: ind.breeding_status_code,
                 notes: ind.notes,
+                client_uuid: ind.client_uuid,
               })),
               image_ids: sightingPhotoMap.get(sighting.tempId),
             }).then(() => {
@@ -445,29 +569,41 @@ export function NewSurveyPage() {
 
       // Step 4: Upload image files if any (for camera trap surveys)
       if (pendingImageFiles.length > 0 && !resume.surveyImagesUploaded) {
-        await imagesAPI.uploadFiles(surveyId, pendingImageFiles);
+        await imagesAPI.uploadFilesRecoveringDuplicates(surveyId, pendingImageFiles);
         resume.surveyImagesUploaded = true;
       }
 
       // Success - navigate to survey detail page or surveys list
       saveCompleteRef.current = true;
       saveResumeRef.current = emptySaveResumeState();
+      surveyClientUuidRef.current = null;
+      removeDraft();
+      setPendingSync(false);
       if (allowImageUpload && pendingImageFiles.length > 0) {
         navigate(`/surveys/${surveyId}`);
       } else {
         navigate(`/surveys?created=${surveyId}`);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create survey';
-      setError(
-        saveResumeRef.current.surveyId != null
-          ? `${message} — click "Save Survey" again to retry; it will resume where it left off.`
-          : message
-      );
+      if (isRetryableError(err)) {
+        // Connectivity, not a real rejection: everything is stored on this
+        // device and the sync banner explains what happens next.
+        setPendingSync(true);
+        setError(null);
+      } else {
+        setPendingSync(false);
+        const message = err instanceof Error ? err.message : 'Failed to create survey';
+        setError(
+          saveResumeRef.current.surveyId != null
+            ? `${message} — click "Save Survey" again to retry; it will resume where it left off.`
+            : message
+        );
+      }
       console.error('Error creating survey:', err);
       setSaving(false);
     }
   };
+  handleSaveRef.current = handleSave;
 
   // ============================================================================
   // Event Handlers
@@ -604,6 +740,15 @@ export function NewSurveyPage() {
           {error}
         </Alert>
       )}
+
+      {/* Field-entry sync status: offline notice, pending upload, local backup */}
+      <SyncStatusBanner
+        online={online}
+        pendingSync={pendingSync}
+        saving={saving}
+        draftSavedAt={isDirty ? draftSavedAt : null}
+        onSyncNow={handleSave}
+      />
 
       {/* Survey Type Selection Card */}
       <Paper
@@ -803,8 +948,22 @@ export function NewSurveyPage() {
       <UnsavedChangesDialog
         open={blocker.state === 'blocked'}
         onKeepWorking={() => blocker.reset?.()}
-        onDiscard={() => blocker.proceed?.()}
+        onDiscard={() => {
+          removeDraft();
+          setPendingSync(false);
+          blocker.proceed?.();
+        }}
       />
+
+      {/* Unsaved entries found on this device from an earlier session */}
+      {resumeDraft !== null && (
+        <ResumeDraftDialog
+          open
+          savedAt={resumeDraft.savedAt}
+          onResume={handleResumeDraft}
+          onDiscard={handleDiscardDraft}
+        />
+      )}
     </Box>
   );
 }
