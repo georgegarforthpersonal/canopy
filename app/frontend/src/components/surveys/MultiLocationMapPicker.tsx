@@ -37,6 +37,8 @@ import FieldBoundaryOverlay from './FieldBoundaryOverlay';
 export interface DraftIndividualLocation {
   tempId: string;
   id?: number;
+  // Client-minted idempotency uuid (see DraftSighting.client_uuid)
+  client_uuid?: string;
   latitude: number;
   longitude: number;
   count: number;

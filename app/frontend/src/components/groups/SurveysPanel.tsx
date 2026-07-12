@@ -13,6 +13,7 @@ import { AssignmentTurnedIn, ChevronRight } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
 import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
 import { buildWorklist } from '../../pages/groups/surveyState';
+import SectionHeader from './SectionHeader';
 import SurveyWorklistRow from './SurveyWorklistRow';
 
 interface SurveysPanelProps {
@@ -30,29 +31,6 @@ interface SurveysPanelProps {
   /** Open a recorded survey read-only. */
   onOpenSurvey: (survey: Survey) => void;
   onViewAll: () => void;
-}
-
-function SectionHeader({ label, color, suffix }: { label: string; color: string; suffix?: string }) {
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'baseline',
-        gap: 1,
-        px: 2.25,
-        pt: 1.5,
-        pb: 0.25,
-        borderTop: `1px solid ${groupColors.dividerInner}`,
-      }}
-    >
-      <Typography sx={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color }}>
-        {label}
-      </Typography>
-      {suffix && (
-        <Typography sx={{ fontSize: 11.5, color: groupColors.textMuted }}>{suffix}</Typography>
-      )}
-    </Box>
-  );
 }
 
 export default function SurveysPanel({

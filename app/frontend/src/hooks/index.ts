@@ -12,3 +12,6 @@ export { useCameraTrapWizard } from './useCameraTrapWizard';
 export type { CameraTrapWizardState, ImageFile, Classification } from './useCameraTrapWizard';
 export { useSurveyorLookup } from './useSurveyorLookup';
 export { useSignupSaved } from './useSignupSaved';
+export { useDraftAutosave } from './useDraftAutosave';
+export { useOnlineStatus } from './useOnlineStatus';
+export { useSyncRetry } from './useSyncRetry';

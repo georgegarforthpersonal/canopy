@@ -65,6 +65,9 @@ export interface DraftSighting {
   species_id: number | null;
   count: number;
   id?: number;
+  // Client-minted idempotency uuid, set when a save first attempts to create
+  // this sighting; retries reuse it so the server never duplicates the row
+  client_uuid?: string;
   // Per-individual location points with breeding status
   individuals?: DraftIndividualLocation[];
   // Location ID when location is at sighting level
