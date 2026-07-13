@@ -1,8 +1,8 @@
 /**
  * Group detail: the single-screen overview for one survey type. Neutral hero
  * plus two balanced columns — Surveys worklist + Species count (left); Files,
- * Routes (right). On mobile the panels stack in the order
- * Files → Surveys → Routes → Species count.
+ * Routes, Data (right). On mobile the panels stack in the order
+ * Files → Surveys → Routes → Species count → Data.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -29,6 +29,7 @@ import SurveysPanel from '../../components/groups/SurveysPanel';
 import FilesPanel from '../../components/groups/FilesPanel';
 import RoutesPanel from '../../components/groups/RoutesPanel';
 import SpeciesCountPanel from '../../components/groups/SpeciesCountPanel';
+import DataPanel from '../../components/groups/DataPanel';
 
 export default function GroupDetailPage() {
   const { typeId } = useParams<{ typeId: string }>();
@@ -230,6 +231,9 @@ export default function GroupDetailPage() {
             </Box>
             <Box sx={{ order: 3, minWidth: 0 }}>
               <RoutesPanel locations={locations} />
+            </Box>
+            <Box sx={{ order: 5, minWidth: 0 }}>
+              <DataPanel surveyTypeId={surveyType.id} surveyTypeName={surveyType.name} />
             </Box>
           </Box>
         </Box>
