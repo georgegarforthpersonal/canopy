@@ -62,6 +62,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Let cross-origin fetches read the download filename on export responses.
+    expose_headers=["Content-Disposition"],
 )
 
 
