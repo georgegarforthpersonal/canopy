@@ -28,7 +28,7 @@ from sqlmodel import col
 
 from database.connection import get_db
 from dependencies import get_current_organisation
-from auth import Principal, require_editor
+from auth import Principal, require_editor, require_user
 from models import (
     Organisation,
     Sighting,
@@ -353,7 +353,7 @@ def _records_response(rows: list[Any], prefix: str, label: str) -> StreamingResp
 async def list_survey_types_with_records(
     db: Session = Depends(get_db),
     org: Organisation = Depends(get_current_organisation),
-    _principal: Principal = Depends(require_editor),
+    _principal: Principal = Depends(require_user),
 ) -> List[SurveyType]:
     """List survey types that have at least one sighting record (non-empty export)."""
     type_ids: list[int] = [
@@ -387,7 +387,7 @@ async def list_survey_types_with_records(
 async def list_species_types_with_records(
     db: Session = Depends(get_db),
     org: Organisation = Depends(get_current_organisation),
-    _principal: Principal = Depends(require_editor),
+    _principal: Principal = Depends(require_user),
 ) -> List[SpeciesType]:
     """List species types that have at least one sighting record (non-empty export)."""
     type_ids: list[int] = [
@@ -416,7 +416,7 @@ async def export_records_by_survey_type(
     survey_type_id: int,
     db: Session = Depends(get_db),
     org: Organisation = Depends(get_current_organisation),
-    _principal: Principal = Depends(require_editor),
+    _principal: Principal = Depends(require_user),
 ) -> StreamingResponse:
     """Export all sighting records from surveys of a given survey type as .xlsx."""
     survey_type = (
@@ -445,7 +445,7 @@ async def export_records_by_species_type(
     species_type_id: int,
     db: Session = Depends(get_db),
     org: Organisation = Depends(get_current_organisation),
-    _principal: Principal = Depends(require_editor),
+    _principal: Principal = Depends(require_user),
 ) -> StreamingResponse:
     """Export all sighting records of a given species (taxonomic) type as .xlsx.
 

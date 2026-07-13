@@ -170,6 +170,29 @@ class TestRecordsExportBySurveyType:
         response = client.get("/api/export/records/by-survey-type/1")
         assert response.status_code == 401
 
+    def test_viewer_role_can_export(
+        self,
+        client: TestClient,
+        login_as,
+        db_session: Session,
+        create_survey_type,
+        create_survey,
+        create_species,
+    ):
+        """Records export is read-only, so any signed-in account may use it."""
+        survey_type = create_survey_type()
+        species = create_species()
+        survey = create_survey(survey_type_id=survey_type.id)
+        _make_sighting(db_session, survey.id, species.id)
+        headers, _ = login_as()  # defaults to viewer
+
+        response = client.get(
+            f"/api/export/records/by-survey-type/{survey_type.id}", headers=headers
+        )
+
+        assert response.status_code == 200
+        assert len(_read_rows(response)) == 2
+
 
 class TestRecordsExportBySpeciesType:
     """Tests for GET /api/export/records/by-species-type/{id}"""
