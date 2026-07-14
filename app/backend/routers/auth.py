@@ -648,11 +648,16 @@ async def update_invite(
 @router.post("/invites/{invite_id}/resend")
 async def resend_invite(
     invite_id: int,
+    send_email: bool = True,
     db: Session = Depends(get_db),
     org: Organisation = Depends(get_current_organisation),
     principal: Principal = Depends(require_admin_role),
 ) -> dict[str, Any]:
-    """Admin: regenerate an invite's token/expiry and resend the email."""
+    """Admin: regenerate an invite's token/expiry and resend the email.
+
+    With ?send_email=false, only the fresh link is returned (for
+    copy-to-clipboard) and nothing is emailed.
+    """
     invite = db.query(Invite).filter(
         Invite.id == invite_id,
         Invite.organisation_id == org.id,
@@ -667,7 +672,7 @@ async def resend_invite(
     db.commit()
 
     invite_url = _invite_url(org, token)
-    email_sent = send_invite_email(
+    email_sent = send_email and send_invite_email(
         invite.email, org.name, invite_url, UserRole(invite.role).value,
         site_url=settings.frontend_url_for(org.slug),
     )

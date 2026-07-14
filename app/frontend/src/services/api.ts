@@ -1713,8 +1713,8 @@ export const usersAPI = {
     });
   },
 
-  resendInvite: (inviteId: number): Promise<{ invite_url: string; email_sent: boolean }> => {
-    return fetchAPI(`/auth/invites/${inviteId}/resend`, {
+  resendInvite: (inviteId: number, sendEmail = true): Promise<{ invite_url: string; email_sent: boolean }> => {
+    return fetchAPI(`/auth/invites/${inviteId}/resend${sendEmail ? '' : '?send_email=false'}`, {
       method: 'POST',
     });
   },
