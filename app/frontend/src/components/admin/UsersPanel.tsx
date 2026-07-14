@@ -96,8 +96,9 @@ export function UsersPanel() {
 
   const copyInviteLink = async (inviteId: number) => {
     try {
-      // Resending regenerates the link — the raw token is never stored
-      const { invite_url } = await usersAPI.resendInvite(inviteId);
+      // Regenerates the link (the raw token is never stored) without
+      // emailing it — copy and resend are separate intents.
+      const { invite_url } = await usersAPI.resendInvite(inviteId, false);
       await navigator.clipboard.writeText(invite_url);
       toast.success('New invite link copied to clipboard');
       load();

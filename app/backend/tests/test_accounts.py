@@ -270,6 +270,43 @@ class TestInvites:
         assert client.get(f"/api/auth/invites/lookup?token={first_token}").status_code == 404
         assert client.get(f"/api/auth/invites/lookup?token={second_token}").status_code == 200
 
+    def test_resend_without_email_returns_link_only(self, client: TestClient, login_as, monkeypatch):
+        """The copy-link button regenerates the link without emailing anyone."""
+        import routers.auth as auth_router
+
+        sent: list = []
+        monkeypatch.setattr(auth_router, "send_invite_email", lambda *a, **k: sent.append(a) or True)
+
+        admin_headers, _ = login_as(UserRole.admin)
+        invite_id = self._invite(client, admin_headers)["invite"]["id"]
+        sent.clear()
+
+        response = client.post(
+            f"/api/auth/invites/{invite_id}/resend?send_email=false", headers=admin_headers
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email_sent"] is False
+        assert sent == []
+        # The returned link is live
+        token = _token_from_url(data["invite_url"])
+        assert client.get(f"/api/auth/invites/lookup?token={token}").status_code == 200
+
+    def test_resend_with_email_still_sends(self, client: TestClient, login_as, monkeypatch):
+        import routers.auth as auth_router
+
+        sent: list = []
+        monkeypatch.setattr(auth_router, "send_invite_email", lambda *a, **k: sent.append(a) or True)
+
+        admin_headers, _ = login_as(UserRole.admin)
+        invite_id = self._invite(client, admin_headers)["invite"]["id"]
+        sent.clear()
+
+        response = client.post(f"/api/auth/invites/{invite_id}/resend", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.json()["email_sent"] is True
+        assert len(sent) == 1
+
 
 # ============================================================================
 # Password reset
