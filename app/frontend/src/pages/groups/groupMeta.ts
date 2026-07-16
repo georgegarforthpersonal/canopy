@@ -4,7 +4,7 @@
  * and the name-slug URLs that make groups addressable as /groups/butterfly.
  */
 import { notionColors } from '../../theme';
-import { getOrgSlug, surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails } from '../../services/api';
+import { ORG_SLUG, surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails } from '../../services/api';
 
 /**
  * Survey types each organisation's Groups beta surfaces, matched
@@ -18,13 +18,18 @@ const BETA_GROUPS: Record<string, string[]> = {
   cannwood: ['walking', 'walking survey', 'marsh fritillary'],
 };
 
-/** Beta group survey-type names for the given org (defaults to the current one). */
-export function betaGroupNames(orgSlug: string = getOrgSlug()): string[] {
+/**
+ * Beta group survey-type names for the given org. Defaults to ORG_SLUG — the
+ * org captured at page load that every API request uses — NOT a fresh URL
+ * parse: on localhost the org comes from a ?org= param that client-side
+ * navigation drops, so re-deriving it mid-session would disagree with the API.
+ */
+export function betaGroupNames(orgSlug: string = ORG_SLUG): string[] {
   return BETA_GROUPS[orgSlug] ?? [];
 }
 
 /** Whether the given org (defaults to the current one) has the Groups beta. */
-export function orgHasGroups(orgSlug: string = getOrgSlug()): boolean {
+export function orgHasGroups(orgSlug: string = ORG_SLUG): boolean {
   return betaGroupNames(orgSlug).length > 0;
 }
 
