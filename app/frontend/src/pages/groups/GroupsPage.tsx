@@ -14,7 +14,7 @@ import GroupCard from '../../components/groups/GroupCard';
 import { PageTitle } from '../../components/layout/PageTitle';
 
 // The survey types the beta surfaces. Matched case-insensitively by name.
-const BETA_SURVEY_TYPE_NAMES = ['butterfly', 'dragonfly'];
+const BETA_SURVEY_TYPE_NAMES = ['butterfly', 'dragonfly', 'marsh fritillary'];
 
 interface CardData {
   surveyType: SurveyTypeWithDetails;
