@@ -349,6 +349,9 @@ export interface Location {
   parent_name?: string | null;
   // Sector order within its parent route (null/absent for top-level locations).
   ordinal?: number | null;
+  // Named map-colour key overriding the location_type default; null/absent =
+  // default. Keys map to colours in config/locationStyles.ts.
+  color?: string | null;
 }
 
 /** Display label for a location: "<parent> - child" for sectors, else the name. */
@@ -392,6 +395,8 @@ export interface LocationWithBoundary extends Location {
 export interface LocationInput {
   name: string;
   location_type: LocationType;
+  // Named colour key; null resets to the location_type default.
+  color?: string | null;
   geometry?: GeoJsonGeometry | null;
   sectors?: SectorInput[] | null;
 }

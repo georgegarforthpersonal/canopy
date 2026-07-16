@@ -109,7 +109,9 @@ export default function GroupDetailPage() {
         // index it by sector id for sector locations assigned to the type.
         const sectorById = new Map(
           withBoundaries.flatMap((route) =>
-            (route.sectors ?? []).map((s) => [s.id, { sector: s, routeName: route.name }] as const),
+            (route.sectors ?? []).map(
+              (s) => [s.id, { sector: s, routeName: route.name, routeColor: route.color ?? null }] as const,
+            ),
           ),
         );
         setLocations(
@@ -122,6 +124,8 @@ export default function GroupDetailPage() {
               parent_name: loc.parent_name ?? nested?.routeName ?? null,
               ordinal: loc.ordinal ?? nested?.sector.ordinal ?? null,
               location_type: loc.location_type ?? geo?.location_type,
+              // A sector shown standalone keeps its parent route's colour.
+              color: loc.color ?? nested?.routeColor ?? null,
               geometry: geo?.geometry ?? nested?.sector.geometry ?? null,
               boundary_geometry: geo?.boundary_geometry ?? null,
               sectors: geo?.sectors ?? null,

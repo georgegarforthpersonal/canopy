@@ -70,6 +70,29 @@ class TestCreateLocation:
         assert data["name"] == "New Meadow"
         assert "id" in data
 
+    def test_create_location_with_color(self, client: TestClient, auth_headers: dict):
+        """Should persist the named colour key and return it on reads."""
+        response = client.post(
+            "/api/locations",
+            json={"name": "Orange Meadow", "location_type": "area", "color": "orange"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["color"] == "orange"
+
+        listed = client.get("/api/locations", headers=auth_headers).json()
+        assert listed[0]["color"] == "orange"
+
+    def test_create_location_defaults_to_no_color(self, client: TestClient, auth_headers: dict):
+        """Colour is null (type default) unless chosen."""
+        response = client.post(
+            "/api/locations",
+            json={"name": "Plain Meadow"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["color"] is None
+
     def test_create_location_unauthorized(self, client: TestClient):
         """Should return 401 without authentication."""
         response = client.post("/api/locations", json={"name": "Test"})
@@ -92,6 +115,38 @@ class TestUpdateLocation:
         )
         assert response.status_code == 200
         assert response.json()["name"] == "New Name"
+
+    def test_update_location_color(
+        self, client: TestClient, auth_headers: dict, create_location
+    ):
+        """Should set the colour, and reset it on an explicit null."""
+        location = create_location(name="Colourful")
+
+        response = client.put(
+            f"/api/locations/{location.id}",
+            json={"color": "teal"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["color"] == "teal"
+
+        # Omitting the key leaves the colour unchanged.
+        response = client.put(
+            f"/api/locations/{location.id}",
+            json={"name": "Still Colourful"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["color"] == "teal"
+
+        # An explicit null resets to the type default.
+        response = client.put(
+            f"/api/locations/{location.id}",
+            json={"color": None},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["color"] is None
 
     def test_update_location_not_found(self, client: TestClient, auth_headers: dict):
         """Should return 404 for non-existent location."""
