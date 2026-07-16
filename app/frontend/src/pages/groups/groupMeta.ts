@@ -4,7 +4,29 @@
  * and the name-slug URLs that make groups addressable as /groups/butterfly.
  */
 import { notionColors } from '../../theme';
-import { surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails } from '../../services/api';
+import { getOrgSlug, surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails } from '../../services/api';
+
+/**
+ * Survey types each organisation's Groups beta surfaces, matched
+ * case-insensitively against the trimmed survey type name. Organisations not
+ * listed here don't see the Groups tab (or the Scheduled admin tab that feeds
+ * it). Cannwood's entry lists both plausible names for its walking survey so
+ * the group appears whichever way the type was named in Admin.
+ */
+const BETA_GROUPS: Record<string, string[]> = {
+  heal: ['butterfly'],
+  cannwood: ['walking', 'walking survey'],
+};
+
+/** Beta group survey-type names for the given org (defaults to the current one). */
+export function betaGroupNames(orgSlug: string = getOrgSlug()): string[] {
+  return BETA_GROUPS[orgSlug] ?? [];
+}
+
+/** Whether the given org (defaults to the current one) has the Groups beta. */
+export function orgHasGroups(orgSlug: string = getOrgSlug()): boolean {
+  return betaGroupNames(orgSlug).length > 0;
+}
 
 export interface AccentColors {
   bg: string;

@@ -1,6 +1,7 @@
 /**
- * Groups grid (landing). For the Heal beta this shows a single Butterfly card.
- * Selecting a card opens that survey type's space.
+ * Groups grid (landing). Shows a card per survey type in the current org's
+ * beta list (Heal: Butterfly; Cannwood: Walking). Selecting a card opens that
+ * survey type's space.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -8,12 +9,9 @@ import { Alert, Box, Typography, CircularProgress } from '@mui/material';
 import { surveyTypesAPI, surveysAPI, dashboardAPI, type Survey, type SurveyTypeWithDetails } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
 import { nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, groupPath } from './groupMeta';
+import { primarySpeciesType, groupPath, betaGroupNames } from './groupMeta';
 import GroupCard from '../../components/groups/GroupCard';
 import { PageTitle } from '../../components/layout/PageTitle';
-
-// The survey type the beta surfaces. Matched case-insensitively by name.
-const BETA_SURVEY_TYPE_NAME = 'butterfly';
 
 interface CardData {
   surveyType: SurveyTypeWithDetails;
@@ -32,36 +30,38 @@ export default function GroupsPage() {
     let active = true;
     (async () => {
       try {
+        const names = betaGroupNames();
         const types = await surveyTypesAPI.getAll();
-        const butterfly = types.find(
-          (t) => t.name.trim().toLowerCase() === BETA_SURVEY_TYPE_NAME,
-        );
-        if (!butterfly) {
+        const matched = types.filter((t) => names.includes(t.name.trim().toLowerCase()));
+        if (matched.length === 0) {
           if (active) setCards([]);
           return;
         }
         // "Surveys" is the total across all statuses (matching the All surveys
         // count); "Species" is the distinct species recorded (the all-time
         // cumulative total); "Next survey" is the soonest scheduled future one.
-        const details = await surveyTypesAPI.getById(butterfly.id);
-        const speciesType = primarySpeciesType(details);
-        const [totalPage, scheduled, cumulative] = await Promise.all([
-          surveysAPI.getAll({ survey_type_id: butterfly.id, page: 1, limit: 1 }),
-          surveysAPI.getAllPages({ survey_type_id: butterfly.id, survey_status: 'scheduled' }),
-          dashboardAPI.getCumulativeSpecies([speciesType]),
-        ]);
+        const loaded = await Promise.all(
+          matched.map(async (t): Promise<CardData> => {
+            const details = await surveyTypesAPI.getById(t.id);
+            const speciesType = primarySpeciesType(details);
+            const [totalPage, scheduled, cumulative] = await Promise.all([
+              surveysAPI.getAll({ survey_type_id: t.id, page: 1, limit: 1 }),
+              surveysAPI.getAllPages({ survey_type_id: t.id, survey_status: 'scheduled' }),
+              dashboardAPI.getCumulativeSpecies([speciesType]),
+            ]);
+            const speciesCount = cumulative.data
+              .filter((d) => d.type === speciesType)
+              .reduce((max, d) => Math.max(max, d.cumulative_count), 0);
+            return {
+              surveyType: details,
+              surveyCount: totalPage.total,
+              speciesCount,
+              nextSurvey: nextScheduledSurvey(scheduled),
+            };
+          }),
+        );
         if (!active) return;
-        const speciesCount = cumulative.data
-          .filter((d) => d.type === speciesType)
-          .reduce((max, d) => Math.max(max, d.cumulative_count), 0);
-        setCards([
-          {
-            surveyType: details,
-            surveyCount: totalPage.total,
-            speciesCount,
-            nextSurvey: nextScheduledSurvey(scheduled),
-          },
-        ]);
+        setCards(loaded);
       } catch {
         if (active) setError(true);
       } finally {

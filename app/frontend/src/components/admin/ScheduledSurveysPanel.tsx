@@ -3,8 +3,8 @@
  * admin schedule a recurring series or cancel/delete an existing one. Scheduled
  * surveys are what populate the Groups worklist for volunteers to sign up to.
  *
- * Heal-only for now (gated by the caller), matching where scheduled surveys
- * currently surface.
+ * Only shown for orgs with the Groups beta (gated by the caller), matching
+ * where scheduled surveys currently surface.
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
