@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupSlug, groupPath } from './groupMeta';
+import { groupSlug, groupPath, betaGroupNames, orgHasGroups } from './groupMeta';
 
 describe('groupSlug', () => {
   it('lowercases and hyphenates a multi-word name', () => {
@@ -16,6 +16,25 @@ describe('groupSlug', () => {
 
   it('returns an empty string for a name with no sluggable characters', () => {
     expect(groupSlug('!!!')).toBe('');
+  });
+});
+
+describe('betaGroupNames / orgHasGroups', () => {
+  it('gives Heal its butterfly and dragonfly groups', () => {
+    expect(betaGroupNames('heal')).toEqual(['butterfly', 'dragonfly']);
+    expect(orgHasGroups('heal')).toBe(true);
+  });
+
+  it('gives Cannwood walking (either type name) and marsh fritillary', () => {
+    expect(betaGroupNames('cannwood')).toContain('walking');
+    expect(betaGroupNames('cannwood')).toContain('walking survey');
+    expect(betaGroupNames('cannwood')).toContain('marsh fritillary');
+    expect(orgHasGroups('cannwood')).toBe(true);
+  });
+
+  it('hides Groups for orgs not in the beta', () => {
+    expect(betaGroupNames('ecotopia')).toEqual([]);
+    expect(orgHasGroups('ecotopia')).toBe(false);
   });
 });
 

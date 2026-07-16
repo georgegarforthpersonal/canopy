@@ -1,7 +1,7 @@
 /**
- * Groups grid (landing). For the Heal beta this shows a card per surfaced
- * survey type, ordered alphabetically. Selecting a card opens that survey
- * type's space.
+ * Groups grid (landing). Shows a card per survey type in the current org's
+ * beta list (see BETA_GROUPS in groupMeta), ordered alphabetically. Selecting
+ * a card opens that survey type's space.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -9,12 +9,9 @@ import { Alert, Box, Typography, CircularProgress } from '@mui/material';
 import { surveyTypesAPI, surveysAPI, dashboardAPI, type Survey, type SurveyTypeWithDetails } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
 import { nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, groupPath } from './groupMeta';
+import { primarySpeciesType, groupPath, betaGroupNames } from './groupMeta';
 import GroupCard from '../../components/groups/GroupCard';
 import { PageTitle } from '../../components/layout/PageTitle';
-
-// The survey types the beta surfaces. Matched case-insensitively by name.
-const BETA_SURVEY_TYPE_NAMES = ['butterfly', 'dragonfly', 'marsh fritillary'];
 
 interface CardData {
   surveyType: SurveyTypeWithDetails;
@@ -33,20 +30,23 @@ export default function GroupsPage() {
     let active = true;
     (async () => {
       try {
+        const names = betaGroupNames();
         const types = await surveyTypesAPI.getAll();
-        const surfaced = types.filter((t) =>
-          BETA_SURVEY_TYPE_NAMES.includes(t.name.trim().toLowerCase()),
-        );
+        const matched = types.filter((t) => names.includes(t.name.trim().toLowerCase()));
+        if (matched.length === 0) {
+          if (active) setCards([]);
+          return;
+        }
         // "Surveys" is the total across all statuses (matching the All surveys
         // count); "Species" is the distinct species recorded (the all-time
         // cumulative total); "Next survey" is the soonest scheduled future one.
         const loaded = await Promise.all(
-          surfaced.map(async (type): Promise<CardData> => {
-            const details = await surveyTypesAPI.getById(type.id);
+          matched.map(async (t): Promise<CardData> => {
+            const details = await surveyTypesAPI.getById(t.id);
             const speciesType = primarySpeciesType(details);
             const [totalPage, scheduled, cumulative] = await Promise.all([
-              surveysAPI.getAll({ survey_type_id: type.id, page: 1, limit: 1 }),
-              surveysAPI.getAllPages({ survey_type_id: type.id, survey_status: 'scheduled' }),
+              surveysAPI.getAll({ survey_type_id: t.id, page: 1, limit: 1 }),
+              surveysAPI.getAllPages({ survey_type_id: t.id, survey_status: 'scheduled' }),
               dashboardAPI.getCumulativeSpecies([speciesType]),
             ]);
             const speciesCount = cumulative.data
