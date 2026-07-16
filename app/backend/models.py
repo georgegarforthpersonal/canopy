@@ -513,6 +513,13 @@ class LocationBase(SQLModel):
         default=LocationType.none,
         description="Spatial representation of this location (area / route / point / none)",
     )
+    # Named map-colour key (e.g. 'orange'); the key→colour mapping lives in the
+    # frontend palette. Null means the fixed per-location_type default colour.
+    color: Optional[str] = Field(
+        default=None,
+        max_length=20,
+        description="Named map colour key overriding the location_type default (null = default)",
+    )
 
 
 class Location(LocationBase, table=True):  # type: ignore[call-arg]
@@ -608,6 +615,8 @@ class LocationUpdate(SQLModel):
     """
     name: Optional[str] = Field(None, max_length=255)
     location_type: Optional[LocationType] = None
+    # Present-and-null resets the colour to the location_type default.
+    color: Optional[str] = Field(None, max_length=20)
     geometry: Optional[Dict[str, Any]] = None
     sectors: Optional[List[SectorInput]] = None
 

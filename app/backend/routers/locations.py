@@ -110,7 +110,7 @@ def _write_geometry(
 
 
 def _location_read(loc: Location) -> Dict[str, Any]:
-    return {"id": loc.id, "name": loc.name, "location_type": loc.location_type, "ordinal": loc.ordinal}
+    return {"id": loc.id, "name": loc.name, "location_type": loc.location_type, "ordinal": loc.ordinal, "color": loc.color}
 
 
 def _write_sectors(
@@ -220,6 +220,7 @@ async def get_locations(
             "location_type": loc.location_type,
             "parent_name": names_by_id.get(loc.parent_location_id) if loc.parent_location_id else None,
             "ordinal": loc.ordinal,
+            "color": loc.color,
         }
         for loc in locations
     ]
@@ -233,7 +234,7 @@ async def get_locations_by_survey_type(
 ) -> List[dict[str, Any]]:
     """Get locations available for a specific survey type."""
     result = db.execute(text("""
-        SELECT l.id, l.name, l.location_type, p.name AS parent_name, l.ordinal
+        SELECT l.id, l.name, l.location_type, p.name AS parent_name, l.ordinal, l.color
         FROM location l
         INNER JOIN survey_type_location stl ON stl.location_id = l.id
         LEFT JOIN location p ON p.id = l.parent_location_id
@@ -243,7 +244,7 @@ async def get_locations_by_survey_type(
     """).bindparams(survey_type_id=survey_type_id, org_id=org.id)).fetchall()
 
     return [
-        {"id": row[0], "name": row[1], "location_type": row[2], "parent_name": row[3], "ordinal": row[4]}
+        {"id": row[0], "name": row[1], "location_type": row[2], "parent_name": row[3], "ordinal": row[4], "color": row[5]}
         for row in result
     ]
 
@@ -263,6 +264,7 @@ async def get_locations_with_boundaries(
             id,
             name,
             location_type,
+            color,
             ST_AsGeoJSON(boundary_geometry)::json AS geometry,
             CASE
                 WHEN GeometryType(boundary_geometry) = 'POLYGON'
@@ -282,8 +284,9 @@ async def get_locations_with_boundaries(
         "id": row[0],
         "name": row[1],
         "location_type": row[2],
-        "geometry": row[3],
-        "boundary_geometry": row[4],
+        "color": row[3],
+        "geometry": row[4],
+        "boundary_geometry": row[5],
         "sectors": sectors_by_route.get(row[0]) or None,
     } for row in result]
 
@@ -322,6 +325,7 @@ async def create_location(
     db_location = Location(
         name=location.name,
         location_type=location.location_type,
+        color=location.color,
         organisation_id=org.id,
     )
     db.add(db_location)
@@ -378,6 +382,9 @@ async def update_location(
         db_location.name = location.name
     if "location_type" in fields_set and location.location_type is not None:
         db_location.location_type = location.location_type
+    # An explicit null resets the colour to the location_type default.
+    if "color" in fields_set:
+        db_location.color = location.color
 
     # Determine the effective type for geometry validation.
     effective_type = db_location.location_type

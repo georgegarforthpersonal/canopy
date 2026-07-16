@@ -27,7 +27,7 @@ import {
   type GeoJsonGeometry,
   type Position,
 } from '../../utils/geometry';
-import { LOCATION_TYPE_STYLE, ROUTE_COLOR } from '../../config';
+import { ROUTE_COLOR, styleForLocation } from '../../config';
 import MapEntityPopup from '../MapEntityPopup';
 
 // Endpoint / sector-boundary markers for a sectored route:
@@ -294,7 +294,7 @@ export default function FieldBoundaryOverlay({
     <>
       {renderable.map(({ loc, geometry }) => {
         if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') {
-          const style = LOCATION_TYPE_STYLE.area;
+          const style = styleForLocation({ location_type: 'area', color: loc.color });
           const rings: Position[][] =
             geometry.type === 'Polygon'
               ? (geometry.coordinates as Position[][])
@@ -321,7 +321,7 @@ export default function FieldBoundaryOverlay({
         }
 
         if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') {
-          const style = LOCATION_TYPE_STYLE.route;
+          const style = styleForLocation({ location_type: 'route', color: loc.color });
 
           // Routes divided into sectors render one polyline per sector (each
           // with its own LineString geometry) instead of the undivided line.
@@ -425,7 +425,7 @@ export default function FieldBoundaryOverlay({
         }
 
         if (geometry.type === 'Point') {
-          const style = LOCATION_TYPE_STYLE.point;
+          const style = styleForLocation({ location_type: 'point', color: loc.color });
           const position = toLatLng(geometry.coordinates as Position);
           return (
             <CircleMarker
