@@ -1,7 +1,6 @@
 /**
- * "Species count" panel for a group: a headline count + "+N this season"
- * with a Chart/List toggle (same control as the Locations & devices panel's
- * Map/List). Chart is the shared all-time cumulative-species area chart;
+ * "Species count" panel for a group: a headline count with a Chart/List
+ * toggle (same control as the Locations & devices panel's Map/List). Chart is the shared all-time cumulative-species area chart;
  * List is every species identified with its occurrence count and the date
  * it was first observed, newest discovery first.
  */
@@ -33,7 +32,7 @@ const listGridSx = {
 } as const;
 
 export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProps) {
-  const [summary, setSummary] = useState<CumulativeSummary>({ total: 0, seasonDelta: 0 });
+  const [summary, setSummary] = useState<CumulativeSummary>({ total: 0 });
   const [view, setView] = useState<'chart' | 'list'>('chart');
   const [species, setSpecies] = useState<SpeciesWithCount[] | null>(null);
 
@@ -76,11 +75,6 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
           <Typography sx={{ fontSize: 15, fontWeight: 600, color: groupColors.textPrimary }}>
             Species count
           </Typography>
-          {summary.seasonDelta > 0 && (
-            <Typography sx={{ fontSize: 12, color: groupColors.brand }} noWrap>
-              +{summary.seasonDelta} this season
-            </Typography>
-          )}
           <Typography sx={{ fontSize: 20, fontWeight: 700, color: groupColors.textPrimary, lineHeight: 1 }}>
             {summary.total}
           </Typography>
