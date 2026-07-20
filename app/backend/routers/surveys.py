@@ -336,6 +336,57 @@ async def get_survey(
     }
 
 
+def _find_open_slot(
+    db: Session,
+    org_id: Optional[int],
+    survey_type_id: Optional[int],
+    survey_date: date,
+    location_id: Optional[int],
+) -> Optional[Survey]:
+    """The open scheduled slot a completed survey records, if any.
+
+    A slot qualifies when its scheduling window contains the survey's date
+    (same organisation and survey type) and it is still an empty placeholder —
+    a slot that already carries sightings is an in-progress recording and is
+    never touched (deleting it would cascade-delete those sightings). Slots
+    scheduled for the survey's own location, or for no particular location,
+    are preferred over other locations' slots; a different-location slot is
+    still adopted as a last resort so the week never shows "needs survey"
+    over a location mismatch.
+    """
+    if survey_type_id is None:
+        return None
+    location_preference = case(
+        (col(Survey.location_id).is_(None), 0),
+        (Survey.location_id == location_id, 0),
+        else_=1,
+    )
+    return (  # type: ignore[no-any-return]
+        db.query(Survey)
+        .filter(
+            Survey.organisation_id == org_id,
+            Survey.survey_type_id == survey_type_id,
+            Survey.status == SurveyStatus.scheduled,
+            col(Survey.scheduled_window_start) <= survey_date,
+            col(Survey.scheduled_window_end) >= survey_date,
+            ~db.query(Sighting.id).filter(Sighting.survey_id == Survey.id).exists(),
+        )
+        .order_by(location_preference, col(Survey.scheduled_window_start), col(Survey.id))
+        .first()
+    )
+
+
+def _adopt_slot(db: Session, survey: Survey, slot: Survey) -> None:
+    """Record `slot`'s week as `survey`: the survey takes over the slot's
+    scheduling window and the placeholder is deleted, along with its
+    pre-assigned surveyor sign-ups (the recorded survey keeps the people who
+    actually did it)."""
+    survey.scheduled_window_start = slot.scheduled_window_start
+    survey.scheduled_window_end = slot.scheduled_window_end
+    db.query(SurveySurveyor).filter(SurveySurveyor.survey_id == slot.id).delete()
+    db.delete(slot)
+
+
 @router.post("", response_model=SurveyRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_editor)])
 async def create_survey(
     survey: SurveyCreate,
@@ -352,26 +403,6 @@ async def create_survey(
         Created survey with ID
     """
     try:
-        # A completed survey whose date falls inside an open scheduled slot's
-        # window records that week: the new row adopts the slot's window and
-        # the placeholder is removed. Otherwise a survey entered via "new
-        # survey" (instead of the record flow) leaves the slot showing
-        # "needs survey" forever.
-        adopted_slot: Optional[Survey] = None
-        if survey.status == SurveyStatus.completed and survey.survey_type_id is not None:
-            adopted_slot = (
-                db.query(Survey)
-                .filter(
-                    Survey.organisation_id == org.id,
-                    Survey.survey_type_id == survey.survey_type_id,
-                    Survey.status == SurveyStatus.scheduled,
-                    col(Survey.scheduled_window_start) <= survey.date,
-                    col(Survey.scheduled_window_end) >= survey.date,
-                )
-                .order_by(col(Survey.scheduled_window_start), col(Survey.id))
-                .first()
-            )
-
         # Create survey (without surveyor_ids which isn't a field on the model)
         db_survey = Survey(
             date=survey.date,
@@ -386,14 +417,20 @@ async def create_survey(
             survey_type_id=survey.survey_type_id,
             status=survey.status,
             organisation_id=org.id,
-            scheduled_window_start=adopted_slot.scheduled_window_start if adopted_slot else None,
-            scheduled_window_end=adopted_slot.scheduled_window_end if adopted_slot else None,
         )
-        if adopted_slot is not None:
-            db.query(SurveySurveyor).filter(
-                SurveySurveyor.survey_id == adopted_slot.id
-            ).delete()
-            db.delete(adopted_slot)
+
+        # A completed survey whose date falls inside an open scheduled slot's
+        # window records that week: the new row adopts the slot's window and
+        # the placeholder is removed. Otherwise a survey entered via "new
+        # survey" (instead of the record flow) leaves the slot showing
+        # "needs survey" forever.
+        if survey.status == SurveyStatus.completed:
+            adopted_slot = _find_open_slot(
+                db, org.id, survey.survey_type_id, survey.date, survey.location_id
+            )
+            if adopted_slot is not None:
+                _adopt_slot(db, db_survey, adopted_slot)
+
         db.add(db_survey)
         db.flush()  # Get the ID without committing
 
@@ -548,6 +585,8 @@ async def update_survey(
     if not db_survey:
         raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
 
+    was_completed = db_survey.status == SurveyStatus.completed
+
     # Update only the fields that were provided
     update_data = survey.model_dump(exclude_unset=True, exclude={'surveyor_ids'})
 
@@ -560,6 +599,21 @@ async def update_survey(
     # the combination, never changes the lifecycle; the same field edit can
     # mean "fix the plan" or "write up the survey", and only the caller knows
     # which, so it must say so.
+
+    # Becoming completed records the week, exactly as a fresh completed create
+    # does: a survey without a scheduling window of its own adopts the open
+    # slot whose window contains its date. A survey that already has a window
+    # IS the week's slot (the record flow), so there is nothing to adopt.
+    if (
+        db_survey.status == SurveyStatus.completed
+        and not was_completed
+        and db_survey.scheduled_window_start is None
+    ):
+        slot = _find_open_slot(
+            db, org.id, db_survey.survey_type_id, db_survey.date, db_survey.location_id
+        )
+        if slot is not None:
+            _adopt_slot(db, db_survey, slot)
 
     # Update surveyor associations if provided
     if survey.surveyor_ids is not None:
@@ -598,6 +652,8 @@ async def update_survey(
         "location_id": db_survey.location_id,
         "device_id": db_survey.device_id,
         "status": db_survey.status,
+        "scheduled_window_start": db_survey.scheduled_window_start,
+        "scheduled_window_end": db_survey.scheduled_window_end,
         "survey_type_id": db_survey.survey_type_id,
         "surveyor_ids": surveyor_ids_list
     }
