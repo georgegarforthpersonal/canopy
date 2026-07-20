@@ -50,6 +50,7 @@ from models import (
     SurveyDetectionsSaveRequest,
     SurveyDetectionsSaveResponse,
 )
+from services.job_queue import nudge_dispatcher
 from services.processing import DEFAULT_LAT, DEFAULT_LON
 from services.r2_storage import (
     delete_audio_file,
@@ -354,6 +355,8 @@ async def upload_audio_files(
         uploaded.append(recording)
 
     db.commit()
+    if not skip_processing and uploaded:
+        nudge_dispatcher()
 
     # Build response
     return [_build_recording_response(rec, 0) for rec in uploaded]
@@ -396,6 +399,7 @@ async def process_audio_recording(
     recording.processing_attempts = 0
     recording.processing_error = None
     db.commit()
+    nudge_dispatcher()
 
     return {"status": "queued", "message": "Processing queued"}
 

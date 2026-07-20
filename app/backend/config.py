@@ -165,7 +165,16 @@ class Settings(BaseSettings):
         return 16 if self.inference_mode.lower() == "modal" else 2
     job_poll_interval_seconds: float = Field(
         default=3.0,
-        description="How often the dispatcher polls for pending jobs"
+        description="How often the dispatcher polls while jobs are running"
+    )
+    job_idle_poll_interval_seconds: float = Field(
+        default=900.0,
+        description=(
+            "Safety-poll cadence when the queue is idle. Uploads nudge the "
+            "dispatcher directly, so this only catches jobs orphaned by a "
+            "crashed replica; keep it well above Neon's 5-minute suspend "
+            "window so an idle database can scale to zero."
+        )
     )
     job_max_attempts: int = Field(
         default=3,

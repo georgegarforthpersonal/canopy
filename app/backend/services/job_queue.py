@@ -2,10 +2,16 @@
 Durable, DB-backed job queue for media processing.
 
 The processing_status column on audio_recording / camera_trap_image IS the
-queue: uploads insert rows as 'pending', and this dispatcher polls for them,
+queue: uploads insert rows as 'pending' and nudge the dispatcher, which
 claims batches with FOR UPDATE SKIP LOCKED (safe with multiple app replicas),
 and runs the matching function from services/processing.py in a worker thread
 with bounded concurrency and a per-job timeout.
+
+The dispatcher only polls fast (job_poll_interval_seconds) while jobs are in
+flight. When the queue is idle it sleeps until nudged, with a slow safety poll
+(job_idle_poll_interval_seconds) to recover jobs enqueued by another replica
+or orphaned by a crash. Keeping the idle cadence above Neon's 5-minute suspend
+window is what lets an otherwise-idle database scale to zero.
 
 Jobs survive restarts: rows left in 'processing' by a crashed or redeployed
 server are swept back to 'pending' once their processing_started_at is older
@@ -55,16 +61,19 @@ class JobDispatcher:
         self,
         concurrency: Optional[int] = None,
         poll_interval: Optional[float] = None,
+        idle_poll_interval: Optional[float] = None,
         max_attempts: Optional[int] = None,
         job_timeout: Optional[int] = None,
     ) -> None:
         self.concurrency = concurrency or settings.effective_job_concurrency
         self.poll_interval = poll_interval or settings.job_poll_interval_seconds
+        self.idle_poll_interval = idle_poll_interval or settings.job_idle_poll_interval_seconds
         self.max_attempts = max_attempts or settings.job_max_attempts
         self.job_timeout = job_timeout or settings.job_timeout_seconds
         self._tasks: set["asyncio.Task[None]"] = set()
         self._loop_task: Optional["asyncio.Task[None]"] = None
         self._stopping = asyncio.Event()
+        self._nudged = asyncio.Event()
         self._last_sweep: Optional[datetime] = None
         self._rotation = 0
         # Dedicated pool: asyncio's default executor is sized ~cpu+4, which
@@ -77,9 +86,13 @@ class JobDispatcher:
         self._loop_task = asyncio.create_task(self._loop())
         logger.info(
             f"Job dispatcher started (concurrency={self.concurrency}, "
-            f"poll={self.poll_interval}s, timeout={self.job_timeout}s, "
-            f"max_attempts={self.max_attempts})"
+            f"poll={self.poll_interval}s, idle_poll={self.idle_poll_interval}s, "
+            f"timeout={self.job_timeout}s, max_attempts={self.max_attempts})"
         )
+
+    def nudge(self) -> None:
+        """Wake the dispatcher immediately; called after enqueueing a job."""
+        self._nudged.set()
 
     async def stop(self) -> None:
         self._stopping.set()
@@ -92,14 +105,26 @@ class JobDispatcher:
 
     async def _loop(self) -> None:
         while not self._stopping.is_set():
+            self._nudged.clear()
             try:
                 await self._tick()
             except Exception:
                 logger.exception("Job dispatcher tick failed")
-            try:
-                await asyncio.wait_for(self._stopping.wait(), timeout=self.poll_interval)
-            except TimeoutError:
-                pass
+            # Poll fast only while jobs are in flight; otherwise sleep until
+            # nudged (or the safety poll) so an idle database can suspend.
+            timeout = self.poll_interval if self._tasks else self.idle_poll_interval
+            await self._wait_for_work(timeout)
+
+    async def _wait_for_work(self, timeout: float) -> None:
+        waits = [
+            asyncio.create_task(self._stopping.wait()),
+            asyncio.create_task(self._nudged.wait()),
+        ]
+        _, pending = await asyncio.wait(
+            waits, timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
 
     async def _tick(self) -> None:
         now = datetime.utcnow()
@@ -242,3 +267,13 @@ async def stop_dispatcher() -> None:
     if _dispatcher is not None:
         await _dispatcher.stop()
         _dispatcher = None
+
+
+def nudge_dispatcher() -> None:
+    """Wake the in-process dispatcher after enqueueing jobs.
+
+    No-op when the dispatcher is disabled (another replica's safety poll
+    picks the jobs up instead).
+    """
+    if _dispatcher is not None:
+        _dispatcher.nudge()
