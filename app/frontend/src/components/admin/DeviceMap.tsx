@@ -22,7 +22,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import { LatLngBounds, LatLng } from 'leaflet';
-import type { GeoJsonGeometry, Position } from '../../utils/geometry';
+import { collectPositions } from '../../utils/geometry';
 import MapIcon from '@mui/icons-material/Map';
 import SatelliteIcon from '@mui/icons-material/Satellite';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
@@ -53,21 +53,6 @@ interface DeviceMapProps {
   /** When set (and not read-only), clicking a location shape opens Edit/Delete. */
   onEditLocation?: (loc: LocationWithBoundary) => void;
   onDeleteLocation?: (loc: LocationWithBoundary) => void;
-}
-
-/** Recursively collect every [lng, lat] position from a GeoJSON geometry. */
-function collectPositions(geometry: GeoJsonGeometry | null | undefined): Position[] {
-  if (!geometry) return [];
-  const out: Position[] = [];
-  const walk = (coords: unknown) => {
-    if (Array.isArray(coords) && typeof coords[0] === 'number') {
-      out.push(coords as Position);
-    } else if (Array.isArray(coords)) {
-      coords.forEach(walk);
-    }
-  };
-  walk(geometry.coordinates);
-  return out;
 }
 
 /** Fit the map to every location boundary and device on first render. */

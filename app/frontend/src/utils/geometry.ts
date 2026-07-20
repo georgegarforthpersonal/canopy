@@ -25,6 +25,21 @@ export interface GeoJsonGeometry {
   coordinates: Position | Position[] | Position[][] | Position[][][];
 }
 
+/** Recursively collect every [lng, lat] position from a GeoJSON geometry. */
+export function collectPositions(geometry: GeoJsonGeometry | null | undefined): Position[] {
+  if (!geometry) return [];
+  const out: Position[] = [];
+  const walk = (coords: unknown) => {
+    if (Array.isArray(coords) && typeof coords[0] === 'number') {
+      out.push(coords as Position);
+    } else if (Array.isArray(coords)) {
+      coords.forEach(walk);
+    }
+  };
+  walk(geometry.coordinates);
+  return out;
+}
+
 const EARTH_RADIUS_M = 6378137; // WGS84 equatorial radius
 
 /**
