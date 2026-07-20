@@ -542,6 +542,7 @@ export function NewSurveyPage() {
   const allowSightingDeviceSelection = selectedSurveyType?.allow_sighting_device_selection ?? false;
   const locationAtSightingLevel = !allowSightingDeviceSelection && (selectedSurveyType?.location_at_sighting_level ?? false);
   const allowGeolocation = !allowSightingDeviceSelection && (selectedSurveyType?.allow_geolocation ?? true);
+  const allowCoordinateEntry = allowGeolocation && (selectedSurveyType?.allow_coordinate_entry ?? false);
   const allowSightingNotes = selectedSurveyType?.allow_sighting_notes ?? true;
   const allowImageUpload = selectedSurveyType?.allow_image_upload ?? false;
   const allowSightingPhotoUpload = selectedSurveyType?.allow_sighting_photo_upload ?? false;
@@ -799,6 +800,7 @@ export function NewSurveyPage() {
             locationAtSightingLevel={locationAtSightingLevel}
             locations={locations}
             allowGeolocation={allowGeolocation}
+            allowCoordinateEntry={allowCoordinateEntry}
             allowSightingNotes={allowSightingNotes}
             allowSightingPhotoUpload={allowSightingPhotoUpload}
             allowSightingDeviceSelection={allowSightingDeviceSelection}

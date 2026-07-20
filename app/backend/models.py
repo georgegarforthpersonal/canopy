@@ -658,6 +658,7 @@ class SurveyTypeBase(SQLModel):
     description: Optional[str] = Field(None, description="Survey type description")
     location_at_sighting_level: bool = Field(default=False, description="If true, location is set per sighting; if false, per survey")
     allow_geolocation: bool = Field(default=True, description="Whether coordinates can be entered for sightings")
+    allow_coordinate_entry: bool = Field(default=False, description="Whether precise sighting locations can be typed as coordinates or taken from photo GPS")
     allow_sighting_notes: bool = Field(default=True, description="Whether notes can be entered for individual sightings")
     allow_audio_upload: bool = Field(default=False, description="Whether audio files can be uploaded for this survey type")
     allow_image_upload: bool = Field(default=False, description="Whether camera trap images can be uploaded for this survey type")
@@ -719,6 +720,7 @@ class SurveyTypeUpdate(SQLModel):
     description: Optional[str] = None
     location_at_sighting_level: Optional[bool] = None
     allow_geolocation: Optional[bool] = None
+    allow_coordinate_entry: Optional[bool] = None
     allow_sighting_notes: Optional[bool] = None
     allow_audio_upload: Optional[bool] = None
     allow_image_upload: Optional[bool] = None

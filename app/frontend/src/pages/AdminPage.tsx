@@ -162,6 +162,7 @@ export function AdminPage() {
   const [formDescription, setFormDescription] = useState('');
   const [formLocationAtSightingLevel, setFormLocationAtSightingLevel] = useState(false);
   const [formAllowGeolocation, setFormAllowGeolocation] = useState(true);
+  const [formAllowCoordinateEntry, setFormAllowCoordinateEntry] = useState(false);
   const [formAllowSightingNotes, setFormAllowSightingNotes] = useState(true);
   const [formAllowAudioUpload, setFormAllowAudioUpload] = useState(false);
   const [formAllowImageUpload, setFormAllowImageUpload] = useState(false);
@@ -343,6 +344,7 @@ export function AdminPage() {
       setFormDescription(details.description || '');
       setFormLocationAtSightingLevel(details.location_at_sighting_level);
       setFormAllowGeolocation(details.allow_geolocation);
+      setFormAllowCoordinateEntry(details.allow_coordinate_entry);
       setFormAllowSightingNotes(details.allow_sighting_notes);
       setFormAllowAudioUpload(details.allow_audio_upload);
       setFormAllowImageUpload(details.allow_image_upload);
@@ -368,6 +370,7 @@ export function AdminPage() {
     setFormDescription('');
     setFormLocationAtSightingLevel(false);
     setFormAllowGeolocation(true);
+    setFormAllowCoordinateEntry(false);
     setFormAllowSightingNotes(true);
     setFormAllowAudioUpload(false);
     setFormAllowImageUpload(false);
@@ -410,6 +413,7 @@ export function AdminPage() {
         description: formDescription.trim() || undefined,
         location_at_sighting_level: formLocationAtSightingLevel,
         allow_geolocation: formAllowGeolocation,
+        allow_coordinate_entry: formAllowCoordinateEntry,
         allow_sighting_notes: formAllowSightingNotes,
         allow_audio_upload: formAllowAudioUpload,
         allow_image_upload: formAllowImageUpload,
@@ -1050,6 +1054,25 @@ export function AdminPage() {
                   : formAllowGeolocation
                   ? 'Users can add GPS coordinates to sightings'
                   : 'GPS coordinates are disabled for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowCoordinateEntry}
+                    onChange={(e) => setFormAllowCoordinateEntry(e.target.checked)}
+                    disabled={savingSurveyType || !formAllowGeolocation || formAllowSightingDeviceSelection}
+                  />
+                }
+                label="Allow precise coordinate entry"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {!formAllowGeolocation || formAllowSightingDeviceSelection
+                  ? 'Requires geolocation to be enabled'
+                  : formAllowCoordinateEntry
+                  ? 'Users can type coordinates or use photo GPS to place sighting locations'
+                  : 'Sighting locations are placed by clicking the map only'}
               </Typography>
             </Box>
             <Box sx={{ mt: 2 }}>

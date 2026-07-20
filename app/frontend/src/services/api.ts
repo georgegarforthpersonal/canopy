@@ -655,6 +655,7 @@ export interface SurveyType {
   schedule_cadence: ScheduleCadence;
   location_at_sighting_level: boolean;
   allow_geolocation: boolean;
+  allow_coordinate_entry: boolean;
   allow_sighting_notes: boolean;
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
@@ -698,6 +699,7 @@ export interface SurveyTypeCreate {
   description?: string;
   location_at_sighting_level: boolean;
   allow_geolocation: boolean;
+  allow_coordinate_entry: boolean;
   allow_sighting_notes: boolean;
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
@@ -723,6 +725,7 @@ export interface SurveyTypeUpdate {
   description?: string;
   location_at_sighting_level?: boolean;
   allow_geolocation?: boolean;
+  allow_coordinate_entry?: boolean;
   allow_sighting_notes?: boolean;
   allow_audio_upload?: boolean;
   allow_image_upload?: boolean;
