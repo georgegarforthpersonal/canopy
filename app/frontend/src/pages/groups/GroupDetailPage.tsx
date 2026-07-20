@@ -27,7 +27,7 @@ import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
 import GroupHero from '../../components/groups/GroupHero';
 import SurveysPanel from '../../components/groups/SurveysPanel';
 import FilesPanel from '../../components/groups/FilesPanel';
-import RoutesPanel from '../../components/groups/RoutesPanel';
+import LocationsPanel from '../../components/groups/LocationsPanel';
 import SpeciesCountPanel from '../../components/groups/SpeciesCountPanel';
 import DataPanel from '../../components/groups/DataPanel';
 
@@ -234,7 +234,7 @@ export default function GroupDetailPage() {
               <FilesPanel surveyTypeId={surveyType.id} files={files} loading={filesLoading} />
             </Box>
             <Box sx={{ order: 3, minWidth: 0 }}>
-              <RoutesPanel locations={locations} />
+              <LocationsPanel locations={locations} />
             </Box>
             <Box sx={{ order: 5, minWidth: 0 }}>
               <DataPanel surveyTypeId={surveyType.id} surveyTypeName={surveyType.name} />

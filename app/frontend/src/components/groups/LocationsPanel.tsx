@@ -1,8 +1,8 @@
 /**
- * Routes panel for a group: the transect routes (and their sectors) assigned
- * to the survey type, as either a map or a list (local toggle, default Map).
- * Deliberately routes-only — volunteers use this panel to understand where
- * to walk, so areas, points and devices are filtered out.
+ * Locations panel for a group: every location assigned to the survey type
+ * (routes, sectors, areas, points), as either a map or a list (local toggle,
+ * default Map). Routes and sectors sort first — volunteers use them to
+ * understand where to walk.
  */
 import { useState } from 'react';
 import {
@@ -12,37 +12,52 @@ import {
   ToggleButtonGroup,
   ToggleButton,
 } from '@mui/material';
-import { Map as MapIcon, ViewList, Route as RouteIcon } from '@mui/icons-material';
+import { Map as MapIcon, ViewList, Route as RouteIcon, Pentagon as AreaIcon, Place as PlaceIcon } from '@mui/icons-material';
 import { locationDisplayName } from '../../services/api';
 import type { LocationWithBoundary } from '../../services/api';
-import { geometryLengthM, formatLength } from '../../utils/geometry';
+import { geometryLengthM, formatLength, geometryAreaSqm, formatArea } from '../../utils/geometry';
 import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
 import DeviceMap from '../admin/DeviceMap';
 
-interface RoutesPanelProps {
-  /** All locations assigned to the survey type; non-routes are filtered out here. */
+interface LocationsPanelProps {
+  /** All locations assigned to the survey type. */
   locations: LocationWithBoundary[];
 }
 
-function routeDetail(loc: LocationWithBoundary): string {
-  const len = geometryLengthM(loc.geometry);
+function locationDetail(loc: LocationWithBoundary): string {
   if (loc.location_type === 'sector') {
+    const len = geometryLengthM(loc.geometry);
     return len > 0 ? `Transect sector · ${formatLength(len)}` : 'Transect sector';
   }
-  const sectorCount = loc.sectors?.length ?? 0;
-  const parts = ['Transect'];
-  if (sectorCount > 0) parts.push(`${sectorCount} ${sectorCount === 1 ? 'sector' : 'sectors'}`);
-  if (len > 0) parts.push(formatLength(len));
-  return parts.join(' · ');
+  if (loc.location_type === 'route') {
+    const len = geometryLengthM(loc.geometry);
+    const sectorCount = loc.sectors?.length ?? 0;
+    const parts = ['Transect'];
+    if (sectorCount > 0) parts.push(`${sectorCount} ${sectorCount === 1 ? 'sector' : 'sectors'}`);
+    if (len > 0) parts.push(formatLength(len));
+    return parts.join(' · ');
+  }
+  if (loc.location_type === 'point') return 'Point';
+  if (loc.location_type === 'area') {
+    const area = formatArea(geometryAreaSqm(loc.geometry));
+    return area ? `Area · ${area}` : 'Area';
+  }
+  return '';
 }
 
-export default function RoutesPanel({ locations }: RoutesPanelProps) {
+function LocationRowIcon({ type }: { type: LocationWithBoundary['location_type'] }) {
+  if (type === 'area') return <AreaIcon sx={{ fontSize: 16 }} />;
+  if (type === 'route' || type === 'sector') return <RouteIcon sx={{ fontSize: 16 }} />;
+  return <PlaceIcon sx={{ fontSize: 16 }} />;
+}
+
+export default function LocationsPanel({ locations }: LocationsPanelProps) {
   const [view, setView] = useState<'map' | 'list'>('map');
 
-  // Routes first, then any sectors assigned to the type in their own right.
-  const routes = locations.filter((l) => l.location_type === 'route');
-  const sectors = locations.filter((l) => l.location_type === 'sector');
-  const visible = [...routes, ...sectors];
+  // Routes first, then sectors assigned in their own right, then the rest.
+  const order = (l: LocationWithBoundary) =>
+    l.location_type === 'route' ? 0 : l.location_type === 'sector' ? 1 : 2;
+  const visible = [...locations].sort((a, b) => order(a) - order(b));
 
   return (
     <Paper sx={groupCardSx}>
@@ -58,7 +73,7 @@ export default function RoutesPanel({ locations }: RoutesPanelProps) {
         }}
       >
         <Typography sx={{ fontSize: 15, fontWeight: 600, color: groupColors.textPrimary, whiteSpace: 'nowrap' }}>
-          Routes
+          Locations
         </Typography>
         <ToggleButtonGroup
           value={view}
@@ -98,7 +113,7 @@ export default function RoutesPanel({ locations }: RoutesPanelProps) {
       {visible.length === 0 ? (
         <Box sx={{ px: 2.25, py: 3 }}>
           <Typography sx={{ fontSize: 13.5, color: groupColors.textMuted }}>
-            No routes assigned to this survey type yet.
+            No locations assigned to this survey type yet.
           </Typography>
         </Box>
       ) : view === 'map' ? (
@@ -135,15 +150,17 @@ export default function RoutesPanel({ locations }: RoutesPanelProps) {
                   flexShrink: 0,
                 }}
               >
-                <RouteIcon sx={{ fontSize: 16 }} />
+                <LocationRowIcon type={location.location_type} />
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: groupColors.textPrimary }} noWrap>
                   {locationDisplayName(location)}
                 </Typography>
-                <Typography sx={{ fontSize: 11.5, color: groupColors.textMuted }}>
-                  {routeDetail(location)}
-                </Typography>
+                {locationDetail(location) !== '' && (
+                  <Typography sx={{ fontSize: 11.5, color: groupColors.textMuted }}>
+                    {locationDetail(location)}
+                  </Typography>
+                )}
               </Box>
             </Box>
           ))}
