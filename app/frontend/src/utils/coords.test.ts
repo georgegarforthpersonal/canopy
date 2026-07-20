@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parseLatLng, coordsAlreadyAdded } from './coords';
+import { parseLatLng } from './coords';
 
 describe('parseLatLng', () => {
   it('parses comma-and-space separated coordinates', () => {
@@ -72,32 +72,5 @@ describe('parseLatLng', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain('Longitude');
     expect(parseLatLng('0, -181').ok).toBe(false);
-  });
-});
-
-describe('coordsAlreadyAdded', () => {
-  const locations = [
-    { latitude: 51.123456, longitude: -2.345678 },
-    { latitude: 52.5, longitude: -1.5 },
-  ];
-
-  it('matches exact coordinates', () => {
-    expect(coordsAlreadyAdded(locations, 51.123456, -2.345678)).toBe(true);
-  });
-
-  it('matches within epsilon', () => {
-    expect(coordsAlreadyAdded(locations, 51.1234564, -2.3456784)).toBe(true);
-  });
-
-  it('misses outside epsilon', () => {
-    expect(coordsAlreadyAdded(locations, 51.12346, -2.345678)).toBe(false);
-  });
-
-  it('requires both axes to match', () => {
-    expect(coordsAlreadyAdded(locations, 51.123456, -1.5)).toBe(false);
-  });
-
-  it('returns false for an empty list', () => {
-    expect(coordsAlreadyAdded([], 51.1, -2.3)).toBe(false);
   });
 });

@@ -12,5 +12,3 @@ export { useCameraTrapWizard } from './useCameraTrapWizard';
 export type { CameraTrapWizardState, ImageFile, Classification } from './useCameraTrapWizard';
 export { useSurveyorLookup } from './useSurveyorLookup';
 export { useSignupSaved } from './useSignupSaved';
-export { usePhotoGpsSuggestions } from './usePhotoGpsSuggestions';
-export type { PhotoGpsSuggestion } from './usePhotoGpsSuggestions';

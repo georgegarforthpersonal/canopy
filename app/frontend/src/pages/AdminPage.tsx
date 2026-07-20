@@ -1071,7 +1071,7 @@ export function AdminPage() {
                 {!formAllowGeolocation || formAllowSightingDeviceSelection
                   ? 'Requires geolocation to be enabled'
                   : formAllowCoordinateEntry
-                  ? 'Users can type coordinates or use photo GPS to place sighting locations'
+                  ? 'Users can type GPS coordinates to place sighting locations'
                   : 'Sighting locations are placed by clicking the map only'}
               </Typography>
             </Box>

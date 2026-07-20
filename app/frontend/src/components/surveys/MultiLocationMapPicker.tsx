@@ -18,7 +18,6 @@ import {
   ListSubheader,
   TextField,
   Button,
-  Avatar,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MapIcon from '@mui/icons-material/Map';
@@ -28,10 +27,10 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import 'leaflet/dist/leaflet.css';
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
-import { parseLatLng, coordsAlreadyAdded } from '../../utils/coords';
+import { parseLatLng } from '../../utils/coords';
 
 import type { BreedingStatusCode, BreedingCategory, LocationWithBoundary } from '../../services/api';
-import { useMapFullscreen, MapResizeHandler, usePhotoGpsSuggestions } from '../../hooks';
+import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from './breedingConstants';
 import { boundaryLatLngs } from './mapModeUtils';
@@ -57,8 +56,7 @@ interface MultiLocationMapPickerProps {
   disabled?: boolean;
   locationsWithBoundaries?: LocationWithBoundary[]; // Optional locations with boundaries to display on the map
   surveyLocationId?: number | null;
-  allowCoordinateEntry?: boolean; // Survey-type flag: show typed coordinate entry and photo GPS suggestions
-  photos?: File[]; // Pending sighting photos — those with EXIF GPS become one-tap location suggestions
+  allowCoordinateEntry?: boolean; // Survey-type flag: show typed coordinate entry
 }
 
 // Component to handle map clicks
@@ -127,20 +125,6 @@ function PanToPoint({ target }: { target: { lat: number; lng: number; seq: numbe
   return null;
 }
 
-// Thumbnail for a photo-GPS suggestion chip. URL lifecycle lives entirely in
-// the effect so StrictMode's cleanup+rerun doesn't leave a revoked URL behind.
-function PhotoSuggestionAvatar({ file }: { file: File }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const objectUrl = URL.createObjectURL(file);
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
-
-  return <Avatar variant="rounded" src={url ?? undefined} alt={file.name} />;
-}
-
 // Get marker color based on breeding status code
 function getMarkerColor(code: string | null | undefined, breedingCodes: BreedingStatusCode[]): string {
   if (!code) return '#9E9E9E';
@@ -177,7 +161,6 @@ export default function MultiLocationMapPicker({
   locationsWithBoundaries,
   surveyLocationId,
   allowCoordinateEntry = false,
-  photos,
 }: MultiLocationMapPickerProps) {
   const [mapType, setMapType] = useState<'street' | 'satellite'>('satellite');
   const [mapCenter] = useState<LatLng>(new LatLng(DEFAULT_MAP_CENTER[0], DEFAULT_MAP_CENTER[1]));
@@ -185,7 +168,6 @@ export default function MultiLocationMapPicker({
   const [coordError, setCoordError] = useState<string | null>(null);
   const [panTarget, setPanTarget] = useState<{ lat: number; lng: number; seq: number } | null>(null);
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
-  const photoSuggestions = usePhotoGpsSuggestions(allowCoordinateEntry ? photos : undefined);
 
   // Calculate total count across all locations
   const totalCount = locations.reduce((sum, loc) => sum + loc.count, 0);
@@ -479,38 +461,6 @@ export default function MultiLocationMapPicker({
           Add
         </Button>
       </Stack>
-      )}
-
-      {/* Photo GPS suggestions */}
-      {photoSuggestions.length > 0 && (
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            Add location from photo
-          </Typography>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            {photoSuggestions.map((suggestion) => {
-              const added = coordsAlreadyAdded(locations, suggestion.latitude, suggestion.longitude);
-              return (
-                <Chip
-                  key={`${suggestion.file.name}-${suggestion.file.lastModified}-${suggestion.file.size}`}
-                  avatar={<PhotoSuggestionAvatar file={suggestion.file} />}
-                  label={
-                    added
-                      ? 'Added'
-                      : `${suggestion.latitude.toFixed(5)}, ${suggestion.longitude.toFixed(5)}`
-                  }
-                  onClick={
-                    added || disabled || isAtMax
-                      ? undefined
-                      : () => addPoint(suggestion.latitude, suggestion.longitude, true)
-                  }
-                  disabled={disabled || (!added && isAtMax)}
-                  variant={added ? 'filled' : 'outlined'}
-                />
-              );
-            })}
-          </Stack>
-        </Box>
       )}
 
       {/* Individual Cards */}

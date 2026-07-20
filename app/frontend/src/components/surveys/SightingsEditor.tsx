@@ -92,7 +92,7 @@ interface SightingsEditorProps {
   locationAtSightingLevel?: boolean; // When true, show location dropdown per sighting
   locations?: Location[]; // Available locations for sighting-level selection
   allowGeolocation?: boolean; // Whether geolocation is allowed (controls geolocation button visibility)
-  allowCoordinateEntry?: boolean; // Whether typed coordinates / photo GPS can place sighting locations
+  allowCoordinateEntry?: boolean; // Whether typed coordinates can place sighting locations
   allowSightingNotes?: boolean; // Whether notes can be entered for individual sightings
   allowSightingPhotoUpload?: boolean; // Whether photos can be attached to individual sightings
   allowSightingDeviceSelection?: boolean; // When true, each sighting picks a device that supplies its location
@@ -1070,7 +1070,6 @@ export function SightingsEditor({
         locationsWithBoundaries={locationsWithBoundaries}
         surveyLocationId={surveyLocationId}
         allowCoordinateEntry={allowCoordinateEntry}
-        photos={locationEditingSighting?.pendingPhotos}
       />
 
     </>

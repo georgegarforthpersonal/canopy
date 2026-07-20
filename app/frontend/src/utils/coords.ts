@@ -33,18 +33,3 @@ export function parseLatLng(input: string): ParseLatLngResult {
 
   return { ok: true, lat, lng };
 }
-
-/**
- * Whether a point matching (lat, lng) already exists in the list, within
- * epsilon on both axes. Default epsilon matches the 6-dp display precision.
- */
-export function coordsAlreadyAdded(
-  locations: Array<{ latitude: number; longitude: number }>,
-  lat: number,
-  lng: number,
-  epsilon = 1e-6
-): boolean {
-  return locations.some(
-    (loc) => Math.abs(loc.latitude - lat) < epsilon && Math.abs(loc.longitude - lng) < epsilon
-  );
-}

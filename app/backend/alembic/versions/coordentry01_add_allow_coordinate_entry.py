@@ -4,9 +4,9 @@ Revision ID: coordentry01
 Revises: loccol01
 Create Date: 2026-07-20
 
-Adds toggle for precise sighting-location entry (typed lat/lng and
-photo-EXIF-GPS suggestions) in the location picker. Off by default;
-enabled per survey type (e.g. marsh fritillary larval webs).
+Adds toggle for precise sighting-location entry (typed lat/lng) in the
+location picker. Off by default; enabled per survey type (e.g. marsh
+fritillary larval webs).
 """
 from typing import Sequence, Union
 

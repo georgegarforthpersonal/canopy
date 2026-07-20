@@ -31,7 +31,7 @@ interface AddSightingModalProps {
   locationAtSightingLevel?: boolean; // When true, show location dropdown
   locations?: Location[]; // Available locations for sighting-level selection
   allowGeolocation?: boolean; // Whether GPS location picker is shown
-  allowCoordinateEntry?: boolean; // Whether typed coordinates / photo GPS can place sighting locations
+  allowCoordinateEntry?: boolean; // Whether typed coordinates can place sighting locations
   allowSightingNotes?: boolean; // Whether notes field is shown
   allowSightingPhotoUpload?: boolean; // Whether photo upload is shown
   allowSightingDeviceSelection?: boolean; // When true, show device dropdown that supplies the sighting's location
@@ -445,7 +445,6 @@ export function AddSightingModal({
                 locationsWithBoundaries={locationsWithBoundaries}
                 surveyLocationId={surveyLocationId}
                 allowCoordinateEntry={allowCoordinateEntry}
-                photos={pendingPhotos}
               />
             </Box>
           )}
