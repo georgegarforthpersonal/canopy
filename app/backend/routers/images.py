@@ -46,6 +46,7 @@ from models import (
     ProcessingSummary,
     Survey,
 )
+from services.job_queue import nudge_dispatcher
 from services.r2_storage import (
     delete_image_file,
     generate_image_presigned_url,
@@ -332,6 +333,8 @@ async def upload_images(
         uploaded.append(image)
 
     db.commit()
+    if not skip_processing and uploaded:
+        nudge_dispatcher()
 
     # Build response
     return [_build_image_response(img, 0) for img in uploaded]
@@ -374,6 +377,7 @@ async def process_image(
     image.processing_attempts = 0
     image.processing_error = None
     db.commit()
+    nudge_dispatcher()
 
     return {"status": "queued", "message": "Processing queued"}
 

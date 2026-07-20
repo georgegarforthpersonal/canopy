@@ -10,7 +10,7 @@ import LayersIcon from '@mui/icons-material/Layers';
 import 'leaflet/dist/leaflet.css';
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
-import { DEFAULT_MAP_CENTER, LOCATION_TYPE_STYLE } from '../../config';
+import { DEFAULT_MAP_CENTER, styleForLocation } from '../../config';
 import FieldBoundaryOverlay from './FieldBoundaryOverlay';
 
 import L from 'leaflet';
@@ -207,12 +207,15 @@ export default function LocationMapPicker({
                   positions={locationBoundary.boundary_geometry.map(
                     ([lng, lat]) => [lat, lng] as [number, number]
                   )}
-                  pathOptions={{
-                    fillColor: LOCATION_TYPE_STYLE.area.fill,
-                    fillOpacity: LOCATION_TYPE_STYLE.area.fillOpacity,
-                    color: LOCATION_TYPE_STYLE.area.stroke,
-                    weight: LOCATION_TYPE_STYLE.area.weight,
-                  }}
+                  pathOptions={(() => {
+                    const style = styleForLocation({ location_type: 'area', color: locationBoundary.color });
+                    return {
+                      fillColor: style.fill,
+                      fillOpacity: style.fillOpacity,
+                      color: style.stroke,
+                      weight: style.weight,
+                    };
+                  })()}
                   interactive={false}
                 />
               )

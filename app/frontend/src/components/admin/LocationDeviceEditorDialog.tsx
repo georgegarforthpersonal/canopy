@@ -50,6 +50,7 @@ import { DEVICE_TYPE_LABELS } from '../../utils/deviceIcon';
 import { brandColors } from '../../theme';
 import { useResponsive } from '../../hooks/useResponsive';
 import LocationDrawMap, { type DrawableLocationType } from './LocationDrawMap';
+import LocationColorSelector from './LocationColorSelector';
 import SectorEditor from './SectorEditor';
 import LocationMapPicker from '../surveys/LocationMapPicker';
 
@@ -103,6 +104,8 @@ export default function LocationDeviceEditorDialog({
   // Location form
   const [name, setName] = useState('');
   const [locationType, setLocationType] = useState<LocationType>('none');
+  // Named map-colour key; null = the fixed per-type default.
+  const [color, setColor] = useState<string | null>(null);
   const [geometry, setGeometry] = useState<GeoJsonGeometry | null>(null);
   // Route sectors: divider fractions + per-sector names/ids kept in step.
   const [sectorDividers, setSectorDividers] = useState<number[]>([]);
@@ -128,6 +131,7 @@ export default function LocationDeviceEditorDialog({
     if (location) {
       setName(location.name);
       setLocationType(location.location_type ?? 'none');
+      setColor(location.color ?? null);
       setGeometry(location.geometry ?? null);
 
       // Rebuild the editable divider/name/id state from stored sectors.
@@ -154,6 +158,7 @@ export default function LocationDeviceEditorDialog({
     } else {
       setName('');
       setLocationType('none');
+      setColor(null);
       setGeometry(null);
       setSectorDividers([]);
       setSectorNames([]);
@@ -223,6 +228,8 @@ export default function LocationDeviceEditorDialog({
     const payload: LocationInput = {
       name: name.trim(),
       location_type: locationType,
+      // Always sent: null resets to the per-type default colour.
+      color,
       // Always send geometry so edits (including removals) persist; null for 'none'.
       geometry: isDrawable ? geometry : null,
     };
@@ -366,12 +373,20 @@ export default function LocationDeviceEditorDialog({
                   This location has no coordinates set. It can still be selected for surveys and sightings.
                 </Typography>
               ) : (
-                <LocationDrawMap
-                  locationType={locationType as DrawableLocationType}
-                  value={geometry}
-                  onChange={handleGeometryChange}
-                  referenceLocations={locationReferenceForMap}
-                />
+                <>
+                  <LocationColorSelector
+                    value={color}
+                    onChange={setColor}
+                    locationType={locationType}
+                  />
+                  <LocationDrawMap
+                    locationType={locationType as DrawableLocationType}
+                    color={color}
+                    value={geometry}
+                    onChange={handleGeometryChange}
+                    referenceLocations={locationReferenceForMap}
+                  />
+                </>
               )}
 
               {locationType === 'route' && geometry?.type === 'LineString' && (

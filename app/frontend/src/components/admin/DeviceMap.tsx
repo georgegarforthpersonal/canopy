@@ -22,7 +22,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import { LatLngBounds, LatLng } from 'leaflet';
-import type { GeoJsonGeometry, Position } from '../../utils/geometry';
+import { collectPositions } from '../../utils/geometry';
 import MapIcon from '@mui/icons-material/Map';
 import SatelliteIcon from '@mui/icons-material/Satellite';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
@@ -36,7 +36,7 @@ import type { Device, LocationType, LocationWithBoundary } from '../../services/
 import FieldBoundaryOverlay from '../surveys/FieldBoundaryOverlay';
 import MapEntityPopup from '../MapEntityPopup';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
-import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, LOCATION_TYPE_STYLE } from '../../config';
+import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM } from '../../config';
 import { DEVICE_COLORS, DEVICE_SVG, DEVICE_TYPE_LABELS, DEVICE_CHIP_COLORS, getDeviceIcon } from '../../utils/deviceIcon';
 
 interface DeviceMapProps {
@@ -53,21 +53,6 @@ interface DeviceMapProps {
   /** When set (and not read-only), clicking a location shape opens Edit/Delete. */
   onEditLocation?: (loc: LocationWithBoundary) => void;
   onDeleteLocation?: (loc: LocationWithBoundary) => void;
-}
-
-/** Recursively collect every [lng, lat] position from a GeoJSON geometry. */
-function collectPositions(geometry: GeoJsonGeometry | null | undefined): Position[] {
-  if (!geometry) return [];
-  const out: Position[] = [];
-  const walk = (coords: unknown) => {
-    if (Array.isArray(coords) && typeof coords[0] === 'number') {
-      out.push(coords as Position);
-    } else if (Array.isArray(coords)) {
-      coords.forEach(walk);
-    }
-  };
-  walk(geometry.coordinates);
-  return out;
 }
 
 /** Fit the map to every location boundary and device on first render. */
@@ -148,13 +133,16 @@ function DeviceLegendIcon({ type }: { type: Device['device_type'] }) {
   );
 }
 
-/** Legend swatch mirroring how each location type is drawn on the map. */
+// Neutral grey for the location-shape key: locations can carry their own
+// colour, so the key explains only the shapes, not the hues.
+const LEGEND_SHAPE_GREY = '#8a8a8a';
+
+/** Legend glyph for a location type's shape (colour-agnostic). */
 function LocationLegendIcon({ type }: { type: Exclude<LocationType, 'none'> }) {
-  const style = LOCATION_TYPE_STYLE[type];
   if (type === 'route') {
     return (
       <Box sx={{ width: 18, height: 18, display: 'flex', alignItems: 'center' }}>
-        <Box sx={{ width: '100%', borderTop: `3px solid ${style.stroke}`, borderRadius: 2 }} />
+        <Box sx={{ width: '100%', borderTop: `3px solid ${LEGEND_SHAPE_GREY}`, borderRadius: 2 }} />
       </Box>
     );
   }
@@ -164,12 +152,12 @@ function LocationLegendIcon({ type }: { type: Exclude<LocationType, 'none'> }) {
         width: type === 'point' ? 14 : 16,
         height: type === 'point' ? 14 : 16,
         borderRadius: type === 'point' ? '50%' : '3px',
-        border: `2px solid ${style.stroke}`,
+        border: `2px solid ${LEGEND_SHAPE_GREY}`,
         position: 'relative',
         overflow: 'hidden',
       }}
     >
-      <Box sx={{ position: 'absolute', inset: 0, bgcolor: style.fill, opacity: style.fillOpacity }} />
+      <Box sx={{ position: 'absolute', inset: 0, bgcolor: LEGEND_SHAPE_GREY, opacity: type === 'point' ? 0.8 : 0.2 }} />
     </Box>
   );
 }

@@ -46,7 +46,6 @@ import {
   surveyTypesAPI,
   locationsAPI,
   exportAPI,
-  getOrgSlug,
   locationDisplayName,
   type Surveyor,
   type SurveyType,
@@ -58,6 +57,7 @@ import {
   type DeviceType,
   type ScheduleCadence,
 } from '../services/api';
+import { orgHasGroups } from './groups/groupMeta';
 import LocationsDevicesManager from '../components/admin/LocationsDevicesManager';
 import RecordsExportPanel from '../components/admin/RecordsExportPanel';
 import ScheduledSurveysPanel from '../components/admin/ScheduledSurveysPanel';
@@ -111,9 +111,9 @@ export function AdminPage() {
   const toast = useToast();
   const surveyorHighlight = useRowHighlight();
   const surveyTypeHighlight = useRowHighlight();
-  // Survey scheduling is a Heal-only admin facility for now, matching the
-  // Heal-only Groups tab where scheduled surveys surface.
-  const showScheduling = getOrgSlug() === 'heal';
+  // Survey scheduling follows the Groups beta gate — scheduled surveys
+  // surface on the Groups tab, so the orgs match (see BETA_GROUPS in groupMeta).
+  const showScheduling = orgHasGroups();
   const [tabValue, setTabValue] = useState(0);
   // Panels look their index up by key, so the conditional Scheduled tab
   // can't silently shift the ones after it.

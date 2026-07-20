@@ -199,6 +199,44 @@ class TestFailureHandling:
         assert "Timed out" in rec.processing_error
 
 
+class TestIdleNudge:
+    def test_nudge_wakes_waiting_dispatcher(self):
+        async def scenario():
+            dispatcher = make_dispatcher(idle_poll_interval=60)
+            waiter = asyncio.create_task(dispatcher._wait_for_work(60))
+            await asyncio.sleep(0.01)
+            assert not waiter.done()
+            dispatcher.nudge()
+            await asyncio.wait_for(waiter, timeout=1)
+
+        asyncio.run(scenario())
+
+    def test_nudged_job_is_claimed_without_waiting_for_safety_poll(
+        self, committed_survey, monkeypatch
+    ):
+        import threading
+
+        db, survey = committed_survey
+        ran = threading.Event()
+        fake_kind = JobKind("audio", "audio_recording", lambda row_id: ran.set())
+        monkeypatch.setattr("services.job_queue.JOB_KINDS", [fake_kind])
+
+        async def scenario():
+            dispatcher = make_dispatcher(idle_poll_interval=60)
+            await dispatcher.start()
+            try:
+                await asyncio.sleep(0.05)  # initial tick sees an empty queue
+                add_recording(db, survey.id)
+                dispatcher.nudge()
+                # Claimed via the nudge: the safety poll is 60s away, so a
+                # missed nudge fails this wait rather than passing slowly.
+                assert await asyncio.to_thread(ran.wait, 5)
+            finally:
+                await dispatcher.stop()
+
+        asyncio.run(scenario())
+
+
 class TestStaleSweep:
     def test_sweep_requeues_stale_processing_rows(self, committed_survey):
         db, survey = committed_survey

@@ -31,6 +31,7 @@ import type { BreedingStatusCode, BreedingCategory, LocationWithBoundary } from 
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
 import { DEFAULT_MAP_CENTER } from '../../config';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from './breedingConstants';
+import { boundaryLatLngs } from './mapModeUtils';
 import FieldBoundaryOverlay from './FieldBoundaryOverlay';
 
 // Extended individual location with temp ID for tracking unsaved points
@@ -72,22 +73,34 @@ function FitBoundsToMarkers({ locations, surveyLocationId, locationsWithBoundari
   const map = useMap();
   // Capture whether there were locations when the component first mounted
   const hadInitialLocationsRef = useRef(locations.length > 0);
-  const hasFittedRef = useRef(false);
+  // 'locations' = framed the survey type's whole location set; upgraded to
+  // 'final' once markers or a chosen survey location can be fitted.
+  const fitRef = useRef<'none' | 'locations' | 'final'>('none');
 
   useEffect(() => {
-    // Only fit bounds if there were pre-existing locations when the modal opened
-    if (!hasFittedRef.current && hadInitialLocationsRef.current && locations.length > 0) {
-      const bounds = locations.map((loc) => [loc.latitude, loc.longitude] as [number, number]);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-      hasFittedRef.current = true;
-    }
+    if (fitRef.current !== 'final') {
+      // Only fit bounds to markers if there were pre-existing locations when the modal opened
+      if (hadInitialLocationsRef.current && locations.length > 0) {
+        const bounds = locations.map((loc) => [loc.latitude, loc.longitude] as [number, number]);
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        fitRef.current = 'final';
+      } else if (!hadInitialLocationsRef.current && surveyLocationId) {
+        const location = locationsWithBoundaries?.find((l) => l.id === surveyLocationId);
+        const bounds = boundaryLatLngs(location);
+        if (bounds.length > 0) {
+          map.fitBounds(bounds, { padding: [20, 20], maxZoom: 17 });
+          fitRef.current = 'final';
+        }
+      }
 
-    if (!hasFittedRef.current && !hadInitialLocationsRef.current && surveyLocationId && locationsWithBoundaries) {
-      const location = locationsWithBoundaries.find(l => l.id === surveyLocationId);
-      if (location?.boundary_geometry && location.boundary_geometry.length > 0) {
-        const bounds = location.boundary_geometry.map(([lng, lat]: [number, number]) => [lat, lng] as [number, number]);
-        map.fitBounds(bounds, { padding: [20, 20], maxZoom: 17 });
-        hasFittedRef.current = true;
+      if (fitRef.current === 'none' && !hadInitialLocationsRef.current && locationsWithBoundaries) {
+        const bounds = locationsWithBoundaries.flatMap(boundaryLatLngs);
+        if (bounds.length > 0) {
+          // animate:false so a re-render can't stop this fit partway via the
+          // cleanup below, leaving the map zoomed out.
+          map.fitBounds(bounds, { padding: [20, 20], maxZoom: 17, animate: false });
+          fitRef.current = 'locations';
+        }
       }
     }
     return () => { stopMapAnimation(map); };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -40,6 +40,7 @@ import type { DraftSighting } from '../components/surveys/SightingsEditor';
 import { PageHeader } from '../components/layout/PageHeader';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
+import { scopeBoundariesToLocations } from '../utils/scopeBoundaries';
 import { SPACING } from '../config/responsive';
 
 /**
@@ -256,6 +257,13 @@ export function NewSurveyPage() {
 
     fetchFilteredData();
   }, [selectedSurveyType]);
+
+  // The sightings map shows only the survey type's Available Locations,
+  // matching the location dropdown (`locations` is the by-survey-type list).
+  const scopedBoundaries = useMemo(
+    () => scopeBoundariesToLocations(locationsWithBoundaries, locations),
+    [locationsWithBoundaries, locations]
+  );
 
   // ============================================================================
   // Validation
@@ -787,7 +795,7 @@ export function NewSurveyPage() {
             breedingCodes={breedingCodes}
             onSightingsChange={handleSightingsChange}
             validationError={validationErrors.sightings}
-            locationsWithBoundaries={locationsWithBoundaries}
+            locationsWithBoundaries={scopedBoundaries}
             locationAtSightingLevel={locationAtSightingLevel}
             locations={locations}
             allowGeolocation={allowGeolocation}

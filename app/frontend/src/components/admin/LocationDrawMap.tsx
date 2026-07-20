@@ -21,7 +21,7 @@ import '../../utils/leafletDefaultIcon';
 
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
-import { DEFAULT_MAP_CENTER, LOCATION_TYPE_STYLE } from '../../config';
+import { DEFAULT_MAP_CENTER, styleForLocation } from '../../config';
 import {
   geometryAreaSqm,
   geometryLengthM,
@@ -64,6 +64,8 @@ function geometryToLayer(geometry: GeoJsonGeometry): L.Layer {
 
 interface GeomanControllerProps {
   locationType: DrawableLocationType;
+  /** Named colour key overriding the type default (null = default). */
+  color: string | null;
   /** Initial geometry to load when the controller mounts (null → start drawing). */
   value: GeoJsonGeometry | null;
   onChange: (geometry: GeoJsonGeometry | null) => void;
@@ -73,7 +75,7 @@ interface GeomanControllerProps {
  * Imperative geoman bridge. Mounted with a `key` that changes whenever the
  * location type changes or Clear is pressed, so each lifecycle starts clean.
  */
-function GeomanController({ locationType, value, onChange }: GeomanControllerProps) {
+function GeomanController({ locationType, color, value, onChange }: GeomanControllerProps) {
   const map = useMap();
   const layerRef = useRef<L.Layer | null>(null);
   const onChangeRef = useRef(onChange);
@@ -102,7 +104,7 @@ function GeomanController({ locationType, value, onChange }: GeomanControllerPro
   );
 
   useEffect(() => {
-    const style = LOCATION_TYPE_STYLE[locationType];
+    const style = styleForLocation({ location_type: locationType, color });
     const pathOptions = {
       color: style.stroke,
       fillColor: style.fill,
@@ -217,6 +219,8 @@ function GeomanController({ locationType, value, onChange }: GeomanControllerPro
 
 interface LocationDrawMapProps {
   locationType: DrawableLocationType;
+  /** Named colour key overriding the type default (null = default). */
+  color?: string | null;
   value: GeoJsonGeometry | null;
   onChange: (geometry: GeoJsonGeometry | null) => void;
   /** Other locations shown faintly for context and snapping. */
@@ -225,6 +229,7 @@ interface LocationDrawMapProps {
 
 export default function LocationDrawMap({
   locationType,
+  color = null,
   value,
   onChange,
   referenceLocations,
@@ -233,8 +238,9 @@ export default function LocationDrawMap({
   const [nonce, setNonce] = useState(0);
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
 
-  // Remount the geoman controller whenever the type changes or the user clears.
-  const drawKey = `${locationType}-${nonce}`;
+  // Remount the geoman controller whenever the type or colour changes or the
+  // user clears, so the drawing style always matches the current selection.
+  const drawKey = `${locationType}-${color ?? 'default'}-${nonce}`;
 
   const handleClear = () => {
     onChange(null);
@@ -356,7 +362,7 @@ export default function LocationDrawMap({
           {referenceLocations && referenceLocations.length > 0 && (
             <FieldBoundaryOverlay locations={referenceLocations} />
           )}
-          <GeomanController key={drawKey} locationType={locationType} value={value} onChange={onChange} />
+          <GeomanController key={drawKey} locationType={locationType} color={color} value={value} onChange={onChange} />
         </MapContainer>
       </Box>
     </Paper>

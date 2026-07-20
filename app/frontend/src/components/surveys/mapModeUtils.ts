@@ -1,6 +1,7 @@
 import type { DraftSighting } from './SightingsEditor';
 import type { DraftIndividualLocation } from './MultiLocationMapPicker';
-import type { Device } from '../../services/api';
+import type { Device, LocationWithBoundary } from '../../services/api';
+import { collectPositions } from '../../utils/geometry';
 
 /**
  * Represents a single marker on the map: one species at one GPS location.
@@ -261,4 +262,11 @@ export function removeMarker(
   }
 
   return result;
+}
+
+/** Every [lat, lng] vertex of a location's shape, for bounds fitting. */
+export function boundaryLatLngs(location: LocationWithBoundary | undefined): [number, number][] {
+  const positions = collectPositions(location?.geometry);
+  if (positions.length > 0) return positions.map(([lng, lat]) => [lat, lng]);
+  return (location?.boundary_geometry ?? []).map(([lng, lat]) => [lat, lng]);
 }

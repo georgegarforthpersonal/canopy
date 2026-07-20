@@ -4,12 +4,26 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  collectPositions,
   geometryAreaSqm,
   geometryLengthM,
   formatArea,
   formatLength,
   type GeoJsonGeometry,
 } from './geometry';
+
+describe('collectPositions', () => {
+  it('flattens positions from any geometry nesting depth', () => {
+    const point: GeoJsonGeometry = { type: 'Point', coordinates: [-2.4, 51.15] };
+    const polygon: GeoJsonGeometry = {
+      type: 'Polygon',
+      coordinates: [[[-2.4, 51.15], [-2.39, 51.15], [-2.39, 51.16], [-2.4, 51.15]]],
+    };
+    expect(collectPositions(point)).toEqual([[-2.4, 51.15]]);
+    expect(collectPositions(polygon)).toHaveLength(4);
+    expect(collectPositions(null)).toEqual([]);
+  });
+});
 
 describe('geometryAreaSqm', () => {
   it('measures a roughly 1km x 1km polygon near 1,000,000 m²', () => {

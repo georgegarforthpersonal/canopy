@@ -15,6 +15,7 @@ import { getSightingsGridConfig } from '../components/surveys/sightingsGridConfi
 import { getSpeciesIcon } from '../config';
 import { PageHeader } from '../components/layout/PageHeader';
 import { getSurveyorName, formatDate } from '../utils/formatters';
+import { scopeBoundariesToLocations } from '../utils/scopeBoundaries';
 import { ImageViewerModal, type ImageViewerItem } from '../components/ImageViewerModal';
 import ViewModeToggle from '../components/ViewModeToggle';
 import { SPACING } from '../config/responsive';
@@ -91,6 +92,12 @@ export function SurveyDetailPage() {
   const [species, setSpecies] = useState<Species[]>([]);
   const [breedingCodes, setBreedingCodes] = useState<BreedingStatusCode[]>([]);
   const [locationsWithBoundaries, setLocationsWithBoundaries] = useState<LocationWithBoundary[]>([]);
+  // The sightings map shows only the survey type's Available Locations,
+  // matching the location dropdown (`locations` is the by-survey-type list).
+  const scopedBoundaries = useMemo(
+    () => scopeBoundariesToLocations(locationsWithBoundaries, locations),
+    [locationsWithBoundaries, locations]
+  );
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1030,7 +1037,7 @@ export function SurveyDetailPage() {
               breedingCodes={breedingCodes}
               onSightingsChange={handleSightingsChange}
               validationError={validationErrors.sightings}
-              locationsWithBoundaries={locationsWithBoundaries}
+              locationsWithBoundaries={scopedBoundaries}
               locationAtSightingLevel={locationAtSightingLevel}
               locations={locations}
               allowGeolocation={allowGeolocation}
@@ -1067,7 +1074,7 @@ export function SurveyDetailPage() {
                   }))}
                   species={species}
                   breedingCodes={breedingCodes}
-                  locationsWithBoundaries={locationsWithBoundaries}
+                  locationsWithBoundaries={scopedBoundaries}
                   readOnly
                   surveyLocationId={survey.location_id}
                   devices={visibleDevices}

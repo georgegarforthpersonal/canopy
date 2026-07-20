@@ -6,7 +6,7 @@ import { useAuth, usePermissions } from '../../context/AuthContext';
 import { UserMenu } from './UserMenu';
 import healLogo from '../../assets/heal_logo.jpg';
 import { showLogo } from '../../theme';
-import { getOrgSlug } from '../../services/api';
+import { orgHasGroups } from '../../pages/groups/groupMeta';
 
 /**
  * TopNavBar - Main navigation bar with logo and navigation icons
@@ -27,8 +27,8 @@ export function TopNavBar() {
   const { logout } = useAuth();
   const { canAccessAdmin } = usePermissions();
 
-  // Groups is a Heal-only beta for now.
-  const showGroups = getOrgSlug() === 'heal';
+  // Groups is a beta gated per organisation (see BETA_GROUPS in groupMeta).
+  const showGroups = orgHasGroups();
 
   const navItems = [
     {

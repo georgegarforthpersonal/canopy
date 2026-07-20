@@ -26,8 +26,6 @@ import { getSpeciesDisplayName } from '../../config';
 export interface CumulativeSummary {
   /** Total unique species recorded all-time. */
   total: number;
-  /** Unique species first recorded in the latest season (calendar year). */
-  seasonDelta: number;
 }
 
 interface CumulativeSpeciesChartProps {
@@ -104,14 +102,10 @@ function prepareChartData(data: CumulativeSpeciesDataPoint[]): {
 }
 
 function summarise(data: CumulativeSpeciesDataPoint[], speciesType: string): CumulativeSummary {
-  if (data.length === 0) return { total: 0, seasonDelta: 0 };
+  if (data.length === 0) return { total: 0 };
   const forType = data.filter((d) => d.type === speciesType);
   const total = forType.reduce((max, d) => Math.max(max, d.cumulative_count), 0);
-  const latestYear = Math.max(...forType.map((d) => dayjs(d.date).year()));
-  const seasonDelta = forType
-    .filter((d) => dayjs(d.date).year() === latestYear)
-    .reduce((sum, d) => sum + d.new_species.length, 0);
-  return { total, seasonDelta };
+  return { total };
 }
 
 export default function CumulativeSpeciesChart({
