@@ -352,6 +352,26 @@ async def create_survey(
         Created survey with ID
     """
     try:
+        # A completed survey whose date falls inside an open scheduled slot's
+        # window records that week: the new row adopts the slot's window and
+        # the placeholder is removed. Otherwise a survey entered via "new
+        # survey" (instead of the record flow) leaves the slot showing
+        # "needs survey" forever.
+        adopted_slot: Optional[Survey] = None
+        if survey.status == SurveyStatus.completed and survey.survey_type_id is not None:
+            adopted_slot = (
+                db.query(Survey)
+                .filter(
+                    Survey.organisation_id == org.id,
+                    Survey.survey_type_id == survey.survey_type_id,
+                    Survey.status == SurveyStatus.scheduled,
+                    col(Survey.scheduled_window_start) <= survey.date,
+                    col(Survey.scheduled_window_end) >= survey.date,
+                )
+                .order_by(col(Survey.scheduled_window_start), col(Survey.id))
+                .first()
+            )
+
         # Create survey (without surveyor_ids which isn't a field on the model)
         db_survey = Survey(
             date=survey.date,
@@ -365,8 +385,15 @@ async def create_survey(
             device_id=survey.device_id,
             survey_type_id=survey.survey_type_id,
             status=survey.status,
-            organisation_id=org.id
+            organisation_id=org.id,
+            scheduled_window_start=adopted_slot.scheduled_window_start if adopted_slot else None,
+            scheduled_window_end=adopted_slot.scheduled_window_end if adopted_slot else None,
         )
+        if adopted_slot is not None:
+            db.query(SurveySurveyor).filter(
+                SurveySurveyor.survey_id == adopted_slot.id
+            ).delete()
+            db.delete(adopted_slot)
         db.add(db_survey)
         db.flush()  # Get the ID without committing
 
@@ -393,6 +420,8 @@ async def create_survey(
             "location_id": db_survey.location_id,
             "device_id": db_survey.device_id,
             "status": db_survey.status,
+            "scheduled_window_start": db_survey.scheduled_window_start,
+            "scheduled_window_end": db_survey.scheduled_window_end,
             "survey_type_id": db_survey.survey_type_id,
             "surveyor_ids": survey.surveyor_ids
         }

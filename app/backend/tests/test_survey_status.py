@@ -262,6 +262,193 @@ class TestScheduleSurveys:
         assert created[1]["scheduled_window_start"] == "2026-06-08"
         assert created[1]["scheduled_window_end"] == "2026-06-14"
 
+    def test_fresh_completed_survey_adopts_open_weekly_slot(
+        self, client: TestClient, auth_headers: dict, create_survey_type, create_surveyor
+    ):
+        """A survey entered via "new survey" whose date falls inside an open
+        weekly slot's window records that week: it adopts the slot's window
+        and the placeholder is removed."""
+        surveyor = create_surveyor()
+        survey_type = create_survey_type(name="Butterflies", schedule_cadence="weekly")
+        client.post(
+            "/api/surveys/schedule",
+            json={"survey_type_id": survey_type.id, "dates": ["2026-06-01"]},
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/surveys",
+            json={
+                "date": "2026-06-04",
+                "survey_type_id": survey_type.id,
+                "surveyor_ids": [surveyor.id],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["status"] == "completed"
+        assert body["scheduled_window_start"] == "2026-06-01"
+        assert body["scheduled_window_end"] == "2026-06-07"
+
+        scheduled = client.get("/api/surveys?survey_status=scheduled", headers=auth_headers).json()
+        assert scheduled["total"] == 0
+        completed = client.get("/api/surveys?survey_status=completed", headers=auth_headers).json()
+        assert completed["total"] == 1
+
+    def test_adopting_slot_keeps_actual_surveyors(
+        self, client: TestClient, auth_headers: dict, create_survey_type, create_surveyor
+    ):
+        """The recorded survey keeps the people who actually did it, not the
+        slot's pre-assigned sign-ups (whose associations must not linger)."""
+        assigned = create_surveyor()
+        actual = create_surveyor()
+        survey_type = create_survey_type(name="Butterflies", schedule_cadence="weekly")
+        client.post(
+            "/api/surveys/schedule",
+            json={
+                "survey_type_id": survey_type.id,
+                "surveyor_ids": [assigned.id],
+                "dates": ["2026-06-01"],
+            },
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/surveys",
+            json={
+                "date": "2026-06-04",
+                "survey_type_id": survey_type.id,
+                "surveyor_ids": [actual.id],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["surveyor_ids"] == [actual.id]
+
+    def test_no_adoption_outside_window(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """A completed survey dated outside every open window stays unlinked
+        and the slot keeps waiting."""
+        survey_type = create_survey_type(name="Butterflies", schedule_cadence="weekly")
+        client.post(
+            "/api/surveys/schedule",
+            json={"survey_type_id": survey_type.id, "dates": ["2026-06-01"]},
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/surveys",
+            json={"date": "2026-06-09", "survey_type_id": survey_type.id, "surveyor_ids": []},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["scheduled_window_start"] is None
+
+        scheduled = client.get("/api/surveys?survey_status=scheduled", headers=auth_headers).json()
+        assert scheduled["total"] == 1
+
+    def test_no_adoption_across_survey_types(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """A survey of another type never records a different type's slot."""
+        butterflies = create_survey_type(name="Butterflies", schedule_cadence="weekly")
+        moths = create_survey_type(name="Moths", schedule_cadence="weekly")
+        client.post(
+            "/api/surveys/schedule",
+            json={"survey_type_id": butterflies.id, "dates": ["2026-06-01"]},
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/surveys",
+            json={"date": "2026-06-04", "survey_type_id": moths.id, "surveyor_ids": []},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        assert resp.json()["scheduled_window_start"] is None
+
+        scheduled = client.get("/api/surveys?survey_status=scheduled", headers=auth_headers).json()
+        assert scheduled["total"] == 1
+
+    def test_scheduled_create_never_adopts(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """Creating another scheduled survey inside the window must not
+        swallow the existing slot — only recorded (completed) surveys do."""
+        survey_type = create_survey_type(name="Butterflies", schedule_cadence="weekly")
+        client.post(
+            "/api/surveys/schedule",
+            json={"survey_type_id": survey_type.id, "dates": ["2026-06-01"]},
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/surveys",
+            json={
+                "date": "2026-06-04",
+                "status": "scheduled",
+                "survey_type_id": survey_type.id,
+                "surveyor_ids": [],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+
+        scheduled = client.get("/api/surveys?survey_status=scheduled", headers=auth_headers).json()
+        assert scheduled["total"] == 2
+
+    def test_day_precise_slots_are_never_adopted(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """Date-cadence slots have no window; a completed survey on the same
+        day is a legitimate extra survey and must not consume the slot."""
+        survey_type = create_survey_type(name="Birds", schedule_cadence="date")
+        client.post(
+            "/api/surveys/schedule",
+            json={"survey_type_id": survey_type.id, "dates": ["2026-06-01"]},
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/surveys",
+            json={"date": "2026-06-01", "survey_type_id": survey_type.id, "surveyor_ids": []},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+
+        scheduled = client.get("/api/surveys?survey_status=scheduled", headers=auth_headers).json()
+        assert scheduled["total"] == 1
+
+    def test_only_one_slot_adopted_per_week(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """Two surveys in the same week: the first records the slot, the
+        second is an ordinary extra survey."""
+        survey_type = create_survey_type(name="Butterflies", schedule_cadence="weekly")
+        client.post(
+            "/api/surveys/schedule",
+            json={"survey_type_id": survey_type.id, "dates": ["2026-06-01"]},
+            headers=auth_headers,
+        )
+
+        first = client.post(
+            "/api/surveys",
+            json={"date": "2026-06-02", "survey_type_id": survey_type.id, "surveyor_ids": []},
+            headers=auth_headers,
+        ).json()
+        second = client.post(
+            "/api/surveys",
+            json={"date": "2026-06-03", "survey_type_id": survey_type.id, "surveyor_ids": []},
+            headers=auth_headers,
+        ).json()
+
+        assert first["scheduled_window_start"] == "2026-06-01"
+        assert second["scheduled_window_start"] is None
+        completed = client.get("/api/surveys?survey_status=completed", headers=auth_headers).json()
+        assert completed["total"] == 2
+
     def test_weekly_window_surfaces_on_list(
         self, client: TestClient, auth_headers: dict, create_survey_type
     ):
