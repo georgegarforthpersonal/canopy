@@ -13,7 +13,7 @@
  */
 import { Box, Button, Typography } from '@mui/material';
 import { Add, CheckCircleOutline, ChevronRight, WarningAmberRounded } from '@mui/icons-material';
-import type { Survey, Surveyor } from '../../services/api';
+import type { ScheduledSurvey, Surveyor } from '../../services/api';
 import { usePermissions } from '../../context/AuthContext';
 import SelfSignupButton from './SelfSignupButton';
 import SurveyorAvatars from './SurveyorAvatars';
@@ -21,21 +21,21 @@ import { recordButtonSx, groupColors } from '../../pages/groups/groupsTokens';
 import { formatSurveyDate } from '../../pages/groups/surveyState';
 
 interface SurveyWorklistRowProps {
-  survey: Survey;
+  slot: ScheduledSurvey;
   state: 'needs-survey' | 'due-this-week' | 'upcoming' | 'recorded';
   surveyors: Surveyor[];
   /** Surveyor ids assigned this session — rendered green. */
   greenIds?: Set<number>;
-  /** Open the survey to record sightings. */
-  onAddSurvey: (survey: Survey) => void;
+  /** Start recording a survey for this slot. */
+  onAddSurvey: (slot: ScheduledSurvey) => void;
   /** Called after a one-click sign-up/withdraw with the new surveyor ids. */
-  onSignupSaved: (surveyId: number, surveyorIds: number[]) => void;
-  /** Open a recorded survey read-only (recorded rows only). */
-  onOpen?: (survey: Survey) => void;
+  onSignupSaved: (slotId: number, surveyorIds: number[]) => void;
+  /** Open the slot's recorded survey read-only (recorded rows only). */
+  onOpen?: (slot: ScheduledSurvey) => void;
 }
 
 export default function SurveyWorklistRow({
-  survey,
+  slot,
   state,
   surveyors,
   greenIds,
@@ -59,7 +59,7 @@ export default function SurveyWorklistRow({
     <Button
       variant="contained"
       startIcon={<Add sx={{ fontSize: 18 }} />}
-      onClick={() => onAddSurvey(survey)}
+      onClick={() => onAddSurvey(slot)}
       sx={recordButtonSx}
     >
       Record survey
@@ -67,12 +67,12 @@ export default function SurveyWorklistRow({
   ) : null;
 
   const assignButton = (
-    <SelfSignupButton survey={survey} assigned={surveyors} onSaved={onSignupSaved} />
+    <SelfSignupButton slot={slot} assigned={surveyors} onSaved={onSignupSaved} />
   );
 
   return (
     <Box
-      onClick={recorded && onOpen ? () => onOpen(survey) : undefined}
+      onClick={recorded && onOpen ? () => onOpen(slot) : undefined}
       sx={{
         display: 'flex',
         flexDirection: { xs: stacked ? 'column' : 'row', sm: 'row' },
@@ -90,11 +90,11 @@ export default function SurveyWorklistRow({
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1 }}>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
-            {formatSurveyDate(survey)}
+            {formatSurveyDate(slot)}
           </Typography>
-          {survey.location_name && (
+          {slot.location_name && (
             <Typography sx={{ fontSize: 13, color: groupColors.textMuted, mt: 0.25 }} noWrap>
-              {survey.location_name}
+              {slot.location_name}
             </Typography>
           )}
           {needsSurvey && (

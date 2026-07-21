@@ -22,24 +22,24 @@ from sqlalchemy.orm import Session, aliased
 from sqlalchemy import desc, func, text, case
 from sqlmodel import col
 from database.connection import get_db
-from auth import Principal, require_editor, require_user
+from auth import require_editor
 from dependencies import get_current_organisation
 import logging
 from models import (
-    Survey, SurveyRead, SurveyCreate, SurveyUpdate, SurveyStatus, SurveyScheduleCreate,
-    ScheduleCadence,
+    Survey, SurveyRead, SurveyCreate, SurveyUpdate,
+    ScheduledSurvey,
     Sighting, SightingCreate, SightingUpdate, SightingWithDetails,
-    Species, SpeciesType, Location, Surveyor, SurveySurveyor,
+    Species, SpeciesType, Location, SurveySurveyor,
+    SurveyType,
     BreedingStatusCode, BreedingStatusCodeRead,
     IndividualLocationCreate, IndividualLocationRead, SightingWithIndividuals,
     SightingImage, SightingAudioClip,
     AudioRecording, AudioDetection,
     CameraTrapImage,
-    SurveyType,
     Organisation
 )
-from services.accounts import ensure_linked_surveyor
 from services.r2_storage import delete_media_file
+from services.scheduled_link import link_is_valid, relink_survey
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,6 @@ async def get_surveys(
     start_date: Optional[date] = Query(None, description="Filter surveys from this date (inclusive)"),
     end_date: Optional[date] = Query(None, description="Filter surveys until this date (inclusive)"),
     survey_type_id: Optional[int] = Query(None, description="Filter by survey type ID"),
-    survey_status: Optional[SurveyStatus] = Query(None, description="Filter by lifecycle status"),
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db)
 ) -> dict[str, Any]:
@@ -149,10 +148,6 @@ async def get_surveys(
         # Apply survey type filter
         if survey_type_id:
             query = query.filter(Survey.survey_type_id == survey_type_id)
-
-        # Apply lifecycle status filter
-        if survey_status:
-            query = query.filter(Survey.status == survey_status)
 
         # Get total count for pagination metadata
         total = query.count()
@@ -250,9 +245,7 @@ async def get_surveys(
                 "notes": survey.notes,
                 "location_id": survey.location_id,
                 "device_id": survey.device_id,
-                "status": survey.status,
-                "scheduled_window_start": survey.scheduled_window_start,
-                "scheduled_window_end": survey.scheduled_window_end,
+                "scheduled_survey_id": survey.scheduled_survey_id,
                 "surveyor_ids": surveyor_ids_map.get(survey.id, []),
                 "sightings_count": sightings_count_map.get(survey.id, 0),
                 "species_breakdown": species_breakdown_map.get(survey.id, []),
@@ -328,63 +321,10 @@ async def get_survey(
         "location_id": survey.location_id,
         "location_name": location_name,
         "device_id": survey.device_id,
-        "status": survey.status,
-        "scheduled_window_start": survey.scheduled_window_start,
-        "scheduled_window_end": survey.scheduled_window_end,
+        "scheduled_survey_id": survey.scheduled_survey_id,
         "surveyor_ids": surveyor_ids_list,
         "survey_type_id": survey.survey_type_id
     }
-
-
-def _find_open_slot(
-    db: Session,
-    org_id: Optional[int],
-    survey_type_id: Optional[int],
-    survey_date: date,
-    location_id: Optional[int],
-) -> Optional[Survey]:
-    """The open scheduled slot a completed survey records, if any.
-
-    A slot qualifies when its scheduling window contains the survey's date
-    (same organisation and survey type) and it is still an empty placeholder —
-    a slot that already carries sightings is an in-progress recording and is
-    never touched (deleting it would cascade-delete those sightings). Slots
-    scheduled for the survey's own location, or for no particular location,
-    are preferred over other locations' slots; a different-location slot is
-    still adopted as a last resort so the week never shows "needs survey"
-    over a location mismatch.
-    """
-    if survey_type_id is None:
-        return None
-    location_preference = case(
-        (col(Survey.location_id).is_(None), 0),
-        (Survey.location_id == location_id, 0),
-        else_=1,
-    )
-    return (  # type: ignore[no-any-return]
-        db.query(Survey)
-        .filter(
-            Survey.organisation_id == org_id,
-            Survey.survey_type_id == survey_type_id,
-            Survey.status == SurveyStatus.scheduled,
-            col(Survey.scheduled_window_start) <= survey_date,
-            col(Survey.scheduled_window_end) >= survey_date,
-            ~db.query(Sighting.id).filter(Sighting.survey_id == Survey.id).exists(),
-        )
-        .order_by(location_preference, col(Survey.scheduled_window_start), col(Survey.id))
-        .first()
-    )
-
-
-def _adopt_slot(db: Session, survey: Survey, slot: Survey) -> None:
-    """Record `slot`'s week as `survey`: the survey takes over the slot's
-    scheduling window and the placeholder is deleted, along with its
-    pre-assigned surveyor sign-ups (the recorded survey keeps the people who
-    actually did it)."""
-    survey.scheduled_window_start = slot.scheduled_window_start
-    survey.scheduled_window_end = slot.scheduled_window_end
-    db.query(SurveySurveyor).filter(SurveySurveyor.survey_id == slot.id).delete()
-    db.delete(slot)
 
 
 @router.post("", response_model=SurveyRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_editor)])
@@ -402,6 +342,19 @@ async def create_survey(
     Returns:
         Created survey with ID
     """
+    # An explicit slot (the record flow) is honored without window validation —
+    # an overdue week may be written up after its window has passed. It still
+    # must be the org's own slot, for the same survey type.
+    if survey.scheduled_survey_id is not None:
+        slot = db.query(ScheduledSurvey).filter(
+            ScheduledSurvey.id == survey.scheduled_survey_id,
+            ScheduledSurvey.organisation_id == org.id,
+        ).first()
+        if slot is None:
+            raise HTTPException(status_code=400, detail="Scheduled survey not found")
+        if slot.survey_type_id != survey.survey_type_id:
+            raise HTTPException(status_code=400, detail="Scheduled survey is for a different survey type")
+
     try:
         # Create survey (without surveyor_ids which isn't a field on the model)
         db_survey = Survey(
@@ -415,21 +368,16 @@ async def create_survey(
             location_id=survey.location_id,
             device_id=survey.device_id,
             survey_type_id=survey.survey_type_id,
-            status=survey.status,
+            scheduled_survey_id=survey.scheduled_survey_id,
             organisation_id=org.id,
         )
 
-        # A completed survey whose date falls inside an open scheduled slot's
-        # window records that week: the new row adopts the slot's window and
-        # the placeholder is removed. Otherwise a survey entered via "new
-        # survey" (instead of the record flow) leaves the slot showing
-        # "needs survey" forever.
-        if survey.status == SurveyStatus.completed:
-            adopted_slot = _find_open_slot(
-                db, org.id, survey.survey_type_id, survey.date, survey.location_id
-            )
-            if adopted_slot is not None:
-                _adopt_slot(db, db_survey, adopted_slot)
+        # Without an explicit slot, the survey records the open slot whose
+        # window contains its date, if any — otherwise a survey entered via
+        # "new survey" (instead of the record flow) would leave the week
+        # showing "needs survey" forever.
+        if survey.scheduled_survey_id is None:
+            relink_survey(db, db_survey)
 
         db.add(db_survey)
         db.flush()  # Get the ID without committing
@@ -456,9 +404,7 @@ async def create_survey(
             "notes": db_survey.notes,
             "location_id": db_survey.location_id,
             "device_id": db_survey.device_id,
-            "status": db_survey.status,
-            "scheduled_window_start": db_survey.scheduled_window_start,
-            "scheduled_window_end": db_survey.scheduled_window_end,
+            "scheduled_survey_id": db_survey.scheduled_survey_id,
             "survey_type_id": db_survey.survey_type_id,
             "surveyor_ids": survey.surveyor_ids
         }
@@ -466,96 +412,6 @@ async def create_survey(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create survey: {str(e)}")
-
-
-@router.post(
-    "/schedule",
-    response_model=List[SurveyRead],
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_editor)],
-)
-async def schedule_surveys(
-    schedule: SurveyScheduleCreate,
-    org: Organisation = Depends(get_current_organisation),
-    db: Session = Depends(get_db)
-) -> List[dict[str, Any]]:
-    """
-    Bulk-create a recurring series of scheduled surveys.
-
-    Every survey shares the same survey type, location and pre-assigned
-    surveyors, and is created with status 'scheduled' (one per date). The whole
-    series is created in a single transaction.
-
-    The survey type's ``schedule_cadence`` decides how each date is interpreted:
-    a 'date' type schedules a specific day, a 'weekly' type schedules the whole
-    week beginning on that date (the survey may be carried out any day within it).
-    """
-    # The cadence is a property of the survey type; look it up once. Outside
-    # the try block so the 404 isn't rewrapped as a 500.
-    cadence = ScheduleCadence.date
-    if schedule.survey_type_id is not None:
-        survey_type = db.query(SurveyType).filter(
-            SurveyType.id == schedule.survey_type_id,
-            SurveyType.organisation_id == org.id,
-        ).first()
-        if survey_type is None:
-            raise HTTPException(status_code=404, detail="Survey type not found")
-        cadence = survey_type.schedule_cadence
-
-    try:
-        created: list[Survey] = []
-        for survey_date in schedule.dates:
-            if cadence == ScheduleCadence.weekly:
-                window_start: Optional[date] = survey_date
-                window_end: Optional[date] = survey_date + timedelta(days=6)
-            else:
-                window_start = None
-                window_end = None
-
-            db_survey = Survey(
-                date=survey_date,
-                notes=schedule.notes,
-                location_id=schedule.location_id,
-                survey_type_id=schedule.survey_type_id,
-                status=SurveyStatus.scheduled,
-                scheduled_window_start=window_start,
-                scheduled_window_end=window_end,
-                organisation_id=org.id,
-            )
-            db.add(db_survey)
-            db.flush()  # Get the ID without committing
-
-            for surveyor_id in schedule.surveyor_ids:
-                db.add(SurveySurveyor(survey_id=db_survey.id, surveyor_id=surveyor_id))
-
-            created.append(db_survey)
-
-        db.commit()
-
-        return [
-            {
-                "id": s.id,
-                "date": s.date,
-                "start_time": s.start_time,
-                "end_time": s.end_time,
-                "sun_percentage": s.sun_percentage,
-                "temperature_celsius": s.temperature_celsius,
-                "conditions_met": s.conditions_met,
-                "notes": s.notes,
-                "location_id": s.location_id,
-                "device_id": s.device_id,
-                "status": s.status,
-                "scheduled_window_start": s.scheduled_window_start,
-                "scheduled_window_end": s.scheduled_window_end,
-                "survey_type_id": s.survey_type_id,
-                "surveyor_ids": list(schedule.surveyor_ids),
-            }
-            for s in created
-        ]
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to schedule surveys: {str(e)}")
 
 
 @router.put("/{survey_id}", response_model=SurveyRead, dependencies=[Depends(require_editor)])
@@ -585,7 +441,16 @@ async def update_survey(
     if not db_survey:
         raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
 
-    was_completed = db_survey.status == SurveyStatus.completed
+    # An out-of-window link can only have been set explicitly (the record flow
+    # writing up an overdue week after its window passed) — auto-managed links
+    # are window-valid at every save. Capture which kind this is before the
+    # edit lands.
+    current_slot = (
+        db.get(ScheduledSurvey, db_survey.scheduled_survey_id)
+        if db_survey.scheduled_survey_id is not None
+        else None
+    )
+    link_was_valid = link_is_valid(current_slot, db_survey)
 
     # Update only the fields that were provided
     update_data = survey.model_dump(exclude_unset=True, exclude={'surveyor_ids'})
@@ -593,27 +458,15 @@ async def update_survey(
     for field, value in update_data.items():
         setattr(db_survey, field, value)
 
-    # Lifecycle transitions are always explicit: a survey moves from scheduled
-    # to completed (or cancelled) only when the payload carries `status` — the
-    # record flow sends status='completed'. Editing any other field, whatever
-    # the combination, never changes the lifecycle; the same field edit can
-    # mean "fix the plan" or "write up the survey", and only the caller knows
-    # which, so it must say so.
-
-    # Becoming completed records the week, exactly as a fresh completed create
-    # does: a survey without a scheduling window of its own adopts the open
-    # slot whose window contains its date. A survey that already has a window
-    # IS the week's slot (the record flow), so there is nothing to adopt.
-    if (
-        db_survey.status == SurveyStatus.completed
-        and not was_completed
-        and db_survey.scheduled_window_start is None
+    # Editing the fields that decide which slot this survey records re-runs
+    # linking. It is idempotent and non-destructive: a still-valid link is
+    # kept, a stale one is dropped, and the survey (re)links to whichever open
+    # slot's window now contains its date. An explicit out-of-window link is
+    # pinned — re-running would silently detach it over an unrelated edit.
+    if ('date' in update_data or 'location_id' in update_data) and (
+        db_survey.scheduled_survey_id is None or link_was_valid
     ):
-        slot = _find_open_slot(
-            db, org.id, db_survey.survey_type_id, db_survey.date, db_survey.location_id
-        )
-        if slot is not None:
-            _adopt_slot(db, db_survey, slot)
+        relink_survey(db, db_survey)
 
     # Update surveyor associations if provided
     if survey.surveyor_ids is not None:
@@ -651,95 +504,10 @@ async def update_survey(
         "notes": db_survey.notes,
         "location_id": db_survey.location_id,
         "device_id": db_survey.device_id,
-        "status": db_survey.status,
-        "scheduled_window_start": db_survey.scheduled_window_start,
-        "scheduled_window_end": db_survey.scheduled_window_end,
+        "scheduled_survey_id": db_survey.scheduled_survey_id,
         "survey_type_id": db_survey.survey_type_id,
         "surveyor_ids": surveyor_ids_list
     }
-
-
-def _get_scheduled_survey_for_signup(db: Session, survey_id: int, org_id: int) -> Survey:
-    survey = db.query(Survey).filter(
-        Survey.id == survey_id,
-        Survey.organisation_id == org_id,
-    ).first()
-    if not survey:
-        raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
-    if survey.status != SurveyStatus.scheduled:
-        raise HTTPException(status_code=400, detail="You can only sign up to scheduled surveys")
-    return survey  # type: ignore[no-any-return]
-
-
-def _get_or_create_own_surveyor(db: Session, principal: Principal, org_id: int) -> Surveyor:
-    """The surveyor linked to the caller's account.
-
-    Normally created at registration (accept-invite); this is a safety net
-    for accounts that predate that, e.g. bootstrap admins or backfilled users.
-    """
-    surveyor = ensure_linked_surveyor(db, principal.user, org_id)
-    db.commit()
-    db.refresh(surveyor)
-    return surveyor
-
-
-@router.post("/{survey_id}/signup")
-async def sign_up_to_survey(
-    survey_id: int,
-    org: Organisation = Depends(get_current_organisation),
-    db: Session = Depends(get_db),
-    principal: Principal = Depends(require_user),
-) -> dict[str, Any]:
-    """
-    Add *yourself* to a scheduled survey (any role, including viewers).
-
-    Unlike PUT /surveys/{id}, this can only touch the caller's own
-    membership: it adds the surveyor linked to their account (created on
-    first use), leaving everything else about the survey unchanged.
-    """
-    survey = _get_scheduled_survey_for_signup(db, survey_id, org.id)  # type: ignore[arg-type]
-    surveyor = _get_or_create_own_surveyor(db, principal, org.id)  # type: ignore[arg-type]
-
-    already = db.query(SurveySurveyor).filter(
-        SurveySurveyor.survey_id == survey.id,
-        SurveySurveyor.surveyor_id == surveyor.id,
-    ).first()
-    if not already:
-        db.add(SurveySurveyor(survey_id=survey.id, surveyor_id=surveyor.id))
-        db.commit()
-
-    surveyor_ids = [
-        sid for (sid,) in db.query(SurveySurveyor.surveyor_id)
-        .filter(SurveySurveyor.survey_id == survey.id)
-        .order_by(SurveySurveyor.surveyor_id).all()
-    ]
-    return {"survey_id": survey.id, "surveyor_id": surveyor.id, "surveyor_ids": surveyor_ids}
-
-
-@router.delete("/{survey_id}/signup")
-async def withdraw_from_survey(
-    survey_id: int,
-    org: Organisation = Depends(get_current_organisation),
-    db: Session = Depends(get_db),
-    principal: Principal = Depends(require_user),
-) -> dict[str, Any]:
-    """Remove *yourself* from a scheduled survey you signed up to."""
-    survey = _get_scheduled_survey_for_signup(db, survey_id, org.id)  # type: ignore[arg-type]
-
-    surveyor = db.query(Surveyor).filter(Surveyor.user_id == principal.user_id).first()
-    if surveyor:
-        db.query(SurveySurveyor).filter(
-            SurveySurveyor.survey_id == survey.id,
-            SurveySurveyor.surveyor_id == surveyor.id,
-        ).delete()
-        db.commit()
-
-    surveyor_ids = [
-        sid for (sid,) in db.query(SurveySurveyor.surveyor_id)
-        .filter(SurveySurveyor.survey_id == survey.id)
-        .order_by(SurveySurveyor.surveyor_id).all()
-    ]
-    return {"survey_id": survey.id, "surveyor_id": surveyor.id if surveyor else None, "surveyor_ids": surveyor_ids}
 
 
 @router.delete("/{survey_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_editor)])

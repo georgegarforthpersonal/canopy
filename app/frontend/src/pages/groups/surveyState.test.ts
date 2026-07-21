@@ -1,72 +1,65 @@
 import { describe, it, expect } from 'vitest';
-import type { Survey } from '../../services/api';
-import { deriveSurveyState, buildWorklist, nextScheduledSurvey, formatWeekRange, recordedThisWeek } from './surveyState';
+import type { ScheduledSurvey } from '../../services/api';
+import { deriveSlotState, buildWorklist, nextScheduledSurvey, formatWeekRange, recordedThisWeek } from './surveyState';
 
 const TODAY = '2026-06-25';
 
-function survey(partial: Partial<Survey> & { id: number; date: string }): Survey {
+function slot(partial: Partial<ScheduledSurvey> & { id: number; window_start: string }): ScheduledSurvey {
   return {
-    status: 'scheduled',
-    scheduled_window_start: null,
-    scheduled_window_end: null,
-    start_time: null,
-    end_time: null,
-    sun_percentage: null,
-    temperature_celsius: null,
-    conditions_met: null,
-    notes: null,
+    survey_type_id: 1,
     location_id: null,
     location_name: null,
-    device_id: null,
+    window_end: partial.window_start,
+    notes: null,
+    status: 'open',
     surveyor_ids: [],
-    sightings_count: 0,
-    species_breakdown: [],
-    survey_type_id: 1,
-    survey_type_name: 'Butterfly',
-    survey_type_icon: null,
-    survey_type_color: null,
+    linked_surveys: [],
+    created_at: '2026-06-01T00:00:00',
     ...partial,
   };
 }
 
-describe('deriveSurveyState', () => {
-  it('classifies a scheduled future-dated survey as upcoming', () => {
-    expect(deriveSurveyState(survey({ id: 1, date: '2026-07-01', status: 'scheduled' }), TODAY)).toBe('upcoming');
+const recordedSlot = (partial: Partial<ScheduledSurvey> & { id: number; window_start: string }) =>
+  slot({ linked_surveys: [{ id: 100 + partial.id, date: partial.window_start }], ...partial });
+
+describe('deriveSlotState', () => {
+  it('classifies a future day-precise slot as upcoming', () => {
+    expect(deriveSlotState(slot({ id: 1, window_start: '2026-07-01' }), TODAY)).toBe('upcoming');
   });
 
-  it('classifies a scheduled past survey as needs-survey', () => {
-    expect(deriveSurveyState(survey({ id: 2, date: '2026-06-20', status: 'scheduled' }), TODAY)).toBe('needs-survey');
+  it('classifies a past unfulfilled slot as needs-survey', () => {
+    expect(deriveSlotState(slot({ id: 2, window_start: '2026-06-20' }), TODAY)).toBe('needs-survey');
   });
 
-  it('classifies a completed survey as recorded, even with zero sightings (nil count)', () => {
+  it('classifies a fulfilled slot as recorded, whatever its window', () => {
     expect(
-      deriveSurveyState(survey({ id: 3, date: '2026-06-20', status: 'completed', sightings_count: 0 }), TODAY),
+      deriveSlotState(recordedSlot({ id: 3, window_start: '2026-06-20' }), TODAY),
     ).toBe('recorded');
   });
 
-  it('classifies a cancelled survey as cancelled', () => {
+  it('classifies a cancelled slot as cancelled, even fulfilled', () => {
     expect(
-      deriveSurveyState(survey({ id: 4, date: '2026-06-20', status: 'cancelled' }), TODAY),
+      deriveSlotState(recordedSlot({ id: 4, window_start: '2026-06-20', status: 'cancelled' }), TODAY),
     ).toBe('cancelled');
   });
 
-  it('treats a scheduled survey dated today as needs-survey (not upcoming)', () => {
-    expect(deriveSurveyState(survey({ id: 5, date: TODAY, status: 'scheduled' }), TODAY)).toBe('needs-survey');
+  it('treats a day-precise slot dated today as due-this-week (window is inclusive)', () => {
+    expect(deriveSlotState(slot({ id: 5, window_start: TODAY }), TODAY)).toBe('due-this-week');
   });
 
-  it('classifies a weekly survey before its window as upcoming', () => {
+  it('classifies a weekly slot before its window as upcoming', () => {
     expect(
-      deriveSurveyState(
-        survey({ id: 6, date: '2026-06-29', scheduled_window_start: '2026-06-29', scheduled_window_end: '2026-07-05' }),
+      deriveSlotState(
+        slot({ id: 6, window_start: '2026-06-29', window_end: '2026-07-05' }),
         TODAY,
       ),
     ).toBe('upcoming');
   });
 
-  it('classifies a weekly survey during its window as due-this-week (not overdue)', () => {
+  it('classifies a weekly slot during its window as due-this-week (not overdue)', () => {
     expect(
-      deriveSurveyState(
-        survey({ id: 7, date: '2026-06-22', scheduled_window_start: '2026-06-22', scheduled_window_end: '2026-06-28' }),
+      deriveSlotState(
+        slot({ id: 7, window_start: '2026-06-22', window_end: '2026-06-28' }),
         TODAY,
       ),
     ).toBe('due-this-week');
@@ -74,29 +67,32 @@ describe('deriveSurveyState', () => {
 
   it('treats today == window_start as due-this-week (window is inclusive)', () => {
     expect(
-      deriveSurveyState(
-        survey({ id: 8, date: TODAY, scheduled_window_start: TODAY, scheduled_window_end: '2026-07-01' }),
-        TODAY,
-      ),
+      deriveSlotState(slot({ id: 8, window_start: TODAY, window_end: '2026-07-01' }), TODAY),
     ).toBe('due-this-week');
   });
 
   it('treats today == window_end as due-this-week (window is inclusive)', () => {
     expect(
-      deriveSurveyState(
-        survey({ id: 9, date: '2026-06-19', scheduled_window_start: '2026-06-19', scheduled_window_end: TODAY }),
-        TODAY,
-      ),
+      deriveSlotState(slot({ id: 9, window_start: '2026-06-19', window_end: TODAY }), TODAY),
     ).toBe('due-this-week');
   });
 
-  it('classifies a weekly survey after its window as needs-survey (overdue)', () => {
+  it('classifies a weekly slot after its window as needs-survey (overdue)', () => {
     expect(
-      deriveSurveyState(
-        survey({ id: 10, date: '2026-06-15', scheduled_window_start: '2026-06-15', scheduled_window_end: '2026-06-21' }),
+      deriveSlotState(
+        slot({ id: 10, window_start: '2026-06-15', window_end: '2026-06-21' }),
         TODAY,
       ),
     ).toBe('needs-survey');
+  });
+
+  it('a fulfilled slot is recorded even mid-window (fulfilment outranks due)', () => {
+    expect(
+      deriveSlotState(
+        recordedSlot({ id: 11, window_start: '2026-06-22', window_end: '2026-06-28' }),
+        TODAY,
+      ),
+    ).toBe('recorded');
   });
 });
 
@@ -115,37 +111,32 @@ describe('formatWeekRange', () => {
 });
 
 describe('buildWorklist', () => {
-  const surveys = [
-    survey({ id: 1, date: '2026-06-21', status: 'scheduled' }), // needs-survey
-    survey({ id: 2, date: '2026-06-18', status: 'scheduled' }), // needs-survey
-    survey({ id: 3, date: '2026-06-10', status: 'scheduled' }), // needs-survey
-    survey({ id: 4, date: '2026-06-05', status: 'scheduled' }), // needs-survey (4th, still shown)
-    survey({ id: 5, date: '2026-06-15', status: 'completed', sightings_count: 2 }), // recorded (excluded)
-    survey({ id: 10, date: '2026-06-08', status: 'cancelled' }), // cancelled (excluded)
-    survey({ id: 6, date: '2026-06-27', status: 'scheduled' }), // upcoming
-    survey({ id: 7, date: '2026-07-01', status: 'scheduled' }), // upcoming
-    survey({ id: 8, date: '2026-07-11', status: 'scheduled' }), // upcoming
-    survey({ id: 9, date: '2026-07-19', status: 'scheduled' }), // upcoming (4th, dropped)
+  const slots = [
+    slot({ id: 1, window_start: '2026-06-21' }), // needs-survey
+    slot({ id: 2, window_start: '2026-06-18' }), // needs-survey
+    slot({ id: 3, window_start: '2026-06-10' }), // needs-survey
+    slot({ id: 4, window_start: '2026-06-05' }), // needs-survey (4th, still shown)
+    recordedSlot({ id: 5, window_start: '2026-06-15' }), // recorded (excluded)
+    slot({ id: 10, window_start: '2026-06-08', status: 'cancelled' }), // cancelled (excluded)
+    slot({ id: 6, window_start: '2026-06-27' }), // upcoming
+    slot({ id: 7, window_start: '2026-07-01' }), // upcoming
+    slot({ id: 8, window_start: '2026-07-11' }), // upcoming
+    slot({ id: 9, window_start: '2026-07-19' }), // upcoming (4th, dropped)
   ];
 
   it('never caps overdue, oldest first so the panel reads chronologically', () => {
-    const { overdue } = buildWorklist(surveys, TODAY);
+    const { overdue } = buildWorklist(slots, TODAY);
     expect(overdue.map((s) => s.id)).toEqual([4, 3, 2, 1]);
   });
 
   it('caps upcoming at 3 (soonest first) but reports the true total', () => {
-    const { upcoming, upcomingTotal } = buildWorklist(surveys, TODAY);
+    const { upcoming, upcomingTotal } = buildWorklist(slots, TODAY);
     expect(upcoming.map((s) => s.id)).toEqual([6, 7, 8]);
     expect(upcomingTotal).toBe(4);
   });
 
-  it('places a due-this-week (in-window) survey in its own bucket, not overdue or upcoming', () => {
-    const weekly = survey({
-      id: 20,
-      date: '2026-06-24',
-      scheduled_window_start: '2026-06-24',
-      scheduled_window_end: '2026-06-30',
-    });
+  it('places a due-this-week (in-window) slot in its own bucket, not overdue or upcoming', () => {
+    const weekly = slot({ id: 20, window_start: '2026-06-24', window_end: '2026-06-30' });
     const { dueThisWeek, overdue, upcoming } = buildWorklist([weekly], TODAY);
     expect(dueThisWeek.map((s) => s.id)).toEqual([20]);
     expect(overdue).toEqual([]);
@@ -154,57 +145,39 @@ describe('buildWorklist', () => {
 });
 
 describe('recordedThisWeek', () => {
-  it('keeps a completed weekly survey whose window contains today', () => {
-    const s = survey({
-      id: 1,
-      date: '2026-06-23',
-      status: 'completed',
-      scheduled_window_start: '2026-06-22',
-      scheduled_window_end: '2026-06-28',
-    });
+  it('keeps a fulfilled weekly slot whose window contains today', () => {
+    const s = recordedSlot({ id: 1, window_start: '2026-06-22', window_end: '2026-06-28' });
     expect(recordedThisWeek([s], TODAY).map((x) => x.id)).toEqual([1]);
   });
 
-  it('drops a completed weekly survey from a past window', () => {
-    const s = survey({
-      id: 2,
-      date: '2026-06-16',
-      status: 'completed',
-      scheduled_window_start: '2026-06-15',
-      scheduled_window_end: '2026-06-21',
-    });
+  it('drops a fulfilled weekly slot from a past window', () => {
+    const s = recordedSlot({ id: 2, window_start: '2026-06-15', window_end: '2026-06-21' });
     expect(recordedThisWeek([s], TODAY)).toEqual([]);
   });
 
-  it('keeps a day-precise completed survey only when recorded for today', () => {
-    const today = survey({ id: 3, date: TODAY, status: 'completed' });
-    const yesterday = survey({ id: 4, date: '2026-06-24', status: 'completed' });
+  it('keeps a fulfilled day-precise slot only when it is for today', () => {
+    const today = recordedSlot({ id: 3, window_start: TODAY });
+    const yesterday = recordedSlot({ id: 4, window_start: '2026-06-24' });
     expect(recordedThisWeek([today, yesterday], TODAY).map((x) => x.id)).toEqual([3]);
   });
 
-  it('ignores non-completed surveys even inside the current window', () => {
-    const s = survey({
-      id: 5,
-      date: '2026-06-22',
-      status: 'scheduled',
-      scheduled_window_start: '2026-06-22',
-      scheduled_window_end: '2026-06-28',
-    });
+  it('ignores unfulfilled slots even inside the current window', () => {
+    const s = slot({ id: 5, window_start: '2026-06-22', window_end: '2026-06-28' });
     expect(recordedThisWeek([s], TODAY)).toEqual([]);
   });
 });
 
 describe('nextScheduledSurvey', () => {
-  it('returns the soonest upcoming survey', () => {
-    const surveys = [
-      survey({ id: 1, date: '2026-07-11' }),
-      survey({ id: 2, date: '2026-06-27' }),
-      survey({ id: 3, date: '2026-06-20' }), // past
+  it('returns the soonest upcoming slot', () => {
+    const slots = [
+      slot({ id: 1, window_start: '2026-07-11' }),
+      slot({ id: 2, window_start: '2026-06-27' }),
+      slot({ id: 3, window_start: '2026-06-20' }), // past
     ];
-    expect(nextScheduledSurvey(surveys, TODAY)?.id).toBe(2);
+    expect(nextScheduledSurvey(slots, TODAY)?.id).toBe(2);
   });
 
   it('returns null when nothing is scheduled', () => {
-    expect(nextScheduledSurvey([survey({ id: 1, date: '2026-06-01' })], TODAY)).toBeNull();
+    expect(nextScheduledSurvey([slot({ id: 1, window_start: '2026-06-01' })], TODAY)).toBeNull();
   });
 });

@@ -36,6 +36,7 @@ from auth import (
 from models import (
     Organisation, Surveyor, Location, Species, SpeciesType,
     SurveyType, Survey, SurveySurveyor, Device, DeviceType,
+    ScheduledSurvey, ScheduledSurveyStatus, ScheduledSurveySurveyor,
     User, UserRole,
 )
 
@@ -359,12 +360,14 @@ def create_survey(db_session: Session, test_org: Organisation):
         location_id: int = None,
         survey_type_id: int = None,
         surveyor_ids: list = None,
+        scheduled_survey_id: int = None,
     ) -> Survey:
         survey = Survey(
             date=survey_date or date.today(),
             organisation_id=test_org.id,
             location_id=location_id,
             survey_type_id=survey_type_id,
+            scheduled_survey_id=scheduled_survey_id,
         )
         db_session.add(survey)
         db_session.commit()
@@ -380,6 +383,48 @@ def create_survey(db_session: Session, test_org: Organisation):
         return survey
 
     return _create_survey
+
+
+@pytest.fixture
+def create_scheduled_survey(db_session: Session, test_org: Organisation):
+    """Factory fixture to create scheduled-survey slots. window_end defaults
+    to window_start (day-precise cadence)."""
+    from datetime import date
+
+    def _create_scheduled_survey(
+        survey_type_id: int,
+        window_start: date = None,
+        window_end: date = None,
+        location_id: int = None,
+        status: ScheduledSurveyStatus = ScheduledSurveyStatus.open,
+        surveyor_ids: list = None,
+        organisation_id: int = None,
+        notes: str = None,
+    ) -> ScheduledSurvey:
+        start = window_start or date.today()
+        slot = ScheduledSurvey(
+            organisation_id=organisation_id or test_org.id,
+            survey_type_id=survey_type_id,
+            location_id=location_id,
+            window_start=start,
+            window_end=window_end or start,
+            status=status,
+            notes=notes,
+        )
+        db_session.add(slot)
+        db_session.commit()
+        db_session.refresh(slot)
+
+        if surveyor_ids:
+            for surveyor_id in surveyor_ids:
+                db_session.add(ScheduledSurveySurveyor(
+                    scheduled_survey_id=slot.id, surveyor_id=surveyor_id
+                ))
+            db_session.commit()
+
+        return slot
+
+    return _create_scheduled_survey
 
 
 @pytest.fixture

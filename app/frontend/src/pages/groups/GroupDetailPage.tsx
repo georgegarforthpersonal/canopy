@@ -11,10 +11,11 @@ import {
   ApiError,
   surveyTypesAPI,
   surveysAPI,
+  scheduledSurveysAPI,
   surveyorsAPI,
   locationsAPI,
   type SurveyTypeWithDetails,
-  type Survey,
+  type ScheduledSurvey,
   type Surveyor,
   type LocationWithBoundary,
   type SurveyTypeFile,
@@ -37,8 +38,7 @@ export default function GroupDetailPage() {
   const navigate = useNavigate();
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
-  const [surveys, setSurveys] = useState<Survey[]>([]);
-  const [recentCompleted, setRecentCompleted] = useState<Survey[]>([]);
+  const [slots, setSlots] = useState<ScheduledSurvey[]>([]);
   const [recordedCount, setRecordedCount] = useState(0);
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [locations, setLocations] = useState<LocationWithBoundary[]>([]);
@@ -82,23 +82,21 @@ export default function GroupDetailPage() {
         if (!active) return;
         setSurveyType(details);
 
-        // The worklist is built from ALL scheduled surveys (upcoming + overdue;
-        // truncation would drop exactly the overdue rows, which sort last);
-        // the "All surveys" door shows a recorded/scheduled split, so the
-        // recorded side needs the completed-only total. The first completed
-        // page (date-descending) is kept so the panel can pin any survey
-        // already recorded for the current week.
-        const [scheduled, completedPage, surveyorList, withBoundaries] = await Promise.all([
-          surveysAPI.getAllPages({ survey_type_id: surveyTypeId, survey_status: 'scheduled' }),
-          surveysAPI.getAll({ survey_type_id: surveyTypeId, survey_status: 'completed', page: 1, limit: 25 }),
+        // The worklist is built from the group's slots (linked recorded
+        // surveys come embedded, so fulfilment and this week's pin derive
+        // from the same list); the "All surveys" door shows a
+        // recorded/scheduled split, so the recorded side needs the surveys
+        // total.
+        const [slotList, surveysPage, surveyorList, withBoundaries] = await Promise.all([
+          scheduledSurveysAPI.getAll({ survey_type_id: surveyTypeId }),
+          surveysAPI.getAll({ survey_type_id: surveyTypeId, page: 1, limit: 1 }),
           surveyorsAPI.getAll(),
           locationsAPI.getAllWithBoundaries(),
         ]);
         if (!active) return;
 
-        setSurveys(scheduled);
-        setRecentCompleted(completedPage.data);
-        setRecordedCount(completedPage.total);
+        setSlots(slotList);
+        setRecordedCount(surveysPage.total);
         setSurveyors(surveyorList);
 
         // The survey type's full location set is authoritative (all transects,
@@ -150,7 +148,7 @@ export default function GroupDetailPage() {
   }, [typeId]);
 
   const resolveSurveyors = useSurveyorLookup(surveyors);
-  const handleSignupSaved = useSignupSaved(surveys, setSurveys, setGreenIds, surveyors, setSurveyors);
+  const handleSignupSaved = useSignupSaved(slots, setSlots, setGreenIds, surveyors, setSurveyors);
 
   if (loading) {
     return (
@@ -184,12 +182,16 @@ export default function GroupDetailPage() {
   // A survey type narrowed to exactly one species (e.g. Marsh Fritillary)
   // gets the per-survey seasonal count panel instead of the diversity chart.
   const singleSpecies = surveyType.species.length === 1 ? surveyType.species[0] : null;
-  // `record` opens the survey form in record mode: saving marks the
-  // scheduled survey completed. A plain open never changes the lifecycle.
-  const goToSurvey = (s: Survey, opts?: { record?: boolean }) =>
-    navigate(`/surveys/${s.id}${opts?.record ? '?record=true' : ''}`, {
-      state: { returnTo: { pathname: `/groups/${typeId}`, label: surveyType.name } },
-    });
+  const returnTo = { returnTo: { pathname: `/groups/${typeId}`, label: surveyType.name } };
+  // Recording a slot creates a NEW survey linked to it, prefilled from the
+  // slot on the new-survey form.
+  const recordSlot = (slot: ScheduledSurvey) =>
+    navigate(`/surveys/new?scheduled_survey_id=${slot.id}`, { state: returnTo });
+  // A fulfilled slot opens its recorded survey.
+  const openSlotSurvey = (slot: ScheduledSurvey) => {
+    const surveyId = slot.linked_surveys[0]?.id;
+    if (surveyId != null) navigate(`/surveys/${surveyId}`, { state: returnTo });
+  };
 
   return (
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
@@ -216,14 +218,14 @@ export default function GroupDetailPage() {
           <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2.25, flex: 1, minWidth: 0 }}>
             <Box sx={{ order: 2, minWidth: 0 }}>
               <SurveysPanel
-                surveys={surveys}
-                recordedThisWeek={recordedThisWeek(recentCompleted)}
+                slots={slots}
+                recordedThisWeek={recordedThisWeek(slots)}
                 resolveSurveyors={resolveSurveyors}
                 recordedCount={recordedCount}
                 greenIds={greenIds}
-                onAddSurvey={(s) => goToSurvey(s, { record: true })}
+                onAddSurvey={recordSlot}
                 onSignupSaved={handleSignupSaved}
-                onOpenSurvey={goToSurvey}
+                onOpenSurvey={openSlotSurvey}
                 onViewAll={() => navigate(`/groups/${typeId}/all`)}
               />
             </Box>

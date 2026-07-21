@@ -1,7 +1,8 @@
 /**
- * Admin "Scheduled" tab: lists upcoming/overdue scheduled surveys and lets an
- * admin schedule a recurring series or cancel/delete an existing one. Scheduled
- * surveys are what populate the Groups worklist for volunteers to sign up to.
+ * Admin "Scheduled" tab: lists upcoming/overdue scheduled surveys (slots) and
+ * lets an admin schedule a recurring series or cancel/delete an existing one.
+ * Slots are what populate the Groups worklist for volunteers to sign up to;
+ * recorded surveys link to them and are never deleted with them.
  *
  * Only shown for orgs with the Groups beta (gated by the caller), matching
  * where scheduled surveys currently surface.
@@ -29,10 +30,9 @@ import {
   Alert,
 } from '@mui/material';
 import { Add, Delete, EventBusy } from '@mui/icons-material';
-import dayjs from 'dayjs';
 import {
-  surveysAPI,
-  type Survey,
+  scheduledSurveysAPI,
+  type ScheduledSurvey,
   type SurveyType,
   type Surveyor,
 } from '../../services/api';
@@ -40,10 +40,10 @@ import { useToast } from '../../context/ToastContext';
 import { brandColors } from '../../theme';
 import type { ChipProps } from '@mui/material';
 import {
-  deriveSurveyState,
-  formatWeekRange,
+  deriveSlotState,
+  formatSurveyDate,
   hasWindow,
-  type SurveyState,
+  type SlotState,
 } from '../../pages/groups/surveyState';
 import SurveyorAvatars from '../groups/SurveyorAvatars';
 import ScheduleSurveyDialog from './ScheduleSurveyDialog';
@@ -57,10 +57,10 @@ interface ScheduledSurveysPanelProps {
   surveyTypes: SurveyType[];
 }
 
-type PendingAction = { survey: Survey; action: 'cancel' | 'delete' };
+type PendingAction = { slot: ScheduledSurvey; action: 'cancel' | 'delete' };
 
 /** State → chip label/colour for the scheduled list. */
-const STATE_CHIP: Record<SurveyState, { label: string; color: ChipProps['color'] }> = {
+const STATE_CHIP: Record<SlotState, { label: string; color: ChipProps['color'] }> = {
   'needs-survey': { label: 'Overdue', color: 'warning' },
   'due-this-week': { label: 'Due this week', color: 'info' },
   upcoming: { label: 'Upcoming', color: 'default' },
@@ -74,7 +74,7 @@ export default function ScheduledSurveysPanel({
 }: ScheduledSurveysPanelProps) {
   const toast = useToast();
   const { isMobile } = useResponsive();
-  const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [slots, setSlots] = useState<ScheduledSurvey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -87,15 +87,28 @@ export default function ScheduledSurveysPanel({
     return map;
   }, [surveyors]);
 
+  const typeNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    surveyTypes.forEach((t) => map.set(t.id, t.name));
+    return map;
+  }, [surveyTypes]);
+
   const activeSurveyTypes = useMemo(() => surveyTypes.filter((t) => t.is_active), [surveyTypes]);
 
   const load = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await surveysAPI.getAllPages({ survey_status: 'scheduled' });
-      const sorted = [...res].sort((a, b) => a.date.localeCompare(b.date));
-      setSurveys(sorted);
+      // Only the actionable plan: recorded and cancelled slots drop off,
+      // exactly as recorded/cancelled rows dropped off the old scheduled
+      // list. History lives in the Groups pages.
+      const res = await scheduledSurveysAPI.getAll();
+      setSlots(
+        res.filter((s) => {
+          const state = deriveSlotState(s);
+          return state === 'upcoming' || state === 'due-this-week' || state === 'needs-survey';
+        }),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load scheduled surveys');
     } finally {
@@ -112,10 +125,10 @@ export default function ScheduledSurveysPanel({
     setWorking(true);
     try {
       if (pending.action === 'cancel') {
-        await surveysAPI.update(pending.survey.id, { status: 'cancelled' });
+        await scheduledSurveysAPI.update(pending.slot.id, { status: 'cancelled' });
         toast.success('Survey cancelled');
       } else {
-        await surveysAPI.delete(pending.survey.id);
+        await scheduledSurveysAPI.delete(pending.slot.id);
         toast.success('Survey deleted');
       }
       setPending(null);
@@ -128,11 +141,11 @@ export default function ScheduledSurveysPanel({
   };
 
   // Cancel/delete icon buttons, shared between the desktop table and mobile cards.
-  const surveyActions = (survey: Survey) => (
+  const slotActions = (slot: ScheduledSurvey) => (
     <>
       <IconButton
         size="small"
-        onClick={() => setPending({ survey, action: 'cancel' })}
+        onClick={() => setPending({ slot, action: 'cancel' })}
         sx={{ color: 'warning.main' }}
         title="Cancel"
       >
@@ -140,7 +153,7 @@ export default function ScheduledSurveysPanel({
       </IconButton>
       <IconButton
         size="small"
-        onClick={() => setPending({ survey, action: 'delete' })}
+        onClick={() => setPending({ slot, action: 'delete' })}
         sx={{ color: 'error.main' }}
         title="Delete"
       >
@@ -174,16 +187,15 @@ export default function ScheduledSurveysPanel({
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
             <CircularProgress />
           </Box>
-        ) : surveys.length === 0 ? (
+        ) : slots.length === 0 ? (
           <Paper variant="outlined" sx={{ py: 6, px: 2, textAlign: 'center', color: 'text.secondary' }}>
             No scheduled surveys. Use “Schedule surveys” to plan a series.
           </Paper>
         ) : (
           <Stack spacing={1.5}>
-            {surveys.map((s) => {
-              const state = deriveSurveyState(s);
+            {slots.map((s) => {
+              const state = deriveSlotState(s);
               const chip = STATE_CHIP[state] ?? STATE_CHIP.upcoming;
-              const weekly = hasWindow(s);
               const assigned = s.surveyor_ids
                 .map((id) => surveyorById.get(id))
                 .filter((x): x is Surveyor => x !== undefined);
@@ -192,10 +204,8 @@ export default function ScheduledSurveysPanel({
                   key={s.id}
                   title={
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {weekly
-                        ? formatWeekRange(s.scheduled_window_start!, s.scheduled_window_end!)
-                        : dayjs(s.date).format('ddd D MMM YYYY')}
-                      {weekly && (
+                      {formatSurveyDate(s)}
+                      {hasWindow(s) && (
                         <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
                           Week window
                         </Typography>
@@ -205,7 +215,7 @@ export default function ScheduledSurveysPanel({
                   subtitle={
                     <>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {[s.survey_type_name, s.location_name].filter(Boolean).join(' · ') || '—'}
+                        {[typeNameById.get(s.survey_type_id), s.location_name].filter(Boolean).join(' · ') || '—'}
                       </Typography>
                       <Box sx={{ mt: 1 }}>
                         <SurveyorAvatars surveyors={assigned} emptyLabel="No surveyors yet" />
@@ -213,7 +223,7 @@ export default function ScheduledSurveysPanel({
                     </>
                   }
                   chips={<Chip label={chip.label} size="small" color={chip.color} />}
-                  actions={surveyActions(s)}
+                  actions={slotActions(s)}
                 />
               );
             })}
@@ -239,17 +249,16 @@ export default function ScheduledSurveysPanel({
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
-              ) : surveys.length === 0 ? (
+              ) : slots.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 8, color: 'text.secondary' }}>
                     No scheduled surveys. Use “Schedule surveys” to plan a series.
                   </TableCell>
                 </TableRow>
               ) : (
-                surveys.map((s) => {
-                  const state = deriveSurveyState(s);
+                slots.map((s) => {
+                  const state = deriveSlotState(s);
                   const chip = STATE_CHIP[state] ?? STATE_CHIP.upcoming;
-                  const weekly = hasWindow(s);
                   const assigned = s.surveyor_ids
                     .map((id) => surveyorById.get(id))
                     .filter((x): x is Surveyor => x !== undefined);
@@ -257,17 +266,15 @@ export default function ScheduledSurveysPanel({
                     <TableRow key={s.id} sx={{ '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.02)' } }}>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {weekly
-                            ? formatWeekRange(s.scheduled_window_start!, s.scheduled_window_end!)
-                            : dayjs(s.date).format('ddd D MMM YYYY')}
+                          {formatSurveyDate(s)}
                         </Typography>
-                        {weekly && (
+                        {hasWindow(s) && (
                           <Typography variant="caption" color="text.secondary">
                             Week window
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell>{s.survey_type_name ?? '—'}</TableCell>
+                      <TableCell>{typeNameById.get(s.survey_type_id) ?? '—'}</TableCell>
                       <TableCell>{s.location_name ?? '—'}</TableCell>
                       <TableCell>
                         <SurveyorAvatars surveyors={assigned} emptyLabel="No surveyors yet" />
@@ -277,7 +284,7 @@ export default function ScheduledSurveysPanel({
                       </TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={1} justifyContent="flex-end">
-                          {surveyActions(s)}
+                          {slotActions(s)}
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -306,13 +313,13 @@ export default function ScheduledSurveysPanel({
         <DialogContent>
           <Typography>
             {pending?.action === 'delete'
-              ? 'This permanently removes the scheduled survey.'
+              ? 'This permanently removes the scheduled survey. Any surveys already recorded for it are kept.'
               : 'This marks the survey as cancelled. It stays on record but drops off the worklist.'}
           </Typography>
           {pending && (
             <Typography sx={{ mt: 2, color: 'text.secondary' }}>
-              {pending.survey.survey_type_name ?? 'Survey'} ·{' '}
-              {dayjs(pending.survey.date).format('ddd D MMM YYYY')}
+              {typeNameById.get(pending.slot.survey_type_id) ?? 'Survey'} ·{' '}
+              {formatSurveyDate(pending.slot)}
             </Typography>
           )}
         </DialogContent>

@@ -84,8 +84,6 @@ async def get_cumulative_species(
 
     Returns the number of distinct species seen cumulatively up to each survey date,
     grouped by species type. This shows how species diversity grows over time.
-    Only completed surveys count — scheduled/cancelled surveys have no recorded
-    data and would otherwise stretch the series into the future.
 
     Args:
         species_types: Optional list of species types to filter (e.g., ['bird', 'butterfly'])
@@ -125,7 +123,6 @@ async def get_cumulative_species(
                 JOIN species ON sighting.species_id = species.id
                 JOIN species_type ON species.species_type_id = species_type.id
                 WHERE survey.organisation_id = :org_id
-                AND survey.status = 'completed'
                 {survey_type_filter}
                 {species_filter}
                 {date_filter_sql}
@@ -135,7 +132,6 @@ async def get_cumulative_species(
                 SELECT DISTINCT survey.date
                 FROM survey
                 WHERE survey.organisation_id = :org_id
-                AND survey.status = 'completed'
                 {survey_type_filter}
                 {date_filter_sql}
                 ORDER BY survey.date
@@ -263,7 +259,7 @@ async def get_species_by_count(
     """
     Get species ordered by total occurrence count (descending) for the current organisation.
 
-    Returns species of a given type with their total count across all completed
+    Returns species of a given type with their total count across all recorded
     surveys, useful for auto-selecting the most common species. Species with no
     sightings are omitted.
 
@@ -292,7 +288,6 @@ async def get_species_by_count(
             JOIN survey ON sighting.survey_id = survey.id
             WHERE species_type.name = :species_type
               AND survey.organisation_id = :org_id
-              AND survey.status = 'completed'
               {survey_type_filter}
             GROUP BY species.id, species.name, species.scientific_name, species_type.name
             HAVING SUM(sighting.count) > 0
@@ -336,7 +331,7 @@ async def get_species_occurrences(
     """
     Get occurrence counts for a specific species by survey for the current organisation.
 
-    Returns the total count of individuals seen per completed survey for the
+    Returns the total count of individuals seen per recorded survey for the
     specified species. Each survey date becomes a data point in the chart —
     including zero counts (surveyed, none seen), which are real observations.
 
@@ -355,7 +350,7 @@ async def get_species_occurrences(
         date_filter_sql = build_date_filter_sql(start_date, end_date)
         survey_type_filter = "AND survey.survey_type_id = :survey_type_id" if survey_type_id is not None else ""
 
-        # Query to get occurrences by survey - include ALL completed surveys
+        # Query to get occurrences by survey - include ALL surveys
         # with 0 for no sightings
         query = text(f"""
             SELECT
@@ -365,7 +360,6 @@ async def get_species_occurrences(
             FROM survey
             LEFT JOIN sighting ON survey.id = sighting.survey_id AND sighting.species_id = :species_id
             WHERE survey.organisation_id = :org_id
-            AND survey.status = 'completed'
             {survey_type_filter}
             {date_filter_sql}
             GROUP BY survey.id, survey.date

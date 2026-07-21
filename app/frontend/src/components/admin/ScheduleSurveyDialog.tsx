@@ -25,7 +25,7 @@ import {
 } from '@mui/material';
 import dayjs from 'dayjs';
 import {
-  surveysAPI,
+  scheduledSurveysAPI,
   surveyTypesAPI,
   type SurveyType,
   type SurveyTypeWithDetails,
@@ -132,7 +132,7 @@ export default function ScheduleSurveyDialog({
     setSaving(true);
     setError(null);
     try {
-      const created = await surveysAPI.bulkSchedule({
+      const created = await scheduledSurveysAPI.bulkSchedule({
         survey_type_id: surveyTypeId,
         location_id: showLocation && locationId !== '' ? locationId : null,
         surveyor_ids: [],

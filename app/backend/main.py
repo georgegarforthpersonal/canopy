@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from auth import require_user
 from config import settings
 from exceptions import AppException
-from routers import surveys, species, locations, surveyors, dashboard, survey_types, auth, audio, devices, images, export, ecotopia
+from routers import surveys, scheduled_surveys, species, locations, surveyors, dashboard, survey_types, auth, audio, devices, images, export, ecotopia
 from services.job_queue import start_dispatcher, stop_dispatcher
 
 logger = logging.getLogger(__name__)
@@ -123,6 +123,7 @@ authenticated = [Depends(require_user)]
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(surveys.router, prefix="/api/surveys", tags=["Surveys"], dependencies=authenticated)
+app.include_router(scheduled_surveys.router, prefix="/api/scheduled-surveys", tags=["Scheduled Surveys"], dependencies=authenticated)
 app.include_router(audio.router, prefix="/api/surveys", tags=["Audio"], dependencies=authenticated)
 app.include_router(audio.download_router, prefix="/api/audio", tags=["Audio"], dependencies=authenticated)
 app.include_router(images.router, prefix="/api/surveys", tags=["Images"], dependencies=authenticated)

@@ -11,22 +11,22 @@
 import { useState } from 'react';
 import { Button, CircularProgress } from '@mui/material';
 import { Check, Close, PersonAddAlt1 } from '@mui/icons-material';
-import { surveysAPI, type Survey, type Surveyor } from '../../services/api';
+import { scheduledSurveysAPI, type ScheduledSurvey, type Surveyor } from '../../services/api';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { groupColors } from '../../pages/groups/groupsTokens';
 
 interface SelfSignupButtonProps {
-  survey: Survey;
-  /** The surveyors currently assigned to this survey. */
+  slot: ScheduledSurvey;
+  /** The surveyors currently signed up to this slot. */
   assigned: Surveyor[];
-  /** Called after a successful change with the survey's new surveyor ids. */
-  onSaved: (surveyId: number, surveyorIds: number[]) => void;
+  /** Called after a successful change with the slot's new surveyor ids. */
+  onSaved: (slotId: number, surveyorIds: number[]) => void;
 }
 
 const withdrawRed = '#c62828';
 
-export default function SelfSignupButton({ survey, assigned, onSaved }: SelfSignupButtonProps) {
+export default function SelfSignupButton({ slot, assigned, onSaved }: SelfSignupButtonProps) {
   const toast = useToast();
   const { user } = usePermissions();
   const [inFlight, setInFlight] = useState<'signup' | 'withdraw' | null>(null);
@@ -49,9 +49,9 @@ export default function SelfSignupButton({ survey, assigned, onSaved }: SelfSign
     setInFlight(withdrawing ? 'withdraw' : 'signup');
     try {
       const result = withdrawing
-        ? await surveysAPI.withdraw(survey.id)
-        : await surveysAPI.signUp(survey.id);
-      onSaved(survey.id, result.surveyor_ids);
+        ? await scheduledSurveysAPI.withdraw(slot.id)
+        : await scheduledSurveysAPI.signUp(slot.id);
+      onSaved(slot.id, result.surveyor_ids);
       toast.success(withdrawing ? 'You’ve been taken off this survey' : 'You’re signed up');
     } catch {
       toast.error(withdrawing ? 'Failed to withdraw' : 'Failed to sign up');

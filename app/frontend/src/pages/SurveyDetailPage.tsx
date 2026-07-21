@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Add, Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
+import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { usePermissions } from '../context/AuthContext';
 import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI, devicesAPI, ApiError } from '../services/api';
@@ -71,13 +71,11 @@ export function SurveyDetailPage() {
   // Defaults to the main surveys list when reached via a deep link.
   const returnTo = readReturnTo(location);
 
-  // Two ways into the form, with different save semantics: ?record=true is
-  // the "Record survey" flow (saving marks a scheduled survey completed),
-  // ?edit=true is a plain edit (saving never changes the lifecycle status).
-  const startInRecordMode = searchParams.get('record') === 'true';
-  const startInEditMode = searchParams.get('edit') === 'true' || startInRecordMode;
+  // Every survey row is a recorded event; recording a scheduled slot happens
+  // on the new-survey form (?scheduled_survey_id=N), so this page only views
+  // and edits.
+  const startInEditMode = searchParams.get('edit') === 'true';
   const [isEditMode, setIsEditMode] = useState(startInEditMode);
-  const [isRecordMode, setIsRecordMode] = useState(startInRecordMode);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
 
   // ============================================================================
@@ -105,13 +103,8 @@ export function SurveyDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Recording only means something on a scheduled survey; a stale
-  // ?record=true link to an already-completed one degrades to a plain edit.
-  const isRecording = isRecordMode && survey?.status === 'scheduled';
-  // Plain edits of a scheduled survey are plan fixes — they may leave the
-  // sign-up sheet empty. Recording (and editing a completed survey) needs
-  // at least one surveyor: someone did the survey.
-  const requiresSurveyors = isRecording || survey?.status !== 'scheduled';
+  // A recorded survey always names who did it.
+  const requiresSurveyors = true;
 
   // Sighting image viewer state
   const [sightingViewerImages, setSightingViewerImages] = useState<ImageViewerItem[]>([]);
@@ -294,8 +287,7 @@ export function SurveyDetailPage() {
           setDevices([]);
         }
 
-        // Landing with ?record=true ("Record survey" from a Group page) or
-        // ?edit=true drops straight into the populated form.
+        // Landing with ?edit=true drops straight into the populated form.
         if (startInEditMode) {
           populateEditState(surveyData, sightingsData, surveyorsData);
         }
@@ -417,13 +409,6 @@ export function SurveyDetailPage() {
 
   const handleEditClick = () => {
     if (!survey) return;
-    setIsRecordMode(false);
-    populateEditState(survey, sightings, surveyors);
-  };
-
-  const handleRecordClick = () => {
-    if (!survey) return;
-    setIsRecordMode(true);
     populateEditState(survey, sightings, surveyors);
   };
 
@@ -473,12 +458,6 @@ export function SurveyDetailPage() {
       // Only include location_id if NOT at sighting level
       if (!locationAtSightingLevel) {
         surveyData.location_id = editLocationId ?? undefined;
-      }
-
-      // The lifecycle transition is explicit: only the record flow marks a
-      // scheduled survey completed. A plain edit sends no status at all.
-      if (isRecording) {
-        surveyData.status = 'completed';
       }
 
       await surveysAPI.update(Number(id), surveyData);
@@ -708,7 +687,6 @@ export function SurveyDetailPage() {
     setValidationErrors({});
     setError(null);
     setIsEditMode(false);
-    setIsRecordMode(false);
   };
 
   const handleDeleteClick = () => {
@@ -797,8 +775,6 @@ export function SurveyDetailPage() {
                       <CircularProgress size={20} sx={{ mr: 1 }} />
                       Saving...
                     </>
-                  ) : isRecording ? (
-                    'Save & mark recorded'
                   ) : (
                     'Save Survey'
                   )}
@@ -806,23 +782,8 @@ export function SurveyDetailPage() {
               </Stack>
             ) : canEditSurveys ? (
               <Stack direction="row" spacing={1}>
-                {survey?.status === 'scheduled' && (
-                  <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    onClick={handleRecordClick}
-                    sx={{
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      boxShadow: 'none',
-                      '&:hover': { boxShadow: 'none' },
-                    }}
-                  >
-                    Record survey
-                  </Button>
-                )}
                 <Button
-                  variant={survey?.status === 'scheduled' ? 'outlined' : 'contained'}
+                  variant="contained"
                   startIcon={<Edit />}
                   onClick={handleEditClick}
                   sx={{
@@ -878,7 +839,7 @@ export function SurveyDetailPage() {
           }}
         >
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-            {isRecording ? 'Record Survey' : isEditMode ? 'Survey Details' : 'Survey Information'}
+            {isEditMode ? 'Survey Details' : 'Survey Information'}
           </Typography>
 
           {isEditMode ? (
@@ -1018,11 +979,7 @@ export function SurveyDetailPage() {
           )}
         </Paper>
 
-        {/* Sightings Section — a scheduled survey has no sightings, so the
-            section only appears when recording it (or once it's completed).
-            Entering sightings IS recording; a plain edit of a scheduled
-            survey is for fixing the plan, not writing up results. */}
-        {(isRecording || survey.status !== 'scheduled') && (
+        {/* Sightings Section */}
         <Paper
           sx={{
             p: { xs: 2, sm: 2.5, md: 3 },
@@ -1346,7 +1303,6 @@ export function SurveyDetailPage() {
             </>
           )}
         </Paper>
-        )}
 
         {/* Delete Confirmation Dialog */}
         <Dialog

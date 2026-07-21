@@ -410,17 +410,12 @@ export interface SpeciesTypeCount {
   count: number; // Number of sightings of this type
 }
 
-/** Survey lifecycle status. */
-export type SurveyStatus = 'scheduled' | 'completed' | 'cancelled';
-
 export interface Survey {
   id: number;
   date: string;
-  status: SurveyStatus;
-  // Weekly-cadence surveys carry an inclusive window they may be carried out in;
-  // null for day-precise schedules (where `date` is the scheduled day).
-  scheduled_window_start: string | null;
-  scheduled_window_end: string | null;
+  // The scheduled slot this survey records, if any. Set automatically when
+  // the date falls in an open slot's window, or explicitly by the record flow.
+  scheduled_survey_id: number | null;
   start_time: string | null;
   end_time: string | null;
   sun_percentage: number | null;
@@ -469,19 +464,46 @@ export interface SurveyQueryParams {
   start_date?: string; // YYYY-MM-DD format
   end_date?: string; // YYYY-MM-DD format
   survey_type_id?: number; // Filter by survey type ID
-  survey_status?: SurveyStatus; // Filter by lifecycle status
+}
+
+/** Slot lifecycle: cancelled slots keep linked surveys but attract no new ones. */
+export type ScheduledSurveyStatus = 'open' | 'cancelled';
+
+/** A recorded survey linked to a slot. */
+export interface LinkedSurveySummary {
+  id: number;
+  date: string;
 }
 
 /**
- * Request body for bulk-scheduling a recurring series of surveys.
+ * A scheduled survey: a planned slot that recorded surveys link to. A slot
+ * with any linked survey is fulfilled. Day-precise cadence has
+ * window_start === window_end.
+ */
+export interface ScheduledSurvey {
+  id: number;
+  survey_type_id: number;
+  location_id: number | null;
+  location_name: string | null;
+  window_start: string;
+  window_end: string;
+  notes: string | null;
+  status: ScheduledSurveyStatus;
+  surveyor_ids: number[];
+  linked_surveys: LinkedSurveySummary[];
+  created_at: string;
+}
+
+/**
+ * Request body for bulk-scheduling a recurring series of slots.
  * The frontend expands the recurrence rule into explicit `dates`.
  */
-export interface SurveyScheduleRequest {
-  survey_type_id?: number | null;
+export interface ScheduledSurveyScheduleRequest {
+  survey_type_id: number;
   location_id?: number | null;
   surveyor_ids: number[];
   notes?: string | null;
-  dates: string[]; // YYYY-MM-DD, one survey created per date
+  dates: string[]; // YYYY-MM-DD, one slot created per date
 }
 
 export interface SurveyDetail extends Omit<Survey, 'sightings_count'> {
@@ -766,30 +788,11 @@ export const surveysAPI = {
     if (params?.start_date) queryParams.append('start_date', params.start_date);
     if (params?.end_date) queryParams.append('end_date', params.end_date);
     if (params?.survey_type_id) queryParams.append('survey_type_id', params.survey_type_id.toString());
-    if (params?.survey_status) queryParams.append('survey_status', params.survey_status);
 
     const queryString = queryParams.toString();
     const endpoint = queryString ? `/surveys?${queryString}` : '/surveys';
 
     return fetchAPI(endpoint);
-  },
-
-  /**
-   * Get every survey matching the filters, paging past the backend's
-   * 100-per-page cap. Used where truncation would corrupt derived state
-   * (e.g. the scheduled-surveys worklist, where the overdue rows sort last).
-   */
-  getAllPages: async (
-    params?: Omit<SurveyQueryParams, 'page' | 'limit'>,
-  ): Promise<Survey[]> => {
-    const limit = 100;
-    const first = await surveysAPI.getAll({ ...params, page: 1, limit });
-    const surveys = [...first.data];
-    for (let page = 2; page <= first.total_pages; page++) {
-      const next = await surveysAPI.getAll({ ...params, page, limit });
-      surveys.push(...next.data);
-    }
-    return surveys;
   },
 
   /**
@@ -800,23 +803,13 @@ export const surveysAPI = {
   },
 
   /**
-   * Create a new survey
+   * Create a new survey. Pass scheduled_survey_id to record a specific slot
+   * (the record flow); otherwise the backend auto-links by date.
    */
   create: (survey: Partial<Survey>): Promise<Survey> => {
     return fetchAPI('/surveys', {
       method: 'POST',
       body: JSON.stringify(survey),
-    });
-  },
-
-  /**
-   * Bulk-schedule a recurring series of surveys (one per date), each created
-   * with status 'scheduled'. Used by the admin scheduling UI.
-   */
-  bulkSchedule: (payload: SurveyScheduleRequest): Promise<Survey[]> => {
-    return fetchAPI('/surveys/schedule', {
-      method: 'POST',
-      body: JSON.stringify(payload),
     });
   },
 
@@ -828,21 +821,6 @@ export const surveysAPI = {
       method: 'PUT',
       body: JSON.stringify(survey),
     });
-  },
-
-  /**
-   * Sign the current user up to a scheduled survey (any role). Creates or
-   * links the surveyor for their account; other assignees are untouched.
-   */
-  signUp: (id: number): Promise<{ survey_id: number; surveyor_id: number; surveyor_ids: number[] }> => {
-    return fetchAPI(`/surveys/${id}/signup`, { method: 'POST' });
-  },
-
-  /**
-   * Remove the current user from a scheduled survey they signed up to.
-   */
-  withdraw: (id: number): Promise<{ survey_id: number; surveyor_id: number | null; surveyor_ids: number[] }> => {
-    return fetchAPI(`/surveys/${id}/signup`, { method: 'DELETE' });
   },
 
   /**
@@ -933,6 +911,76 @@ export const surveysAPI = {
     return fetchAPI(`/surveys/${surveyId}/sightings/${sightingId}/individuals/${individualId}`, {
       method: 'DELETE',
     });
+  },
+};
+
+// ============================================================================
+// API Methods - Scheduled Surveys (slots)
+// ============================================================================
+
+export const scheduledSurveysAPI = {
+  /**
+   * Get scheduled surveys with linked recorded surveys embedded. Unpaginated:
+   * a series is bounded and clients need the full worklist.
+   */
+  getAll: (params?: { survey_type_id?: number; status?: ScheduledSurveyStatus }): Promise<ScheduledSurvey[]> => {
+    const queryParams = new URLSearchParams();
+    if (params?.survey_type_id) queryParams.append('survey_type_id', params.survey_type_id.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    const queryString = queryParams.toString();
+    return fetchAPI(queryString ? `/scheduled-surveys?${queryString}` : '/scheduled-surveys');
+  },
+
+  /**
+   * Get a specific slot (used to prefill the record flow).
+   */
+  getById: (id: number): Promise<ScheduledSurvey> => {
+    return fetchAPI(`/scheduled-surveys/${id}`);
+  },
+
+  /**
+   * Bulk-schedule a recurring series of slots (one per date).
+   */
+  bulkSchedule: (payload: ScheduledSurveyScheduleRequest): Promise<ScheduledSurvey[]> => {
+    return fetchAPI('/scheduled-surveys/schedule', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Update a slot. Cancelling is update(id, { status: 'cancelled' }) — linked
+   * surveys are kept; the slot just stops attracting new ones.
+   */
+  update: (id: number, slot: Partial<ScheduledSurvey>): Promise<ScheduledSurvey> => {
+    return fetchAPI(`/scheduled-surveys/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(slot),
+    });
+  },
+
+  /**
+   * Delete a slot. Linked recorded surveys are detached, never deleted.
+   */
+  delete: (id: number): Promise<void> => {
+    return fetchAPI(`/scheduled-surveys/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Sign the current user up to a slot (any role). Creates or links the
+   * surveyor for their account; other assignees are untouched.
+   */
+  signUp: (id: number): Promise<{ scheduled_survey_id: number; surveyor_id: number; surveyor_ids: number[] }> => {
+    return fetchAPI(`/scheduled-surveys/${id}/signup`, { method: 'POST' });
+  },
+
+  /**
+   * Remove the current user from a slot they signed up to.
+   */
+  withdraw: (id: number): Promise<{ scheduled_survey_id: number; surveyor_id: number | null; surveyor_ids: number[] }> => {
+    return fetchAPI(`/scheduled-surveys/${id}/signup`, { method: 'DELETE' });
   },
 };
 
