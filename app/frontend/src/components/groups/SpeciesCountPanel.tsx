@@ -14,6 +14,8 @@ import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
 
 interface SpeciesCountPanelProps {
   speciesType: string;
+  /** The group's survey type — counts only cover this type's surveys. */
+  surveyTypeId: number;
 }
 
 const headerCellSx = {
@@ -31,7 +33,7 @@ const listGridSx = {
   px: 2.25,
 } as const;
 
-export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProps) {
+export default function SpeciesCountPanel({ speciesType, surveyTypeId }: SpeciesCountPanelProps) {
   const [summary, setSummary] = useState<CumulativeSummary>({ total: 0 });
   const [view, setView] = useState<'chart' | 'list'>('chart');
   const [species, setSpecies] = useState<SpeciesWithCount[] | null>(null);
@@ -41,7 +43,7 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
     if (view !== 'list' || species !== null) return;
     let active = true;
     dashboardAPI
-      .getSpeciesByCount(speciesType)
+      .getSpeciesByCount(speciesType, surveyTypeId)
       .then((rows) => {
         if (!active) return;
         // Newest discovery first; species with no date (shouldn't happen for
@@ -56,7 +58,7 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
     return () => {
       active = false;
     };
-  }, [view, species, speciesType]);
+  }, [view, species, speciesType, surveyTypeId]);
 
   return (
     <Paper sx={groupCardSx}>
@@ -120,6 +122,7 @@ export default function SpeciesCountPanel({ speciesType }: SpeciesCountPanelProp
       <Box sx={{ p: 2.25, display: view === 'chart' ? 'block' : 'none' }}>
         <CumulativeSpeciesChart
           speciesType={speciesType}
+          surveyTypeId={surveyTypeId}
           color={groupColors.brand}
           height={240}
           emptyMessage="No data yet"
