@@ -12,11 +12,12 @@ import {
 } from '@mui/material';
 import { Save, Cancel, CloudUpload, Delete, PhotoCamera } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, usePermissions } from '../context/AuthContext';
 import { AccessNotice } from '../components/auth/AccessNotice';
 import {
   surveysAPI,
+  scheduledSurveysAPI,
   surveyorsAPI,
   locationsAPI,
   speciesAPI,
@@ -26,6 +27,7 @@ import {
 } from '../services/api';
 import type {
   Survey,
+  ScheduledSurvey,
   Location,
   Surveyor,
   Species,
@@ -34,6 +36,7 @@ import type {
   SurveyType,
   Device,
 } from '../services/api';
+import { formatSurveyDate } from './groups/surveyState';
 import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/SurveyFormFields';
 import { SightingsEditor } from '../components/surveys/SightingsEditor';
 import type { DraftSighting } from '../components/surveys/SightingsEditor';
@@ -83,8 +86,15 @@ const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
  */
 export function NewSurveyPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isLoading: authLoading } = useAuth();
   const { canEditSurveys } = usePermissions();
+
+  // Record flow: ?scheduled_survey_id=N prefills the form from the slot (type
+  // locked, location and sign-ups carried over, date clamped into the window)
+  // and links the created survey to it.
+  const scheduledSurveyIdParam = searchParams.get('scheduled_survey_id');
+  const [recordingSlot, setRecordingSlot] = useState<ScheduledSurvey | null>(null);
 
   // ============================================================================
   // Form State - Survey Type
@@ -167,6 +177,10 @@ export function NewSurveyPage() {
   // edit, so it alone must not make the unsaved-changes guard fire.
   const autoLocationIdRef = useRef<number | null>(null);
 
+  // Surveyors prefilled from a slot's sign-ups (record flow) — also not a
+  // user edit, so the baseline for the dirty check, not part of it.
+  const prefilledSurveyorIdsRef = useRef<number[]>([]);
+
   // Dirty once the user has entered anything beyond the defaults, until the
   // survey is saved. Blocks Cancel, the back link, and browser back; the
   // confirmation dialog below lets the user proceed or stay.
@@ -176,7 +190,8 @@ export function NewSurveyPage() {
       (notes.trim() !== '' ||
         pendingImageFiles.length > 0 ||
         (locationId !== null && locationId !== autoLocationIdRef.current) ||
-        selectedSurveyors.length > 0 ||
+        selectedSurveyors.map((s) => s.id).sort().join(',') !==
+          [...prefilledSurveyorIdsRef.current].sort().join(',') ||
         draftSightings.some((s) => s.species_id !== null)),
   );
 
@@ -192,17 +207,45 @@ export function NewSurveyPage() {
         setError(null);
 
         // Fetch survey types and other base data in parallel
-        const [surveyTypesData, surveyorsData, breedingCodesData, boundariesData] = await Promise.all([
+        const [surveyTypesData, surveyorsData, breedingCodesData, boundariesData, slot] = await Promise.all([
           surveyTypesAPI.getAll(),
           surveyorsAPI.getAll(),
           surveysAPI.getBreedingCodes(),
           locationsAPI.getAllWithBoundaries(),
+          scheduledSurveyIdParam
+            ? scheduledSurveysAPI.getById(Number(scheduledSurveyIdParam)).catch(() => null)
+            : Promise.resolve(null),
         ]);
 
         setSurveyTypes(surveyTypesData);
         setSurveyors(surveyorsData);
         setBreedingCodes(breedingCodesData);
         setLocationsWithBoundaries(boundariesData);
+
+        // Record flow: prefill from the slot. The type is locked to the
+        // slot's; the date defaults to today clamped into the slot's window
+        // (recording late lands on the window's last day, never outside it);
+        // the slot's sign-ups become the participant baseline; the slot's
+        // location survives the type-change reset via the auto-location ref.
+        if (slot) {
+          setRecordingSlot(slot);
+          const slotType = surveyTypesData.find((t) => t.id === slot.survey_type_id) ?? null;
+          setSelectedSurveyType(slotType);
+          const today = dayjs().format('YYYY-MM-DD');
+          const clamped = today < slot.window_start
+            ? slot.window_start
+            : today > slot.window_end
+              ? slot.window_end
+              : today;
+          setDate(dayjs(clamped));
+          if (slot.location_id != null) {
+            autoLocationIdRef.current = slot.location_id;
+            setLocationId(slot.location_id);
+          }
+          const preassigned = surveyorsData.filter((s) => slot.surveyor_ids.includes(s.id));
+          prefilledSurveyorIdsRef.current = preassigned.map((s) => s.id);
+          setSelectedSurveyors(preassigned);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load form data');
         console.error('Error fetching data:', err);
@@ -213,7 +256,7 @@ export function NewSurveyPage() {
     };
 
     fetchInitialData();
-  }, []);
+  }, [scheduledSurveyIdParam]);
 
   // ============================================================================
   // Data Fetching - When Survey Type Changes
@@ -380,6 +423,7 @@ export function NewSurveyPage() {
         surveyor_ids: selectedSurveyors.map((s) => s.id),
         notes: notes.trim() || null,
         survey_type_id: selectedSurveyType?.id,
+        scheduled_survey_id: recordingSlot?.id ?? null,
         start_time: startTime?.isValid() ? startTime.format('HH:mm:ss') : null,
         end_time: endTime?.isValid() ? endTime.format('HH:mm:ss') : null,
         sun_percentage: sunPercentage !== '' ? Number(sunPercentage) : null,
@@ -643,6 +687,7 @@ export function NewSurveyPage() {
           value={selectedSurveyType}
           onChange={(_, newValue) => handleSurveyTypeChange(newValue)}
           loading={surveyTypesLoading}
+          disabled={recordingSlot !== null}
           renderInput={(params) => (
             <TextField
               {...params}
@@ -655,6 +700,13 @@ export function NewSurveyPage() {
           isOptionEqualToValue={(option, value) => option.id === value.id}
         />
       </Paper>
+
+      {/* Record flow: say which planned week/day this survey records */}
+      {recordingSlot && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Recording the scheduled survey for {formatSurveyDate(recordingSlot)}.
+        </Alert>
+      )}
 
       {/* Survey Type Description Banner */}
       {showDescription && (

@@ -5,7 +5,7 @@
  */
 import { Box, Paper, ButtonBase, Typography } from '@mui/material';
 import { ChevronRight } from '@mui/icons-material';
-import type { Survey, SurveyTypeWithDetails } from '../../services/api';
+import type { ScheduledSurvey, SurveyTypeWithDetails } from '../../services/api';
 import { groupColors } from '../../pages/groups/groupsTokens';
 import { accentColors, primarySpeciesType } from '../../pages/groups/groupMeta';
 import { formatSurveyDate } from '../../pages/groups/surveyState';
@@ -17,7 +17,7 @@ interface GroupCardProps {
   /** Distinct species recorded across all surveys of this type. */
   speciesCount: number;
   /** Soonest upcoming survey, or null if none scheduled. */
-  nextSurvey: Survey | null;
+  nextSurvey: ScheduledSurvey | null;
   onOpen: () => void;
 }
 

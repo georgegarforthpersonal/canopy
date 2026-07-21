@@ -10,25 +10,25 @@
  */
 import { Box, Paper, Typography, ButtonBase } from '@mui/material';
 import { AssignmentTurnedIn, ChevronRight } from '@mui/icons-material';
-import type { Survey, Surveyor } from '../../services/api';
+import type { ScheduledSurvey, Surveyor } from '../../services/api';
 import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
 import { buildWorklist } from '../../pages/groups/surveyState';
 import SurveyWorklistRow from './SurveyWorklistRow';
 
 interface SurveysPanelProps {
-  /** All scheduled (not yet recorded) surveys for this group. */
-  surveys: Survey[];
-  /** This week's already-recorded surveys — pinned so the week stays visible. */
-  recordedThisWeek: Survey[];
+  /** All of this group's scheduled slots (open, fulfilled and cancelled). */
+  slots: ScheduledSurvey[];
+  /** This week's already-recorded slots — pinned so the week stays visible. */
+  recordedThisWeek: ScheduledSurvey[];
   resolveSurveyors: (ids: number[]) => Surveyor[];
-  /** Completed surveys only — shown alongside the scheduled count on the door. */
+  /** Recorded surveys total — shown alongside the scheduled count on the door. */
   recordedCount: number;
   greenIds?: Set<number>;
-  onAddSurvey: (survey: Survey) => void;
+  onAddSurvey: (slot: ScheduledSurvey) => void;
   /** Called after a one-click sign-up/withdraw with the new surveyor ids. */
-  onSignupSaved: (surveyId: number, surveyorIds: number[]) => void;
-  /** Open a recorded survey read-only. */
-  onOpenSurvey: (survey: Survey) => void;
+  onSignupSaved: (slotId: number, surveyorIds: number[]) => void;
+  /** Open a recorded slot's survey read-only. */
+  onOpenSurvey: (slot: ScheduledSurvey) => void;
   onViewAll: () => void;
 }
 
@@ -56,7 +56,7 @@ function SectionHeader({ label, color, suffix }: { label: string; color: string;
 }
 
 export default function SurveysPanel({
-  surveys,
+  slots,
   recordedThisWeek,
   resolveSurveyors,
   recordedCount,
@@ -66,7 +66,8 @@ export default function SurveysPanel({
   onOpenSurvey,
   onViewAll,
 }: SurveysPanelProps) {
-  const { dueThisWeek, overdue, upcoming, upcomingTotal } = buildWorklist(surveys);
+  const { dueThisWeek, overdue, upcoming, upcomingTotal } = buildWorklist(slots);
+  const scheduledCount = overdue.length + dueThisWeek.length + upcomingTotal;
   const thisWeekCount = dueThisWeek.length + recordedThisWeek.length;
   const empty = thisWeekCount === 0 && overdue.length === 0 && upcoming.length === 0;
 
@@ -92,7 +93,7 @@ export default function SurveysPanel({
       {overdue.map((s) => (
         <SurveyWorklistRow
           key={s.id}
-          survey={s}
+          slot={s}
           state="needs-survey"
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
@@ -106,7 +107,7 @@ export default function SurveysPanel({
       {dueThisWeek.map((s) => (
         <SurveyWorklistRow
           key={s.id}
-          survey={s}
+          slot={s}
           state="due-this-week"
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
@@ -117,7 +118,7 @@ export default function SurveysPanel({
       {recordedThisWeek.map((s) => (
         <SurveyWorklistRow
           key={s.id}
-          survey={s}
+          slot={s}
           state="recorded"
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
@@ -144,7 +145,7 @@ export default function SurveysPanel({
       {upcoming.map((s) => (
         <SurveyWorklistRow
           key={s.id}
-          survey={s}
+          slot={s}
           state="upcoming"
           surveyors={resolveSurveyors(s.surveyor_ids)}
           greenIds={greenIds}
@@ -187,7 +188,7 @@ export default function SurveysPanel({
             All surveys
           </Typography>
           <Typography sx={{ fontSize: 12, color: groupColors.textMuted }}>
-            {recordedCount} recorded · {surveys.length} scheduled
+            {recordedCount} recorded · {scheduledCount} scheduled
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: groupColors.brand, flexShrink: 0 }}>

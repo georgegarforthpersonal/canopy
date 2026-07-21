@@ -100,12 +100,11 @@ export function SurveysPage() {
         setLoading(true);
         setError(null);
 
-        // Build query parameters
-        // Only show completed surveys on this page (scheduled/cancelled are managed elsewhere)
-        const queryParams: { page: number; limit: number; survey_type_id?: number; survey_status: 'completed' } = {
+        // Build query parameters. Every survey row is a recorded survey;
+        // the schedule lives on /admin's Scheduled tab and in Groups.
+        const queryParams: { page: number; limit: number; survey_type_id?: number } = {
           page,
           limit,
-          survey_status: 'completed'
         };
 
         // Add survey type filter if selected

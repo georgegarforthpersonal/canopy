@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Typography, CircularProgress } from '@mui/material';
-import { surveyTypesAPI, surveysAPI, dashboardAPI, type Survey, type SurveyTypeWithDetails } from '../../services/api';
+import { surveyTypesAPI, surveysAPI, scheduledSurveysAPI, dashboardAPI, type ScheduledSurvey, type SurveyTypeWithDetails } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
 import { nextScheduledSurvey } from './surveyState';
 import { primarySpeciesType, groupPath, betaGroupNames } from './groupMeta';
@@ -17,7 +17,7 @@ interface CardData {
   surveyType: SurveyTypeWithDetails;
   surveyCount: number;
   speciesCount: number;
-  nextSurvey: Survey | null;
+  nextSurvey: ScheduledSurvey | null;
 }
 
 export default function GroupsPage() {
@@ -37,16 +37,16 @@ export default function GroupsPage() {
           if (active) setCards([]);
           return;
         }
-        // "Surveys" is the total across all statuses (matching the All surveys
+        // "Surveys" is the recorded total (matching the All surveys
         // count); "Species" is the distinct species recorded (the all-time
         // cumulative total); "Next survey" is the soonest scheduled future one.
         const loaded = await Promise.all(
           matched.map(async (t): Promise<CardData> => {
             const details = await surveyTypesAPI.getById(t.id);
             const speciesType = primarySpeciesType(details);
-            const [totalPage, scheduled, cumulative] = await Promise.all([
+            const [totalPage, slots, cumulative] = await Promise.all([
               surveysAPI.getAll({ survey_type_id: t.id, page: 1, limit: 1 }),
-              surveysAPI.getAllPages({ survey_type_id: t.id, survey_status: 'scheduled' }),
+              scheduledSurveysAPI.getAll({ survey_type_id: t.id }),
               dashboardAPI.getCumulativeSpecies([speciesType]),
             ]);
             const speciesCount = cumulative.data
@@ -56,7 +56,7 @@ export default function GroupsPage() {
               surveyType: details,
               surveyCount: totalPage.total,
               speciesCount,
-              nextSurvey: nextScheduledSurvey(scheduled),
+              nextSurvey: nextScheduledSurvey(slots),
             };
           }),
         );

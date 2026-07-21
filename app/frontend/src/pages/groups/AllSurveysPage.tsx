@@ -1,8 +1,12 @@
 /**
  * All surveys: the full chronological history/forward-schedule for a survey
  * type. Status-only rows (no titles); the date — a single day or a week range,
- * with the year — heads each row and is the identifier (no calendar tile). The
- * server returns surveys date-descending (upcoming on top), paged via Load more.
+ * with the year — heads each row and is the identifier (no calendar tile).
+ *
+ * The list merges two sources, date-descending (upcoming on top): the group's
+ * open/cancelled slots (schedule) and its recorded surveys (history, paged via
+ * Load more). Fulfilled slots are represented by their recorded surveys, so
+ * no week appears twice.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -12,25 +16,28 @@ import {
   ApiError,
   surveyTypesAPI,
   surveysAPI,
-  surveyorsAPI,
+  scheduledSurveysAPI,
   type SurveyTypeWithDetails,
   type Survey,
+  type ScheduledSurvey,
   type Surveyor,
 } from '../../services/api';
+import { surveyorsAPI } from '../../services/api';
 import { recordButtonSx, groupCardSx, groupColors } from './groupsTokens';
 import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
-import { deriveSurveyState, formatSurveyDate, type SurveyState } from './surveyState';
+import { deriveSlotState, formatSurveyDate, type SlotState } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import dayjs from 'dayjs';
 import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
 import SelfSignupButton from '../../components/groups/SelfSignupButton';
 import SurveyorAvatars from '../../components/groups/SurveyorAvatars';
 
 const PAGE_SIZE = 25;
 
-const STATUS_STYLES: Record<SurveyState, { label: string; color: string; bg: string }> = {
+const STATUS_STYLES: Record<SlotState, { label: string; color: string; bg: string }> = {
   recorded: { label: 'Recorded', color: '#2E6B42', bg: '#DBEDDB' },
   upcoming: { label: 'Upcoming', color: '#454648', bg: '#EBECED' },
   'due-this-week': { label: 'Due this week', color: '#2C5F8A', bg: '#DCE8F2' },
@@ -38,7 +45,7 @@ const STATUS_STYLES: Record<SurveyState, { label: string; color: string; bg: str
   cancelled: { label: 'Cancelled', color: '#888888', bg: '#EBECED' },
 };
 
-function StatusChip({ state }: { state: SurveyState }) {
+function StatusChip({ state }: { state: SlotState }) {
   const s = STATUS_STYLES[state];
   return (
     <Box
@@ -58,11 +65,17 @@ function StatusChip({ state }: { state: SurveyState }) {
   );
 }
 
+/** One merged list entry: an unfulfilled/cancelled slot, or a recorded survey. */
+type Row =
+  | { kind: 'slot'; slot: ScheduledSurvey; sortDate: string }
+  | { kind: 'survey'; survey: Survey; sortDate: string };
+
 export default function AllSurveysPage() {
   const { typeId } = useParams<{ typeId: string }>();
   const navigate = useNavigate();
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
+  const [slots, setSlots] = useState<ScheduledSurvey[]>([]);
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [total, setTotal] = useState(0);
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
@@ -91,13 +104,15 @@ export default function AllSurveysPage() {
           setNotFound(true);
           return;
         }
-        const [details, page, surveyorList] = await Promise.all([
+        const [details, slotList, page, surveyorList] = await Promise.all([
           surveyTypesAPI.getById(surveyTypeId),
+          scheduledSurveysAPI.getAll({ survey_type_id: surveyTypeId }),
           surveysAPI.getAll({ survey_type_id: surveyTypeId, page: 1, limit: PAGE_SIZE }),
           surveyorsAPI.getAll(),
         ]);
         if (!active) return;
         setSurveyType(details);
+        setSlots(slotList);
         setSurveys(page.data);
         setTotal(page.total);
         setSurveyors(surveyorList);
@@ -117,7 +132,7 @@ export default function AllSurveysPage() {
   }, [typeId]);
 
   const resolveSurveyors = useSurveyorLookup(surveyors);
-  const handleSignupSaved = useSignupSaved(surveys, setSurveys, setGreenIds, surveyors, setSurveyors);
+  const handleSignupSaved = useSignupSaved(slots, setSlots, setGreenIds, surveyors, setSurveyors);
 
   if (loading) {
     return (
@@ -164,19 +179,36 @@ export default function AllSurveysPage() {
     }
   };
 
-  // Open a survey, telling it to return here (the group's survey history)
-  // rather than the main surveys list after editing/deleting. Record survey
-  // passes record so the form opens in record mode — saving marks the
-  // scheduled survey completed; a plain open never changes the lifecycle.
-  const goToSurvey = (surveyId: number, opts?: { record?: boolean }) =>
-    navigate(`/surveys/${surveyId}${opts?.record ? '?record=true' : ''}`, {
-      state: {
-        returnTo: {
-          pathname: `/groups/${typeId}/all`,
-          label: surveyType?.name ?? 'All surveys',
-        },
+  const returnTo = {
+    state: {
+      returnTo: {
+        pathname: `/groups/${typeId}/all`,
+        label: surveyType?.name ?? 'All surveys',
       },
-    });
+    },
+  };
+  // Open a recorded survey, telling it to return here (the group's survey
+  // history) rather than the main surveys list after editing/deleting.
+  const openSurvey = (surveyId: number) => navigate(`/surveys/${surveyId}`, returnTo);
+  // Recording a slot creates a NEW survey linked to it, prefilled on the
+  // new-survey form.
+  const recordSlot = (slot: ScheduledSurvey) =>
+    navigate(`/surveys/new?scheduled_survey_id=${slot.id}`, returnTo);
+
+  // Fulfilled slots are represented by their recorded surveys; the remaining
+  // slots (open or cancelled) are the schedule. Merged date-descending so
+  // upcoming weeks sit on top of the history.
+  const rows: Row[] = [
+    ...slots
+      .filter((s) => deriveSlotState(s) !== 'recorded')
+      .map((slot): Row => ({ kind: 'slot', slot, sortDate: slot.window_start })),
+    ...surveys.map((survey): Row => ({ kind: 'survey', survey, sortDate: survey.date })),
+  ].sort((a, b) => b.sortDate.localeCompare(a.sortDate));
+
+  const scheduledCount = slots.filter((s) => {
+    const st = deriveSlotState(s);
+    return st === 'upcoming' || st === 'due-this-week' || st === 'needs-survey';
+  }).length;
 
   return (
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
@@ -193,31 +225,35 @@ export default function AllSurveysPage() {
           All surveys
         </Typography>
         <Typography sx={{ fontSize: 13.5, color: '#888', mb: 2 }}>
-          {surveyType?.name ?? ''} · {total} survey{total === 1 ? '' : 's'}, most recent first
+          {surveyType?.name ?? ''} · {total} recorded · {scheduledCount} scheduled, most recent first
         </Typography>
 
         <Paper sx={groupCardSx}>
-          {surveys.length === 0 ? (
+          {rows.length === 0 ? (
             <Box sx={{ px: 2.25, py: 3 }}>
               <Typography sx={{ fontSize: 13.5, color: groupColors.textMuted }}>
                 No surveys yet.
               </Typography>
             </Box>
           ) : (
-            surveys.map((survey, idx) => {
-              const state = deriveSurveyState(survey);
-              const assigned = resolveSurveyors(survey.surveyor_ids);
+            rows.map((row, idx) => {
+              const state: SlotState = row.kind === 'survey' ? 'recorded' : deriveSlotState(row.slot);
+              const assigned = resolveSurveyors(
+                row.kind === 'survey' ? row.survey.surveyor_ids : row.slot.surveyor_ids,
+              );
+              const locationName = row.kind === 'survey' ? row.survey.location_name : row.slot.location_name;
+              const clickable = row.kind === 'survey';
               // Rows carrying the sign-up toggle are too wide for a phone, so
               // they stack — same rule as SurveyWorklistRow: date + chip line
               // with avatars top right, actions line below.
               const stacked = state === 'due-this-week' || state === 'upcoming';
-              const recordButton = (
+              const recordButton = row.kind === 'slot' && (
                 <Button
                   variant="contained"
                   startIcon={<Add sx={{ fontSize: 18 }} />}
                   onClick={(e) => {
                     e.stopPropagation();
-                    goToSurvey(survey.id, { record: true });
+                    recordSlot(row.slot);
                   }}
                   sx={recordButtonSx}
                 >
@@ -226,7 +262,7 @@ export default function AllSurveysPage() {
               );
               return (
                 <Box
-                  key={survey.id}
+                  key={`${row.kind}-${row.kind === 'survey' ? row.survey.id : row.slot.id}`}
                   sx={{
                     display: 'flex',
                     flexDirection: { xs: stacked ? 'column' : 'row', sm: 'row' },
@@ -236,21 +272,27 @@ export default function AllSurveysPage() {
                     py: 1.6,
                     borderTop: idx === 0 ? 'none' : `1px solid ${groupColors.dividerInner}`,
                     bgcolor: state === 'needs-survey' ? groupColors.amberRowBg : 'transparent',
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: state === 'needs-survey' ? groupColors.amberRowBg : groupColors.page },
+                    ...(clickable
+                      ? {
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: groupColors.page },
+                        }
+                      : {}),
                   }}
-                  onClick={() => goToSurvey(survey.id)}
+                  onClick={clickable ? () => openSurvey(row.survey.id) : undefined}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: 1 }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
-                        {formatSurveyDate(survey)}
+                        {row.kind === 'slot'
+                          ? formatSurveyDate(row.slot)
+                          : dayjs(row.survey.date).format('ddd D MMM YYYY')}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
                         <StatusChip state={state} />
-                        {survey.location_name && (
+                        {locationName && (
                           <Typography sx={{ fontSize: 13, color: groupColors.textMuted }} noWrap>
-                            {survey.location_name}
+                            {locationName}
                           </Typography>
                         )}
                       </Box>
@@ -265,7 +307,7 @@ export default function AllSurveysPage() {
                   </Box>
 
                   {/* Right cell varies by status */}
-                  {state === 'recorded' && (
+                  {row.kind === 'survey' && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
                       <Box
                         sx={{
@@ -282,7 +324,7 @@ export default function AllSurveysPage() {
                         }}
                       >
                         <SpeciesIcon sx={{ fontSize: 15 }} />
-                        {survey.sightings_count}
+                        {row.survey.sightings_count}
                       </Box>
                       <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
                     </Box>
@@ -292,7 +334,7 @@ export default function AllSurveysPage() {
                       the same one-click self toggle for every role. The record
                       button rides in the same cell so stacked rows keep every
                       action on one wrappable line. */}
-                  {(state === 'upcoming' || state === 'due-this-week') && (
+                  {row.kind === 'slot' && (state === 'upcoming' || state === 'due-this-week') && (
                     <Box
                       sx={{
                         display: 'flex',
@@ -307,7 +349,7 @@ export default function AllSurveysPage() {
                       <Box sx={{ display: { xs: 'none', sm: 'flex' } }}>
                         <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
                       </Box>
-                      <SelfSignupButton survey={survey} assigned={assigned} onSaved={handleSignupSaved} />
+                      <SelfSignupButton slot={row.slot} assigned={assigned} onSaved={handleSignupSaved} />
                       {state === 'due-this-week' && canEditSurveys && recordButton}
                     </Box>
                   )}
