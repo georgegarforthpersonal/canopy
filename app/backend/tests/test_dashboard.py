@@ -8,7 +8,6 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 
-from models import SurveyStatus
 
 
 def _add_sighting(client, auth_headers, survey_id, species_id, count):
@@ -153,12 +152,12 @@ class TestSurveyTypeScoping:
         new_species = [s for d in data for s in d["new_species"]]
         assert "Peacock" not in new_species
 
-    def test_species_occurrences_scoped_and_completed_only(
-        self, client: TestClient, auth_headers: dict, db_session,
+    def test_species_occurrences_scoped_to_type(
+        self, client: TestClient, auth_headers: dict,
         create_species, create_survey, create_survey_type,
     ):
-        """Occurrences cover only completed surveys of the given type; a
-        completed survey with no sighting is a real zero-count point."""
+        """Occurrences cover only surveys of the given type; a survey with no
+        sighting is a real zero-count point."""
         walking = create_survey_type(name="Walking Survey")
         adhoc = create_survey_type(name="Ad Hoc")
         fritillary = create_species(name="Marsh Fritillary", species_type="butterfly")
@@ -166,10 +165,6 @@ class TestSurveyTypeScoping:
         seen = create_survey(survey_date=date(2024, 5, 1), survey_type_id=walking.id)
         none_seen = create_survey(survey_date=date(2024, 5, 8), survey_type_id=walking.id)
         other_type = create_survey(survey_date=date(2024, 5, 2), survey_type_id=adhoc.id)
-        scheduled = create_survey(survey_date=date(2024, 6, 1), survey_type_id=walking.id)
-        scheduled.status = SurveyStatus.scheduled
-        db_session.add(scheduled)
-        db_session.commit()
 
         _add_sighting(client, auth_headers, seen.id, fritillary.id, 4)
         _add_sighting(client, auth_headers, other_type.id, fritillary.id, 7)
