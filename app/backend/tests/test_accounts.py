@@ -673,20 +673,17 @@ class TestInviteSurveyorLinking:
         ).status_code == 409
 
     def test_survey_signup_reuses_registration_surveyor(
-        self, client: TestClient, login_as, create_surveyor, create_survey, db_session
+        self, client: TestClient, login_as, create_surveyor, create_survey_type, create_scheduled_survey
     ):
         admin_headers, _ = login_as(UserRole.admin)
         existing = create_surveyor(first_name="Bernie", last_name="Garforth")
         invited = self._invite(client, admin_headers, surveyor_id=existing.id)
         accepted = self._accept(client, invited["invite_url"])
 
-        survey = create_survey()
-        survey.status = "scheduled"
-        db_session.add(survey)
-        db_session.commit()
+        slot = create_scheduled_survey(survey_type_id=create_survey_type().id)
 
         headers = {"Authorization": f"Bearer {accepted['token']}"}
-        response = client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
+        response = client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers)
         assert response.status_code == 200
         assert response.json()["surveyor_id"] == existing.id
 
@@ -882,15 +879,12 @@ class TestOrgDomainSessionGuard:
 
 class TestSurveySignup:
     def test_viewer_signs_up_creates_linked_surveyor(
-        self, client: TestClient, login_as, create_survey, db_session
+        self, client: TestClient, login_as, create_survey_type, create_scheduled_survey, db_session
     ):
         headers, user = login_as(UserRole.viewer, first_name="Nell", last_name="Woods")
-        survey = create_survey()
-        survey.status = "scheduled"
-        db_session.add(survey)
-        db_session.commit()
+        slot = create_scheduled_survey(survey_type_id=create_survey_type().id)
 
-        response = client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
+        response = client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers)
         assert response.status_code == 200
         surveyor_id = response.json()["surveyor_id"]
 
@@ -900,19 +894,17 @@ class TestSurveySignup:
         assert response.json()["surveyor_ids"] == [surveyor_id]
 
     def test_signup_never_links_existing_surveyor_by_name(
-        self, client: TestClient, login_as, create_survey, create_surveyor, db_session
+        self, client: TestClient, login_as, create_survey_type, create_scheduled_survey,
+        create_surveyor, db_session
     ):
         """No heuristic matching: even an exact name match gets a NEW
         surveyor. Historical surveyors are merged deliberately by an admin,
         never guessed at — a wrong guess would mis-attribute survey history."""
         existing = create_surveyor(first_name="Nell", last_name="Woods")
         headers, user = login_as(UserRole.viewer, first_name="Nell", last_name="Woods")
-        survey = create_survey()
-        survey.status = "scheduled"
-        db_session.add(survey)
-        db_session.commit()
+        slot = create_scheduled_survey(survey_type_id=create_survey_type().id)
 
-        response = client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
+        response = client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers)
         assert response.status_code == 200
         assert response.json()["surveyor_id"] != existing.id
         db_session.refresh(existing)
@@ -921,55 +913,55 @@ class TestSurveySignup:
         new_surveyor = db_session.get(Surveyor, response.json()["surveyor_id"])
         assert new_surveyor.user_id == user.id
 
-    def test_signup_is_idempotent(self, client: TestClient, login_as, create_survey, db_session):
+    def test_signup_is_idempotent(
+        self, client: TestClient, login_as, create_survey_type, create_scheduled_survey
+    ):
         headers, _ = login_as(UserRole.viewer)
-        survey = create_survey()
-        survey.status = "scheduled"
-        db_session.add(survey)
-        db_session.commit()
+        slot = create_scheduled_survey(survey_type_id=create_survey_type().id)
 
-        first = client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
-        second = client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
+        first = client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers)
+        second = client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers)
         assert first.json()["surveyor_ids"] == second.json()["surveyor_ids"]
 
-    def test_signup_only_on_scheduled_surveys(self, client: TestClient, login_as, create_survey):
+    def test_signup_only_on_open_slots(
+        self, client: TestClient, login_as, create_survey_type, create_scheduled_survey
+    ):
+        from models import ScheduledSurveyStatus
         headers, _ = login_as(UserRole.viewer)
-        survey = create_survey()  # defaults to completed
-        assert client.post(f"/api/surveys/{survey.id}/signup", headers=headers).status_code == 400
+        slot = create_scheduled_survey(
+            survey_type_id=create_survey_type().id,
+            status=ScheduledSurveyStatus.cancelled,
+        )
+        assert client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers).status_code == 400
 
     def test_signup_does_not_touch_other_surveyors(
-        self, client: TestClient, login_as, create_survey, create_surveyor, db_session
+        self, client: TestClient, login_as, create_survey_type, create_scheduled_survey, create_surveyor
     ):
         other = create_surveyor(first_name="Someone", last_name="Else")
-        survey = create_survey(surveyor_ids=[other.id])
-        survey.status = "scheduled"
-        db_session.add(survey)
-        db_session.commit()
+        slot = create_scheduled_survey(
+            survey_type_id=create_survey_type().id, surveyor_ids=[other.id]
+        )
 
         headers, _ = login_as(UserRole.viewer)
-        response = client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
+        response = client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers)
         assert other.id in response.json()["surveyor_ids"]
         assert len(response.json()["surveyor_ids"]) == 2
 
-    def test_withdraw(self, client: TestClient, login_as, create_survey, db_session):
+    def test_withdraw(
+        self, client: TestClient, login_as, create_survey_type, create_scheduled_survey
+    ):
         headers, _ = login_as(UserRole.viewer)
-        survey = create_survey()
-        survey.status = "scheduled"
-        db_session.add(survey)
-        db_session.commit()
+        slot = create_scheduled_survey(survey_type_id=create_survey_type().id)
 
-        client.post(f"/api/surveys/{survey.id}/signup", headers=headers)
-        response = client.delete(f"/api/surveys/{survey.id}/signup", headers=headers)
+        client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers)
+        response = client.delete(f"/api/scheduled-surveys/{slot.id}/signup", headers=headers)
         assert response.status_code == 200
         assert response.json()["surveyor_ids"] == []
 
     def test_admin_can_also_self_signup(
-        self, client: TestClient, auth_headers, create_survey, db_session
+        self, client: TestClient, auth_headers, create_survey_type, create_scheduled_survey
     ):
         """Self sign-up is an any-role action, admins included."""
-        survey = create_survey()
-        survey.status = "scheduled"
-        db_session.add(survey)
-        db_session.commit()
-        response = client.post(f"/api/surveys/{survey.id}/signup", headers=auth_headers)
+        slot = create_scheduled_survey(survey_type_id=create_survey_type().id)
+        response = client.post(f"/api/scheduled-surveys/{slot.id}/signup", headers=auth_headers)
         assert response.status_code == 200

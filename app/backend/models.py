@@ -30,25 +30,24 @@ class DeviceType(str, PyEnum):
     moth_light_trap = "moth_light_trap"
 
 
-class SurveyStatus(str, PyEnum):
-    """Lifecycle of a survey.
+class ScheduledSurveyStatus(str, PyEnum):
+    """Lifecycle of a scheduled survey (a planned slot).
 
-    - scheduled: planned/assigned, not yet carried out
-    - completed: the survey took place and was recorded (any sighting count,
-      including a valid nil count of zero)
-    - cancelled: scheduled but did not happen (e.g. weather, no-shows)
+    - open: planned; recorded surveys link to it while its window contains
+      their date. Fulfilment is derived (>=1 linked survey), not stored.
+    - cancelled: the plan was called off (e.g. weather, no-shows). Existing
+      linked surveys keep their link; new surveys never link to it.
     """
-    scheduled = "scheduled"
-    completed = "completed"
+    open = "open"
     cancelled = "cancelled"
 
 
 class ScheduleCadence(str, PyEnum):
     """How surveys of a type are scheduled.
 
-    - date: scheduled for a specific day (scheduled date == survey date).
+    - date: scheduled for a specific day (the slot's window is that one day).
     - weekly: scheduled for a whole week; the survey may be carried out any day
-      within the window (``scheduled_window_start`` .. ``scheduled_window_end``).
+      within the slot's ``window_start`` .. ``window_end``.
     """
     date = "date"
     weekly = "weekly"
@@ -301,6 +300,22 @@ class SurveySurveyor(SQLModel, table=True):  # type: ignore[call-arg]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     survey_id: int = Field(foreign_key="survey.id", ondelete="CASCADE")
+    surveyor_id: int = Field(foreign_key="surveyor.id", ondelete="CASCADE")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
+    )
+
+
+class ScheduledSurveySurveyor(SQLModel, table=True):  # type: ignore[call-arg]
+    """Junction table of surveyors pre-assigned (or self-signed-up) to a
+    scheduled survey. Distinct from SurveySurveyor, which records who actually
+    carried out a recorded survey."""
+    __tablename__ = "scheduled_survey_surveyor"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    scheduled_survey_id: int = Field(foreign_key="scheduled_survey.id", ondelete="CASCADE")
     surveyor_id: int = Field(foreign_key="surveyor.id", ondelete="CASCADE")
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -804,6 +819,81 @@ class SurveyTypeFileRead(SQLModel):
 
 
 # ============================================================================
+# Scheduled Survey Models (slots: plans that recorded surveys link to)
+# ============================================================================
+
+class ScheduledSurvey(SQLModel, table=True):  # type: ignore[call-arg]
+    """A planned survey slot. Recorded Survey rows point at it via
+    ``Survey.scheduled_survey_id``; a slot with at least one linked survey is
+    fulfilled (derived, never stored). Day-precise cadence stores
+    ``window_start == window_end`` so one containment predicate covers both
+    cadences."""
+    __tablename__ = "scheduled_survey"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organisation_id: int = Field(foreign_key="organisation.id", index=True)
+    survey_type_id: int = Field(foreign_key="survey_type.id", index=True)
+    location_id: Optional[int] = Field(None, foreign_key="location.id")
+    window_start: date_type = Field(description="First day the survey may be carried out")
+    window_end: date_type = Field(description="Last day the survey may be carried out (== start for day-precise)")
+    notes: Optional[str] = Field(None)
+    status: ScheduledSurveyStatus = Field(
+        default=ScheduledSurveyStatus.open,
+        sa_column=sa.Column("status", sa.String(20), nullable=False, server_default="open"),
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"server_default": sa.text("CURRENT_TIMESTAMP")}
+    )
+
+
+class ScheduledSurveyCreate(SQLModel):
+    """Bulk-schedule a recurring series of slots.
+
+    Creates one slot per date, sharing the same survey type, location and
+    (optionally) pre-assigned surveyors. The frontend expands the recurrence
+    rule into explicit dates; the survey type's cadence decides whether each
+    date becomes a week-long window or a single day."""
+    survey_type_id: int = Field(description="Survey type for every slot")
+    location_id: Optional[int] = Field(None, gt=0, description="Survey-level location (when the type uses one)")
+    surveyor_ids: List[int] = Field(default_factory=list, description="Surveyors pre-assigned to every slot")
+    notes: Optional[str] = Field(None, description="Optional note applied to every slot")
+    dates: List[date_type] = Field(..., min_length=1, max_length=104, description="One slot is created per date")
+
+
+class ScheduledSurveyUpdate(SQLModel):
+    """Model for updating a slot (all fields optional). Cancelling is
+    ``{"status": "cancelled"}``."""
+    location_id: Optional[int] = Field(None, gt=0)
+    notes: Optional[str] = None
+    status: Optional[ScheduledSurveyStatus] = None
+    surveyor_ids: Optional[List[int]] = None
+
+
+class LinkedSurveySummary(SQLModel):
+    """A recorded survey linked to a slot, as embedded in ScheduledSurveyRead."""
+    id: int
+    date: date_type
+
+
+class ScheduledSurveyRead(SQLModel):
+    """Model for reading a slot, with linked recorded surveys embedded so
+    clients can derive fulfilment without a second request."""
+    id: int
+    survey_type_id: int
+    location_id: Optional[int]
+    location_name: Optional[str] = None
+    window_start: date_type
+    window_end: date_type
+    notes: Optional[str]
+    status: ScheduledSurveyStatus
+    surveyor_ids: List[int] = Field(default_factory=list)
+    linked_surveys: List[LinkedSurveySummary] = Field(default_factory=list)
+    created_at: datetime
+
+
+# ============================================================================
 # Survey Models
 # ============================================================================
 
@@ -819,20 +909,6 @@ class SurveyBase(SQLModel):
     location_id: Optional[int] = Field(None, foreign_key="location.id", description="Location ID (required when survey type uses survey-level location)")
     survey_type_id: Optional[int] = Field(None, foreign_key="survey_type.id", description="Survey type ID")
     device_id: Optional[int] = Field(None, foreign_key="device.id", description="Device ID (for camera trap surveys)")
-    status: SurveyStatus = Field(
-        default=SurveyStatus.completed,
-        sa_column=sa.Column("status", sa.String(20), nullable=False, server_default="completed"),
-        description="Survey lifecycle: scheduled, completed (recorded, incl. nil counts) or cancelled",
-    )
-    # Scheduling window for weekly-cadence survey types: the survey may be carried
-    # out any day in [start, end]. Null for day-precise schedules, where ``date``
-    # is the scheduled day. On completion ``date`` records the actual day.
-    scheduled_window_start: Optional[date_type] = Field(
-        None, description="First day of the scheduling window (weekly cadence); null for day-precise"
-    )
-    scheduled_window_end: Optional[date_type] = Field(
-        None, description="Last day of the scheduling window (weekly cadence); null for day-precise"
-    )
 
 
 class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
@@ -841,6 +917,11 @@ class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
 
     id: Optional[int] = Field(default=None, primary_key=True)
     organisation_id: int = Field(foreign_key="organisation.id", index=True, description="Organisation this survey belongs to")
+    # The slot this survey records, if any. Deleting the slot detaches the
+    # survey (SET NULL); the survey itself is never touched.
+    scheduled_survey_id: Optional[int] = Field(
+        default=None, foreign_key="scheduled_survey.id", ondelete="SET NULL", index=True
+    )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         nullable=False,
@@ -866,20 +947,10 @@ class Survey(SurveyBase, table=True):  # type: ignore[call-arg]
 class SurveyCreate(SurveyBase):
     """Model for creating a new survey"""
     surveyor_ids: List[int] = Field(description="List of surveyor IDs")
-
-
-class SurveyScheduleCreate(SQLModel):
-    """Bulk-schedule a recurring series of surveys.
-
-    Creates one `scheduled` survey per date, sharing the same survey type,
-    location and (optionally) pre-assigned surveyors. Used by the admin
-    scheduling UI; the frontend expands the recurrence rule into explicit dates.
-    """
-    survey_type_id: Optional[int] = Field(None, description="Survey type for every scheduled survey")
-    location_id: Optional[int] = Field(None, gt=0, description="Survey-level location (when the type uses one)")
-    surveyor_ids: List[int] = Field(default_factory=list, description="Surveyors pre-assigned to every survey")
-    notes: Optional[str] = Field(None, description="Optional note applied to every survey")
-    dates: List[date_type] = Field(..., min_length=1, max_length=104, description="One survey is created per date")
+    scheduled_survey_id: Optional[int] = Field(
+        None,
+        description="Slot this survey records (record flow). When omitted the survey auto-links to the open slot whose window contains its date.",
+    )
 
 
 class SurveyUpdate(SQLModel):
@@ -893,7 +964,6 @@ class SurveyUpdate(SQLModel):
     notes: Optional[str] = None
     location_id: Optional[int] = Field(None, gt=0)
     device_id: Optional[int] = None
-    status: Optional[SurveyStatus] = None
     surveyor_ids: Optional[List[int]] = None
 
 
@@ -902,6 +972,7 @@ class SurveyRead(SurveyBase):
     id: int
     surveyor_ids: List[int] = Field(default_factory=list, description="List of surveyor IDs")
     location_name: Optional[str] = Field(None, description="Name of the survey's location, regardless of current survey-type config")
+    scheduled_survey_id: Optional[int] = Field(None, description="Slot this survey records, if any")
 
 
 class SpeciesTypeCount(SQLModel):
