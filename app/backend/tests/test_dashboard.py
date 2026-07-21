@@ -8,6 +8,17 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 
+from models import SurveyStatus
+
+
+def _add_sighting(client, auth_headers, survey_id, species_id, count):
+    resp = client.post(
+        f"/api/surveys/{survey_id}/sightings",
+        json={"species_id": species_id, "count": count},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+
 
 class TestCumulativeSpecies:
     """Tests for GET /api/dashboard/cumulative-species"""
@@ -90,6 +101,87 @@ class TestSpeciesByCount:
         row = next(r for r in rows if r["id"] == species.id)
         assert row["total_count"] == 5
         assert row["first_observed"] == "2024-05-01"
+
+
+class TestSurveyTypeScoping:
+    """The survey_type_id filter scopes dashboard data to one group's surveys."""
+
+    def test_species_by_count_scoped_to_survey_type(
+        self, client: TestClient, auth_headers: dict,
+        create_species, create_survey, create_survey_type,
+    ):
+        """Sightings from other survey types (e.g. ad hoc) must not leak in."""
+        walking = create_survey_type(name="Walking Survey")
+        adhoc = create_survey_type(name="Ad Hoc")
+        fritillary = create_species(name="Marsh Fritillary", species_type="butterfly")
+        peacock = create_species(name="Peacock", species_type="butterfly")
+
+        walking_survey = create_survey(survey_date=date(2024, 5, 1), survey_type_id=walking.id)
+        adhoc_survey = create_survey(survey_date=date(2024, 5, 2), survey_type_id=adhoc.id)
+        _add_sighting(client, auth_headers, walking_survey.id, fritillary.id, 3)
+        _add_sighting(client, auth_headers, adhoc_survey.id, fritillary.id, 2)
+        _add_sighting(client, auth_headers, adhoc_survey.id, peacock.id, 5)
+
+        rows = client.get(
+            f"/api/dashboard/species-by-count?species_type=butterfly&survey_type_id={walking.id}",
+            headers=auth_headers,
+        ).json()
+        assert [(r["id"], r["total_count"]) for r in rows] == [(fritillary.id, 3)]
+
+    def test_cumulative_species_scoped_to_survey_type(
+        self, client: TestClient, auth_headers: dict,
+        create_species, create_survey, create_survey_type,
+    ):
+        """Cumulative unique-species counts only cover the given survey type."""
+        walking = create_survey_type(name="Walking Survey")
+        adhoc = create_survey_type(name="Ad Hoc")
+        fritillary = create_species(name="Marsh Fritillary", species_type="butterfly")
+        peacock = create_species(name="Peacock", species_type="butterfly")
+
+        walking_survey = create_survey(survey_date=date(2024, 5, 1), survey_type_id=walking.id)
+        adhoc_survey = create_survey(survey_date=date(2024, 5, 2), survey_type_id=adhoc.id)
+        _add_sighting(client, auth_headers, walking_survey.id, fritillary.id, 3)
+        _add_sighting(client, auth_headers, adhoc_survey.id, peacock.id, 5)
+
+        data = client.get(
+            f"/api/dashboard/cumulative-species?survey_type_id={walking.id}",
+            headers=auth_headers,
+        ).json()["data"]
+        # Only the walking survey's date appears, and only its species count.
+        assert {d["date"] for d in data} == {"2024-05-01"}
+        assert max(d["cumulative_count"] for d in data) == 1
+        new_species = [s for d in data for s in d["new_species"]]
+        assert "Peacock" not in new_species
+
+    def test_species_occurrences_scoped_and_completed_only(
+        self, client: TestClient, auth_headers: dict, db_session,
+        create_species, create_survey, create_survey_type,
+    ):
+        """Occurrences cover only completed surveys of the given type; a
+        completed survey with no sighting is a real zero-count point."""
+        walking = create_survey_type(name="Walking Survey")
+        adhoc = create_survey_type(name="Ad Hoc")
+        fritillary = create_species(name="Marsh Fritillary", species_type="butterfly")
+
+        seen = create_survey(survey_date=date(2024, 5, 1), survey_type_id=walking.id)
+        none_seen = create_survey(survey_date=date(2024, 5, 8), survey_type_id=walking.id)
+        other_type = create_survey(survey_date=date(2024, 5, 2), survey_type_id=adhoc.id)
+        scheduled = create_survey(survey_date=date(2024, 6, 1), survey_type_id=walking.id)
+        scheduled.status = SurveyStatus.scheduled
+        db_session.add(scheduled)
+        db_session.commit()
+
+        _add_sighting(client, auth_headers, seen.id, fritillary.id, 4)
+        _add_sighting(client, auth_headers, other_type.id, fritillary.id, 7)
+
+        data = client.get(
+            f"/api/dashboard/species-occurrences?species_id={fritillary.id}&survey_type_id={walking.id}",
+            headers=auth_headers,
+        ).json()["data"]
+        assert [(d["survey_id"], d["occurrence_count"]) for d in data] == [
+            (seen.id, 4),
+            (none_seen.id, 0),
+        ]
 
 
 class TestSpeciesOccurrences:

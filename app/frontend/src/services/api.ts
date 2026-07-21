@@ -1440,32 +1440,46 @@ export const dashboardAPI = {
   },
 
   /**
-   * Get cumulative species counts over time for dashboard chart
+   * Get cumulative species counts over time for dashboard chart.
+   * Pass surveyTypeId to scope the data to one survey type's surveys.
    */
-  getCumulativeSpecies: (speciesTypes?: string[]): Promise<CumulativeSpeciesResponse> => {
+  getCumulativeSpecies: (speciesTypes?: string[], surveyTypeId?: number): Promise<CumulativeSpeciesResponse> => {
     const params = new URLSearchParams();
     if (speciesTypes && speciesTypes.length > 0) {
       speciesTypes.forEach(type => params.append('species_types', type));
     }
+    if (surveyTypeId != null) params.append('survey_type_id', surveyTypeId.toString());
     const query = params.toString();
     return fetchAPI(query ? `/dashboard/cumulative-species?${query}` : '/dashboard/cumulative-species');
   },
 
   /**
-   * Get species ordered by occurrence count
+   * Get species ordered by occurrence count.
+   * Pass surveyTypeId to scope the counts to one survey type's surveys.
    */
-  getSpeciesByCount: (speciesType: string): Promise<SpeciesWithCount[]> => {
-    return fetchAPI(`/dashboard/species-by-count?species_type=${speciesType}`);
+  getSpeciesByCount: (speciesType: string, surveyTypeId?: number): Promise<SpeciesWithCount[]> => {
+    const params = new URLSearchParams();
+    params.append('species_type', speciesType);
+    if (surveyTypeId != null) params.append('survey_type_id', surveyTypeId.toString());
+    return fetchAPI(`/dashboard/species-by-count?${params.toString()}`);
   },
 
   /**
-   * Get weekly occurrence counts for a specific species
+   * Get per-survey occurrence counts for a specific species.
+   * Pass surveyTypeId to scope to one survey type's surveys (zero counts on
+   * those surveys are included — surveyed but none seen).
    */
-  getSpeciesOccurrences: (speciesId: number, startDate?: string, endDate?: string): Promise<SpeciesOccurrenceResponse> => {
+  getSpeciesOccurrences: (
+    speciesId: number,
+    startDate?: string,
+    endDate?: string,
+    surveyTypeId?: number,
+  ): Promise<SpeciesOccurrenceResponse> => {
     const params = new URLSearchParams();
     params.append('species_id', speciesId.toString());
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
+    if (surveyTypeId != null) params.append('survey_type_id', surveyTypeId.toString());
     return fetchAPI(`/dashboard/species-occurrences?${params.toString()}`);
   },
 

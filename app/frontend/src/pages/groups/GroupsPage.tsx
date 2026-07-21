@@ -38,8 +38,8 @@ export default function GroupsPage() {
           return;
         }
         // "Surveys" is the recorded total (matching the All surveys
-        // count); "Species" is the distinct species recorded (the all-time
-        // cumulative total); "Next survey" is the soonest scheduled future one.
+        // count); "Species" is the distinct species recorded by this type's
+        // surveys; "Next survey" is the soonest scheduled future one.
         const loaded = await Promise.all(
           matched.map(async (t): Promise<CardData> => {
             const details = await surveyTypesAPI.getById(t.id);
@@ -47,7 +47,7 @@ export default function GroupsPage() {
             const [totalPage, slots, cumulative] = await Promise.all([
               surveysAPI.getAll({ survey_type_id: t.id, page: 1, limit: 1 }),
               scheduledSurveysAPI.getAll({ survey_type_id: t.id }),
-              dashboardAPI.getCumulativeSpecies([speciesType]),
+              dashboardAPI.getCumulativeSpecies([speciesType], t.id),
             ]);
             const speciesCount = cumulative.data
               .filter((d) => d.type === speciesType)
