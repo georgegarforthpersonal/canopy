@@ -80,15 +80,19 @@ export default function SingleSpeciesCountPanel({ surveyTypeId, species }: Singl
           gap: 1,
         }}
       >
+        {/* Only the species name may ellipsize on narrow screens — the count
+            and its year never truncate. */}
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: 15, fontWeight: 600, color: groupColors.textPrimary }} noWrap>
-            {displayName} count
+            {displayName}
           </Typography>
-          <Typography sx={{ fontSize: 20, fontWeight: 700, color: groupColors.textPrimary, lineHeight: 1 }}>
+          <Typography
+            sx={{ fontSize: 20, fontWeight: 700, color: groupColors.textPrimary, lineHeight: 1, flexShrink: 0 }}
+          >
             {series?.latestYearTotal ?? 0}
           </Typography>
           {series?.latestYear != null && (
-            <Typography sx={{ fontSize: 12.5, color: groupColors.textMuted }} noWrap>
+            <Typography sx={{ fontSize: 12.5, color: groupColors.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
               in {series.latestYear}
             </Typography>
           )}
