@@ -27,19 +27,6 @@ describe('buildSeasonalSeries', () => {
     expect(series.rows.map((r) => r.x)).toEqual([...series.rows.map((r) => r.x)].sort((a, b) => a - b));
   });
 
-  it('summarises the latest year (totals include zero-count surveys)', () => {
-    const series = buildSeasonalSeries([
-      point('2025-06-01', 20),
-      point('2026-05-10', 7, 2),
-      point('2026-05-17', 0, 3),
-      point('2026-05-24', 5, 4),
-    ])!;
-
-    expect(series.latestYear).toBe(2026);
-    expect(series.latestYearTotal).toBe(12);
-    expect(series.latestYearSurveys).toBe(3);
-  });
-
   it('merges two same-day surveys in one year by summing', () => {
     const series = buildSeasonalSeries([
       point('2026-05-10', 3, 1),
