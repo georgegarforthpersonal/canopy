@@ -677,6 +677,8 @@ export interface SurveyType {
 export interface SurveyTypeWithDetails extends SurveyType {
   locations: Location[];
   species_types: SpeciesTypeRef[];
+  /** Explicit species narrowing (empty = all species in the species types) */
+  species: Species[];
 }
 
 /**
@@ -715,6 +717,8 @@ export interface SurveyTypeCreate {
   schedule_cadence?: ScheduleCadence;
   location_ids: number[];
   species_type_ids: number[];
+  /** Specific species to offer (empty/omitted = all species in the species types) */
+  species_ids?: number[];
 }
 
 /**
@@ -742,6 +746,8 @@ export interface SurveyTypeUpdate {
   is_active?: boolean;
   location_ids?: number[];
   species_type_ids?: number[];
+  /** Specific species to offer (empty = all species in the species types) */
+  species_ids?: number[];
 }
 
 // ============================================================================

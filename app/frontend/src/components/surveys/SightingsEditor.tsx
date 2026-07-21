@@ -143,6 +143,10 @@ export function SightingsEditor({
     });
   }, [species]);
 
+  // Fixed-species survey types offer exactly one species: the selector is
+  // hidden and every sighting is that species.
+  const singleSpecies = species.length === 1 ? species[0] : null;
+
   // Format category name for display
   const formatCategoryName = (category: string): string => {
     return category.charAt(0).toUpperCase() + category.slice(1);
@@ -206,7 +210,7 @@ export function SightingsEditor({
       ...sightings,
       {
         tempId: `temp-${Date.now()}`,
-        species_id: null,
+        species_id: singleSpecies?.id ?? null,
         count: 1,
       },
     ]);
@@ -727,6 +731,30 @@ export function SightingsEditor({
                     transition: 'background-color 0.2s',
                   }}
                 >
+                {singleSpecies ? (
+                  isEmpty ? (
+                    <Button
+                      startIcon={<Add />}
+                      onClick={() => updateSighting(sighting.tempId, 'species_id', singleSpecies.id)}
+                      sx={{ justifyContent: 'flex-start', textTransform: 'none', fontWeight: 600 }}
+                    >
+                      Add {singleSpecies.name || singleSpecies.scientific_name} sighting
+                    </Button>
+                  ) : (
+                    <Box sx={{ display: 'flex', alignItems: 'center', fontSize: '0.875rem', px: 1.75 }}>
+                      {singleSpecies.name ? (
+                        <>
+                          {singleSpecies.name}
+                          {singleSpecies.scientific_name && (
+                            <i style={{ color: '#666', marginLeft: '0.25rem' }}>{singleSpecies.scientific_name}</i>
+                          )}
+                        </>
+                      ) : (
+                        <i style={{ color: '#666' }}>{singleSpecies.scientific_name}</i>
+                      )}
+                    </Box>
+                  )
+                ) : (
                 <Autocomplete
                   options={sortedSpecies}
                   groupBy={(option) => formatCategoryName(option.type)}
@@ -819,6 +847,7 @@ export function SightingsEditor({
                   }}
                   size="small"
                 />
+                )}
 
                 {/* Device Dropdown Column - when device selection is on */}
                 {gridConfig.showDevice && (

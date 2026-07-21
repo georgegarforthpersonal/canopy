@@ -195,3 +195,54 @@ class TestDeleteSpecies:
         """Should return 404 for non-existent species."""
         response = client.delete("/api/species/999999", headers=auth_headers)
         assert response.status_code == 404
+
+
+class TestGetSpeciesBySurveyType:
+    """Tests for GET /api/species/by-survey-type/{id}"""
+
+    def _create_survey_type(self, client, auth_headers, species_type_ids, species_ids=None):
+        payload = {
+            "name": f"Survey {species_type_ids}-{species_ids}",
+            "location_ids": [],
+            "species_type_ids": species_type_ids,
+        }
+        if species_ids is not None:
+            payload["species_ids"] = species_ids
+        response = client.post("/api/survey-types", json=payload, headers=auth_headers)
+        assert response.status_code == 201
+        return response.json()["id"]
+
+    def test_returns_all_group_species_without_narrowing(
+        self, client: TestClient, auth_headers: dict, create_species
+    ):
+        """No explicit species links: every species in the type's groups."""
+        first = create_species(name="Marsh Fritillary", species_type="butterfly")
+        second = create_species(name="Peacock", species_type="butterfly")
+        create_species(name="Turtle Dove", species_type="bird")
+
+        survey_type_id = self._create_survey_type(
+            client, auth_headers, [first.species_type_id]
+        )
+
+        response = client.get(
+            f"/api/species/by-survey-type/{survey_type_id}", headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert {s["id"] for s in response.json()} == {first.id, second.id}
+
+    def test_returns_only_narrowed_species(
+        self, client: TestClient, auth_headers: dict, create_species
+    ):
+        """Explicit species links win over the group filter."""
+        target = create_species(name="Marsh Fritillary", species_type="butterfly")
+        create_species(name="Peacock", species_type="butterfly")
+
+        survey_type_id = self._create_survey_type(
+            client, auth_headers, [target.species_type_id], [target.id]
+        )
+
+        response = client.get(
+            f"/api/species/by-survey-type/{survey_type_id}", headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert [s["id"] for s in response.json()] == [target.id]

@@ -140,7 +140,11 @@ function AddPopupForm({
   onDiscard: () => void;
   formatCategoryName: (category: string) => string;
 }) {
-  const [selectedSpecies, setSelectedSpecies] = useState<Species | null>(null);
+  // Fixed-species survey types offer exactly one species: it is preselected
+  // and shown as static text instead of the selector.
+  const singleSpecies = sortedSpecies.length === 1 ? sortedSpecies[0] : null;
+
+  const [selectedSpecies, setSelectedSpecies] = useState<Species | null>(singleSpecies);
   const [count, setCount] = useState(1);
   const [breedingStatus, setBreedingStatus] = useState<string | null>(null);
 
@@ -151,7 +155,7 @@ function AddPopupForm({
     if (!selectedSpecies) return;
     onAdd(selectedSpecies.id, count, breedingStatus);
     // Reset form
-    setSelectedSpecies(null);
+    setSelectedSpecies(singleSpecies);
     setCount(1);
     setBreedingStatus(null);
   };
@@ -169,6 +173,14 @@ function AddPopupForm({
       </Typography>
 
       <Stack spacing={1.5}>
+        {singleSpecies ? (
+          <Typography variant="body2" fontWeight={600}>
+            {singleSpecies.name || singleSpecies.scientific_name}
+            {singleSpecies.name && singleSpecies.scientific_name && (
+              <i style={{ color: '#666', marginLeft: '0.3rem', fontWeight: 400 }}>{singleSpecies.scientific_name}</i>
+            )}
+          </Typography>
+        ) : (
         <Autocomplete
           options={sortedSpecies}
           groupBy={(option) => formatCategoryName(option.type)}
@@ -230,6 +242,7 @@ function AddPopupForm({
             listbox: { sx: { maxHeight: '200px' } },
           }}
         />
+        )}
 
         <TextField
           type="number"

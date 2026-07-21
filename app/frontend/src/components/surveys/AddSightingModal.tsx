@@ -66,7 +66,12 @@ export function AddSightingModal({
   devices = [],
   surveyLocationId,
 }: AddSightingModalProps) {
-  const [selectedSpeciesId, setSelectedSpeciesId] = useState<number | null>(initialData?.species_id || null);
+  // Fixed-species survey types offer exactly one species: it is preselected
+  // and shown as static text instead of the selector.
+  const singleSpecies = species.length === 1 ? species[0] : null;
+  const defaultSpeciesId = singleSpecies?.id ?? null;
+
+  const [selectedSpeciesId, setSelectedSpeciesId] = useState<number | null>(initialData?.species_id || defaultSpeciesId);
   const [count, setCount] = useState<number>(initialData?.count || 1);
   const [individuals, setIndividuals] = useState<DraftIndividualLocation[]>(
     initialData?.individuals || []
@@ -120,7 +125,7 @@ export function AddSightingModal({
       setExistingImageIds(initialData.existingImageIds || []);
       setRemovedImageIds(initialData.removedImageIds || []);
     } else {
-      setSelectedSpeciesId(null);
+      setSelectedSpeciesId(defaultSpeciesId);
       setCount(1);
       setIndividuals([]);
       setSelectedLocationId(null);
@@ -161,7 +166,7 @@ export function AddSightingModal({
         removedImageIds: removedImageIds.length > 0 ? removedImageIds : undefined,
       });
       // Reset for next entry
-      setSelectedSpeciesId(null);
+      setSelectedSpeciesId(defaultSpeciesId);
       setCount(1);
       setIndividuals([]);
       setSelectedLocationId(null);
@@ -176,7 +181,7 @@ export function AddSightingModal({
 
   const handleCancel = () => {
     // Reset form
-    setSelectedSpeciesId(initialData?.species_id || null);
+    setSelectedSpeciesId(initialData?.species_id || defaultSpeciesId);
     setCount(initialData?.count || 1);
     setIndividuals(initialData?.individuals || []);
     setSelectedLocationId(initialData?.location_id || null);
@@ -276,7 +281,36 @@ export function AddSightingModal({
       {/* Content */}
       <DialogContent sx={{ pt: 4, pb: 3, overflow: 'visible' }}>
         <Stack spacing={3}>
-          {/* Species Autocomplete - Takes up most of the space */}
+          {/* Species: static for fixed-species survey types, else autocomplete */}
+          {singleSpecies ? (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                p: 2,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'grey.50',
+              }}
+            >
+              {(() => {
+                const SpeciesIcon = getSpeciesIcon(singleSpecies.type);
+                return <SpeciesIcon sx={{ fontSize: 20, color: 'text.secondary' }} />;
+              })()}
+              <Box>
+                <Typography variant="body1" fontWeight={600}>
+                  {singleSpecies.name || singleSpecies.scientific_name}
+                </Typography>
+                {singleSpecies.name && singleSpecies.scientific_name && (
+                  <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                    {singleSpecies.scientific_name}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          ) : (
           <Box>
             <Autocomplete
               options={sortedSpecies}
@@ -346,10 +380,12 @@ export function AddSightingModal({
               }}
             />
           </Box>
+          )}
 
           {/* Count Input */}
           <TextField
             label="Count *"
+            autoFocus={!!singleSpecies}
             type="number"
             value={count || ''}
             onChange={(e) => {

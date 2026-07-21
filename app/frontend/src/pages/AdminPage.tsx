@@ -45,6 +45,7 @@ import {
   surveyorsAPI,
   surveyTypesAPI,
   locationsAPI,
+  speciesAPI,
   exportAPI,
   locationDisplayName,
   type Surveyor,
@@ -52,6 +53,7 @@ import {
   type SurveyTypeWithDetails,
   type SurveyTypeCreate,
   type SurveyTypeUpdate,
+  type Species,
   type SpeciesTypeRef,
   type Location,
   type DeviceType,
@@ -148,6 +150,7 @@ export function AdminPage() {
   const [surveyTypesError, setSurveyTypesError] = useState<string | null>(null);
   const [allLocations, setAllLocations] = useState<Location[]>([]);
   const [allSpeciesTypes, setAllSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
+  const [allSpecies, setAllSpecies] = useState<Species[]>([]);
   const [surveyTypeDialogOpen, setSurveyTypeDialogOpen] = useState(false);
   const [surveyTypeDialogMode, setSurveyTypeDialogMode] = useState<'add' | 'edit'>('add');
   const [editingSurveyType, setEditingSurveyType] = useState<SurveyTypeWithDetails | null>(null);
@@ -177,6 +180,7 @@ export function AdminPage() {
   const [formColor, setFormColor] = useState<string | null>(null);
   const [formSelectedLocations, setFormSelectedLocations] = useState<Location[]>([]);
   const [formSelectedSpeciesTypes, setFormSelectedSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
+  const [formSelectedSpecies, setFormSelectedSpecies] = useState<Species[]>([]);
 
   // Export state
   const [exporting, setExporting] = useState(false);
@@ -218,12 +222,14 @@ export function AdminPage() {
 
   const loadReferenceData = async () => {
     try {
-      const [locations, speciesTypes] = await Promise.all([
+      const [locations, speciesTypes, species] = await Promise.all([
         locationsAPI.getAll(),
         surveyTypesAPI.getSpeciesTypes(),
+        speciesAPI.getAll(),
       ]);
       setAllLocations(locations);
       setAllSpeciesTypes(speciesTypes);
+      setAllSpecies(species);
     } catch (err) {
       console.error('Failed to load reference data:', err);
     }
@@ -359,6 +365,7 @@ export function AdminPage() {
       setFormColor(details.color);
       setFormSelectedLocations(details.locations);
       setFormSelectedSpeciesTypes(details.species_types);
+      setFormSelectedSpecies(details.species);
       setSurveyTypeDialogOpen(true);
     } catch (err) {
       setSurveyTypesError(err instanceof Error ? err.message : 'Failed to load survey type details');
@@ -385,7 +392,15 @@ export function AdminPage() {
     setFormColor(null);
     setFormSelectedLocations([]);
     setFormSelectedSpeciesTypes([]);
+    setFormSelectedSpecies([]);
     setSurveyTypeFormError(null);
+  };
+
+  // Changing species types prunes narrowed species that fall outside them
+  const handleSpeciesTypesChange = (newValue: SpeciesTypeRef[]) => {
+    setFormSelectedSpeciesTypes(newValue);
+    const allowedTypeIds = new Set(newValue.map((st) => st.id));
+    setFormSelectedSpecies((prev) => prev.filter((s) => allowedTypeIds.has(s.species_type_id)));
   };
 
   const handleSaveSurveyType = async () => {
@@ -428,6 +443,7 @@ export function AdminPage() {
         color: formColor || undefined,
         location_ids: formSelectedLocations.map((l) => l.id),
         species_type_ids: formSelectedSpeciesTypes.map((st) => st.id),
+        species_ids: formSelectedSpecies.map((s) => s.id),
       };
 
       let savedId: number | null = null;
@@ -1309,13 +1325,36 @@ export function AdminPage() {
               getOptionLabel={(option) => option.display_name}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               value={formSelectedSpeciesTypes}
-              onChange={(_, newValue) => setFormSelectedSpeciesTypes(newValue)}
+              onChange={(_, newValue) => handleSpeciesTypesChange(newValue)}
               disabled={savingSurveyType}
               renderInput={(params) => (
                 <TextField {...params} margin="normal" label="Species Types" placeholder="Select species types" required />
               )}
               sx={{ mt: 2 }}
             />
+            <Autocomplete
+              multiple
+              options={allSpecies.filter((s) =>
+                formSelectedSpeciesTypes.some((st) => st.id === s.species_type_id)
+              )}
+              getOptionLabel={(s) => s.name || s.scientific_name || ''}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              value={formSelectedSpecies}
+              onChange={(_, newValue) => setFormSelectedSpecies(newValue)}
+              disabled={savingSurveyType || formSelectedSpeciesTypes.length === 0}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  margin="normal"
+                  label="Species"
+                  placeholder="Leave empty to allow all species in the selected species types"
+                />
+              )}
+              sx={{ mt: 2 }}
+            />
+            <Typography variant="caption" color="text.secondary" display="block">
+              Pick one species for a fixed-species survey — surveyors won't have to select it.
+            </Typography>
           </FormSection>
           {surveyTypeDialogMode === 'edit' && editingSurveyType && (
             <SurveyTypeFilesManager surveyTypeId={editingSurveyType.id} />
