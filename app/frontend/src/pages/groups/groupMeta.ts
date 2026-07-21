@@ -10,12 +10,12 @@ import { ORG_SLUG, surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails }
  * Survey types each organisation's Groups beta surfaces, matched
  * case-insensitively against the trimmed survey type name. Organisations not
  * listed here don't see the Groups tab (or the Scheduled admin tab that feeds
- * it). Cannwood's entry lists both plausible names for its walking survey so
- * the group appears whichever way the type was named in Admin.
+ * it). Cannwood's walking survey is being renamed to "Bird" (data script), so
+ * its entry lists the old and new names during the transition.
  */
 const BETA_GROUPS: Record<string, string[]> = {
   heal: ['butterfly', 'dragonfly'],
-  cannwood: ['walking', 'walking survey', 'marsh fritillary'],
+  cannwood: ['walking', 'walking survey', 'bird', 'marsh fritillary', 'turtle dove'],
 };
 
 /**

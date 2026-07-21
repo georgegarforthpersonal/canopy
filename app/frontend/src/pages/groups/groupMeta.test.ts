@@ -25,10 +25,12 @@ describe('betaGroupNames / orgHasGroups', () => {
     expect(orgHasGroups('heal')).toBe(true);
   });
 
-  it('gives Cannwood walking (either type name) and marsh fritillary', () => {
+  it('gives Cannwood bird (old and new type names), marsh fritillary and turtle dove', () => {
     expect(betaGroupNames('cannwood')).toContain('walking');
     expect(betaGroupNames('cannwood')).toContain('walking survey');
+    expect(betaGroupNames('cannwood')).toContain('bird');
     expect(betaGroupNames('cannwood')).toContain('marsh fritillary');
+    expect(betaGroupNames('cannwood')).toContain('turtle dove');
     expect(orgHasGroups('cannwood')).toBe(true);
   });
 
