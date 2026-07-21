@@ -30,12 +30,6 @@ export interface SeasonalSeries {
   years: number[];
   /** True when older years were dropped to stay within MAX_SEASON_YEARS. */
   truncated: boolean;
-  /** The most recent year with at least one survey. */
-  latestYear: number | null;
-  /** Total individuals counted across the latest year's surveys. */
-  latestYearTotal: number;
-  /** Number of surveys carried out in the latest year. */
-  latestYearSurveys: number;
   /** First-of-month tick timestamps spanning the surveyed months. */
   monthTicks: number[];
   /** Padded x-axis domain: start/end of the surveyed months. */
@@ -59,15 +53,9 @@ export function buildSeasonalSeries(data: SpeciesOccurrenceDataPoint[]): Seasona
 
   // Two surveys of the same year on the same day merge into one point (sum).
   const byX = new Map<number, SeasonalRow>();
-  let latestYearTotal = 0;
-  let latestYearSurveys = 0;
   for (const point of data) {
     const { x, year } = refTimestamp(point.survey_date);
     if (!shown.has(year)) continue;
-    if (year === years[0]) {
-      latestYearTotal += point.occurrence_count;
-      latestYearSurveys += 1;
-    }
     const row = byX.get(x) ?? { x };
     const key = String(year);
     row[key] = (row[key] ?? 0) + point.occurrence_count;
@@ -93,9 +81,6 @@ export function buildSeasonalSeries(data: SpeciesOccurrenceDataPoint[]): Seasona
     rows,
     years,
     truncated: allYears.length > years.length,
-    latestYear: years[0] ?? null,
-    latestYearTotal,
-    latestYearSurveys,
     monthTicks,
     domain,
   };

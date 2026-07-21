@@ -64,8 +64,9 @@ export default function SingleSpeciesCountPanel({ surveyTypeId, species }: Singl
     };
   }, [species.id, surveyTypeId]);
 
-  const displayName = species.name ?? species.scientific_name ?? 'Species';
   const series = data ? buildSeasonalSeries(data) : null;
+  // Headline: all-time total individuals across every survey of this group.
+  const totalCount = data?.reduce((sum, d) => sum + d.occurrence_count, 0) ?? 0;
 
   return (
     <Paper sx={groupCardSx}>
@@ -80,22 +81,15 @@ export default function SingleSpeciesCountPanel({ surveyTypeId, species }: Singl
           gap: 1,
         }}
       >
-        {/* Only the species name may ellipsize on narrow screens — the count
-            and its year never truncate. */}
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: 15, fontWeight: 600, color: groupColors.textPrimary }} noWrap>
-            {displayName}
+            Sighting count
           </Typography>
           <Typography
             sx={{ fontSize: 20, fontWeight: 700, color: groupColors.textPrimary, lineHeight: 1, flexShrink: 0 }}
           >
-            {series?.latestYearTotal ?? 0}
+            {totalCount}
           </Typography>
-          {series?.latestYear != null && (
-            <Typography sx={{ fontSize: 12.5, color: groupColors.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              in {series.latestYear}
-            </Typography>
-          )}
         </Box>
         <ToggleButtonGroup
           value={view}
