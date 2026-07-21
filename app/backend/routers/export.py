@@ -91,6 +91,7 @@ EXPORT_TABLES: list[dict[str, Any]] = [
     {"table": "survey_surveyor", "org_filter": ("survey", "survey_id")},
     {"table": "survey_type_location", "org_filter": ("survey_type", "survey_type_id")},
     {"table": "survey_type_species_type", "org_filter": ("survey_type", "survey_type_id")},
+    {"table": "survey_type_species", "org_filter": ("survey_type", "survey_type_id")},
     {"table": "sighting", "org_filter": ("survey", "survey_id")},
     {"table": "sighting_individual", "org_filter": ("sighting", "sighting_id")},
     {"table": "sighting_image", "org_filter": ("sighting", "sighting_id")},

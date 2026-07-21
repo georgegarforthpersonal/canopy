@@ -327,6 +327,20 @@ class SurveyTypeSpeciesTypeLink(SQLModel, table=True):  # type: ignore[call-arg]
     species_type_id: int = Field(foreign_key="species_type.id", ondelete="CASCADE")
 
 
+class SurveyTypeSpeciesLink(SQLModel, table=True):  # type: ignore[call-arg]
+    """Junction table narrowing a survey type to specific species.
+
+    No links = all species in the type's species types are allowed (the
+    default). With links, only the listed species are offered — a single
+    link gives a fixed-species survey (e.g. Marsh Fritillary, Turtle Dove).
+    """
+    __tablename__ = "survey_type_species"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    survey_type_id: int = Field(foreign_key="survey_type.id", ondelete="CASCADE")
+    species_id: int = Field(foreign_key="species.id", ondelete="CASCADE")
+
+
 # ============================================================================
 # Surveyor Models
 # ============================================================================
@@ -658,6 +672,7 @@ class SurveyTypeBase(SQLModel):
     description: Optional[str] = Field(None, description="Survey type description")
     location_at_sighting_level: bool = Field(default=False, description="If true, location is set per sighting; if false, per survey")
     allow_geolocation: bool = Field(default=True, description="Whether coordinates can be entered for sightings")
+    allow_coordinate_entry: bool = Field(default=False, description="Whether precise sighting locations can be typed as GPS coordinates")
     allow_sighting_notes: bool = Field(default=True, description="Whether notes can be entered for individual sightings")
     allow_audio_upload: bool = Field(default=False, description="Whether audio files can be uploaded for this survey type")
     allow_image_upload: bool = Field(default=False, description="Whether camera trap images can be uploaded for this survey type")
@@ -711,6 +726,7 @@ class SurveyTypeCreate(SurveyTypeBase):
     """Model for creating a survey type"""
     location_ids: List[int] = Field(default_factory=list, description="List of allowed location IDs")
     species_type_ids: List[int] = Field(description="List of allowed species type IDs")
+    species_ids: List[int] = Field(default_factory=list, description="Specific species to offer (empty = all species in the selected species types)")
 
 
 class SurveyTypeUpdate(SQLModel):
@@ -719,6 +735,7 @@ class SurveyTypeUpdate(SQLModel):
     description: Optional[str] = None
     location_at_sighting_level: Optional[bool] = None
     allow_geolocation: Optional[bool] = None
+    allow_coordinate_entry: Optional[bool] = None
     allow_sighting_notes: Optional[bool] = None
     allow_audio_upload: Optional[bool] = None
     allow_image_upload: Optional[bool] = None
@@ -735,6 +752,7 @@ class SurveyTypeUpdate(SQLModel):
     is_active: Optional[bool] = None
     location_ids: Optional[List[int]] = None
     species_type_ids: Optional[List[int]] = None
+    species_ids: Optional[List[int]] = None
 
 
 class SurveyTypeRead(SurveyTypeBase):
@@ -747,6 +765,7 @@ class SurveyTypeWithDetails(SurveyTypeRead):
     """Survey type with full location and species type details"""
     locations: List[LocationRead] = Field(default_factory=list)
     species_types: List[SpeciesTypeRead] = Field(default_factory=list)
+    species: List[SpeciesRead] = Field(default_factory=list)
 
 
 # ============================================================================

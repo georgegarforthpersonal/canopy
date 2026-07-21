@@ -655,6 +655,7 @@ export interface SurveyType {
   schedule_cadence: ScheduleCadence;
   location_at_sighting_level: boolean;
   allow_geolocation: boolean;
+  allow_coordinate_entry: boolean;
   allow_sighting_notes: boolean;
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
@@ -676,6 +677,8 @@ export interface SurveyType {
 export interface SurveyTypeWithDetails extends SurveyType {
   locations: Location[];
   species_types: SpeciesTypeRef[];
+  /** Explicit species narrowing (empty = all species in the species types) */
+  species: Species[];
 }
 
 /**
@@ -698,6 +701,7 @@ export interface SurveyTypeCreate {
   description?: string;
   location_at_sighting_level: boolean;
   allow_geolocation: boolean;
+  allow_coordinate_entry: boolean;
   allow_sighting_notes: boolean;
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
@@ -713,6 +717,8 @@ export interface SurveyTypeCreate {
   schedule_cadence?: ScheduleCadence;
   location_ids: number[];
   species_type_ids: number[];
+  /** Specific species to offer (empty/omitted = all species in the species types) */
+  species_ids?: number[];
 }
 
 /**
@@ -723,6 +729,7 @@ export interface SurveyTypeUpdate {
   description?: string;
   location_at_sighting_level?: boolean;
   allow_geolocation?: boolean;
+  allow_coordinate_entry?: boolean;
   allow_sighting_notes?: boolean;
   allow_audio_upload?: boolean;
   allow_image_upload?: boolean;
@@ -739,6 +746,8 @@ export interface SurveyTypeUpdate {
   is_active?: boolean;
   location_ids?: number[];
   species_type_ids?: number[];
+  /** Specific species to offer (empty = all species in the species types) */
+  species_ids?: number[];
 }
 
 // ============================================================================

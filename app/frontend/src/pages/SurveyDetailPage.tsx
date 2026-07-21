@@ -363,6 +363,7 @@ export function SurveyDetailPage() {
   const locationAtSightingLevel = !allowSightingDeviceSelection && (surveyType?.location_at_sighting_level ?? false);
   const allowGeolocation = !allowSightingDeviceSelection && (surveyType?.allow_geolocation ?? true);
   const canShowSightingsMap = allowGeolocation || allowSightingDeviceSelection;
+  const allowCoordinateEntry = allowGeolocation && (surveyType?.allow_coordinate_entry ?? false);
   const allowSightingNotes = surveyType?.allow_sighting_notes ?? true;
   const allowSightingPhotoUpload = surveyType?.allow_sighting_photo_upload ?? false;
   const showStartEndTime = surveyType?.allow_start_end_time ?? false;
@@ -1041,6 +1042,7 @@ export function SurveyDetailPage() {
               locationAtSightingLevel={locationAtSightingLevel}
               locations={locations}
               allowGeolocation={allowGeolocation}
+              allowCoordinateEntry={allowCoordinateEntry}
               allowSightingNotes={allowSightingNotes}
               allowSightingPhotoUpload={allowSightingPhotoUpload}
               allowSightingDeviceSelection={allowSightingDeviceSelection}

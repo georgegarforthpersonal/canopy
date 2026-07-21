@@ -17,6 +17,7 @@ import {
   InputLabel,
   ListSubheader,
   TextField,
+  Button,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MapIcon from '@mui/icons-material/Map';
@@ -26,6 +27,7 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import 'leaflet/dist/leaflet.css';
 import { stopMapAnimation } from '../../utils/stopMapAnimation';
+import { parseLatLng } from '../../utils/coords';
 
 import type { BreedingStatusCode, BreedingCategory, LocationWithBoundary } from '../../services/api';
 import { useMapFullscreen, MapResizeHandler } from '../../hooks';
@@ -54,6 +56,7 @@ interface MultiLocationMapPickerProps {
   disabled?: boolean;
   locationsWithBoundaries?: LocationWithBoundary[]; // Optional locations with boundaries to display on the map
   surveyLocationId?: number | null;
+  allowCoordinateEntry?: boolean; // Survey-type flag: show typed coordinate entry
 }
 
 // Component to handle map clicks
@@ -109,6 +112,19 @@ function FitBoundsToMarkers({ locations, surveyLocationId, locationsWithBoundari
   return null;
 }
 
+// Component to pan the map to a point added by typed entry or a photo suggestion.
+// animate:false because FitBoundsToMarkers' cleanup stops animations on every
+// locations change, which would kill an animated pan started in the same commit.
+function PanToPoint({ target }: { target: { lat: number; lng: number; seq: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) {
+      map.setView([target.lat, target.lng], Math.max(map.getZoom(), 16), { animate: false });
+    }
+  }, [target, map]);
+  return null;
+}
+
 // Get marker color based on breeding status code
 function getMarkerColor(code: string | null | undefined, breedingCodes: BreedingStatusCode[]): string {
   if (!code) return '#9E9E9E';
@@ -144,9 +160,13 @@ export default function MultiLocationMapPicker({
   disabled = false,
   locationsWithBoundaries,
   surveyLocationId,
+  allowCoordinateEntry = false,
 }: MultiLocationMapPickerProps) {
   const [mapType, setMapType] = useState<'street' | 'satellite'>('satellite');
   const [mapCenter] = useState<LatLng>(new LatLng(DEFAULT_MAP_CENTER[0], DEFAULT_MAP_CENTER[1]));
+  const [coordInput, setCoordInput] = useState('');
+  const [coordError, setCoordError] = useState<string | null>(null);
+  const [panTarget, setPanTarget] = useState<{ lat: number; lng: number; seq: number } | null>(null);
   const { isFullscreen, toggleFullscreen, fullscreenContainerSx, fullscreenMapSx } = useMapFullscreen();
 
   // Calculate total count across all locations
@@ -155,23 +175,44 @@ export default function MultiLocationMapPicker({
   const isAtMax = remainingCount !== undefined && remainingCount <= 0;
   const groupedCodes = groupBreedingCodes(breedingCodes);
 
-  // Handle map click - add new individual location
-  const handleMapClick = useCallback(
-    (latlng: LatLng) => {
+  // Add a new individual location; pan for typed/photo adds (map clicks already show where you clicked)
+  const addPoint = useCallback(
+    (latitude: number, longitude: number, pan = false) => {
       if (isAtMax) return;
 
       const newLocation: DraftIndividualLocation = {
         tempId: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        latitude: latlng.lat,
-        longitude: latlng.lng,
+        latitude,
+        longitude,
         count: 1,
         breeding_status_code: null,
         notes: null,
       };
       onChange([...locations, newLocation]);
+      if (pan) {
+        setPanTarget((prev) => ({ lat: latitude, lng: longitude, seq: (prev?.seq ?? 0) + 1 }));
+      }
     },
     [locations, onChange, isAtMax]
   );
+
+  // Handle map click - add new individual location
+  const handleMapClick = useCallback(
+    (latlng: LatLng) => addPoint(latlng.lat, latlng.lng),
+    [addPoint]
+  );
+
+  // Add a location from the typed coordinate input
+  const handleAddTyped = useCallback(() => {
+    const result = parseLatLng(coordInput);
+    if (!result.ok) {
+      setCoordError(result.error);
+      return;
+    }
+    addPoint(result.lat, result.lng, true);
+    setCoordInput('');
+    setCoordError(null);
+  }, [coordInput, addPoint]);
 
   // Update count for a specific location
   const handleCountChange = useCallback(
@@ -231,7 +272,9 @@ export default function MultiLocationMapPicker({
   // Get helper text based on state
   const getHelperText = () => {
     if (locations.length === 0) {
-      return 'Click on the map to add a location.';
+      return allowCoordinateEntry
+        ? 'Click on the map or enter coordinates to add a location.'
+        : 'Click on the map to add a location.';
     }
     if (isAtMax) {
       return `All ${maxCount} individual${maxCount === 1 ? '' : 's'} have been assigned to locations.`;
@@ -328,6 +371,7 @@ export default function MultiLocationMapPicker({
             )}
             <MapClickHandler onClick={handleMapClick} disabled={disabled || isAtMax} />
             <FitBoundsToMarkers locations={locations} surveyLocationId={surveyLocationId} locationsWithBoundaries={locationsWithBoundaries} />
+            <PanToPoint target={panTarget} />
             <MapResizeHandler isFullscreen={isFullscreen} />
 
             {/* Field boundaries layer (rendered before markers so markers appear on top) */}
@@ -382,6 +426,42 @@ export default function MultiLocationMapPicker({
           </Box>
         )}
       </Paper>
+
+      {/* Typed coordinate entry */}
+      {allowCoordinateEntry && (
+      <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mb: 2 }}>
+        <TextField
+          size="small"
+          fullWidth
+          label="Add by coordinates"
+          placeholder="e.g. 51.12345, -2.34567"
+          InputLabelProps={{ shrink: true }}
+          value={coordInput}
+          onChange={(e) => {
+            setCoordInput(e.target.value);
+            setCoordError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleAddTyped();
+            }
+          }}
+          error={!!coordError}
+          helperText={coordError || 'Decimal latitude, longitude (WGS84)'}
+          disabled={disabled || isAtMax}
+        />
+        <Button
+          variant="contained"
+          size="small"
+          onClick={handleAddTyped}
+          disabled={disabled || isAtMax || !coordInput.trim()}
+          sx={{ textTransform: 'none', fontWeight: 600, mt: '5px' }}
+        >
+          Add
+        </Button>
+      </Stack>
+      )}
 
       {/* Individual Cards */}
       {locations.length > 0 && (
@@ -558,7 +638,9 @@ export default function MultiLocationMapPicker({
             No individual locations added yet.
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Click on the map to add locations.
+            {allowCoordinateEntry
+              ? 'Click on the map or enter coordinates to add locations.'
+              : 'Click on the map to add locations.'}
           </Typography>
         </Paper>
       )}

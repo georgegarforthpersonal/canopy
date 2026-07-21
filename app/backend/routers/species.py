@@ -23,6 +23,7 @@ from models import (
     SpeciesCreate,
     SpeciesUpdate,
     SpeciesType,
+    SurveyTypeSpeciesLink,
     SurveyTypeSpeciesTypeLink,
 )
 from auth import require_admin_role
@@ -78,24 +79,38 @@ async def get_species_by_survey_type(
     """
     Get species available for a specific survey type.
 
-    Filters species based on the species types configured for the survey type.
+    If the survey type narrows to explicit species (survey_type_species
+    links), only those are returned; otherwise all species in the survey
+    type's species types.
 
     Args:
         survey_type_id: The survey type ID to filter by
 
     Returns:
-        List of species whose type matches one of the survey type's allowed species types
+        List of species offered for this survey type
     """
     species = db.query(Species).join(
         Species.species_type
     ).join(
-        SurveyTypeSpeciesTypeLink,
-        SurveyTypeSpeciesTypeLink.species_type_id == Species.species_type_id
+        SurveyTypeSpeciesLink,
+        SurveyTypeSpeciesLink.species_id == Species.id
     ).filter(
-        SurveyTypeSpeciesTypeLink.survey_type_id == survey_type_id
+        SurveyTypeSpeciesLink.survey_type_id == survey_type_id
     ).order_by(
         func.coalesce(Species.name, Species.scientific_name)
     ).all()
+
+    if not species:
+        species = db.query(Species).join(
+            Species.species_type
+        ).join(
+            SurveyTypeSpeciesTypeLink,
+            SurveyTypeSpeciesTypeLink.species_type_id == Species.species_type_id
+        ).filter(
+            SurveyTypeSpeciesTypeLink.survey_type_id == survey_type_id
+        ).order_by(
+            func.coalesce(Species.name, Species.scientific_name)
+        ).all()
 
     return [_to_species_read(s) for s in species]
 

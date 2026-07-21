@@ -16,6 +16,7 @@ interface LocationModalProps {
   count?: number; // Maximum number of individuals (from sighting count)
   locationsWithBoundaries?: LocationWithBoundary[]; // Optional locations with boundaries to display on the map
   surveyLocationId?: number | null; // Survey-level location ID for initial map zoom
+  allowCoordinateEntry?: boolean; // Whether typed coordinates can place locations
 }
 
 export function LocationModal({
@@ -29,6 +30,7 @@ export function LocationModal({
   count = 1,
   locationsWithBoundaries,
   surveyLocationId,
+  allowCoordinateEntry = false,
 }: LocationModalProps) {
   const { isMobile } = useResponsive();
   const [individuals, setIndividuals] = useState<DraftIndividualLocation[]>(
@@ -111,6 +113,7 @@ export function LocationModal({
           maxCount={count}
           locationsWithBoundaries={locationsWithBoundaries}
           surveyLocationId={surveyLocationId}
+          allowCoordinateEntry={allowCoordinateEntry}
         />
       </DialogContent>
 

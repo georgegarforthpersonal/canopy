@@ -229,3 +229,161 @@ class TestReactivateSurveyType:
         )
         assert response.status_code == 200
         assert response.json()["is_active"] is True
+
+
+class TestSurveyTypeSpeciesNarrowing:
+    """Tests for explicit species narrowing (survey_type_species links)"""
+
+    def test_create_with_species_ids(
+        self, client: TestClient, auth_headers: dict, create_species
+    ):
+        """Should store narrowed species and return them in details."""
+        target = create_species(name="Marsh Fritillary", species_type="butterfly")
+        create_species(name="Peacock", species_type="butterfly")
+
+        response = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Marsh Fritillary Survey",
+                "location_ids": [],
+                "species_type_ids": [target.species_type_id],
+                "species_ids": [target.id],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+        details = client.get(
+            f"/api/survey-types/{response.json()['id']}", headers=auth_headers
+        ).json()
+        assert [s["id"] for s in details["species"]] == [target.id]
+
+    def test_create_without_species_ids_leaves_species_empty(
+        self, client: TestClient, auth_headers: dict, create_species
+    ):
+        """Details species list is empty when no narrowing is set."""
+        sp = create_species(name="Peacock", species_type="butterfly")
+
+        response = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Butterfly Survey",
+                "location_ids": [],
+                "species_type_ids": [sp.species_type_id],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+        details = client.get(
+            f"/api/survey-types/{response.json()['id']}", headers=auth_headers
+        ).json()
+        assert details["species"] == []
+
+    def test_create_rejects_unknown_species(
+        self, client: TestClient, auth_headers: dict, create_species
+    ):
+        """Should 400 on species IDs that do not exist."""
+        sp = create_species(name="Peacock", species_type="butterfly")
+
+        response = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Bad Species Survey",
+                "location_ids": [],
+                "species_type_ids": [sp.species_type_id],
+                "species_ids": [999999],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+        assert "Invalid species IDs" in response.json()["detail"]
+
+    def test_create_rejects_species_outside_species_types(
+        self, client: TestClient, auth_headers: dict, create_species
+    ):
+        """Should 400 when a narrowed species is not in the selected species types."""
+        butterfly = create_species(name="Peacock", species_type="butterfly")
+        bird = create_species(name="Turtle Dove", species_type="bird")
+
+        response = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Mismatched Survey",
+                "location_ids": [],
+                "species_type_ids": [butterfly.species_type_id],
+                "species_ids": [bird.id],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+        assert "outside the selected species types" in response.json()["detail"]
+
+    def test_update_replaces_and_clears_species(
+        self, client: TestClient, auth_headers: dict, create_species
+    ):
+        """PUT with species_ids replaces the narrowing; empty list clears it."""
+        first = create_species(name="Marsh Fritillary", species_type="butterfly")
+        second = create_species(name="Peacock", species_type="butterfly")
+
+        created = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Narrowed Survey",
+                "location_ids": [],
+                "species_type_ids": [first.species_type_id],
+                "species_ids": [first.id],
+            },
+            headers=auth_headers,
+        ).json()
+
+        response = client.put(
+            f"/api/survey-types/{created['id']}",
+            json={"species_ids": [second.id]},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        details = client.get(
+            f"/api/survey-types/{created['id']}", headers=auth_headers
+        ).json()
+        assert [s["id"] for s in details["species"]] == [second.id]
+
+        response = client.put(
+            f"/api/survey-types/{created['id']}",
+            json={"species_ids": []},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        details = client.get(
+            f"/api/survey-types/{created['id']}", headers=auth_headers
+        ).json()
+        assert details["species"] == []
+
+    def test_update_species_types_prunes_outside_species(
+        self, client: TestClient, auth_headers: dict, create_species
+    ):
+        """Changing species types drops narrowed species outside the new set."""
+        butterfly = create_species(name="Marsh Fritillary", species_type="butterfly")
+        bird = create_species(name="Turtle Dove", species_type="bird")
+
+        created = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Pruned Survey",
+                "location_ids": [],
+                "species_type_ids": [butterfly.species_type_id, bird.species_type_id],
+                "species_ids": [butterfly.id, bird.id],
+            },
+            headers=auth_headers,
+        ).json()
+
+        response = client.put(
+            f"/api/survey-types/{created['id']}",
+            json={"species_type_ids": [bird.species_type_id]},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        details = client.get(
+            f"/api/survey-types/{created['id']}", headers=auth_headers
+        ).json()
+        assert [s["id"] for s in details["species"]] == [bird.id]
