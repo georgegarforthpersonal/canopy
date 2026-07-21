@@ -30,6 +30,8 @@ export interface CumulativeSummary {
 
 interface CumulativeSpeciesChartProps {
   speciesType: string;
+  /** Scope the series to one survey type's surveys (e.g. a group's). */
+  surveyTypeId?: number;
   color?: string;
   height?: number;
   emptyMessage?: string;
@@ -110,6 +112,7 @@ function summarise(data: CumulativeSpeciesDataPoint[], speciesType: string): Cum
 
 export default function CumulativeSpeciesChart({
   speciesType,
+  surveyTypeId,
   color = brandColors.main,
   height = 400,
   emptyMessage = 'No data available',
@@ -128,7 +131,7 @@ export default function CumulativeSpeciesChart({
     setLoading(true);
     setError(null);
     dashboardAPI
-      .getCumulativeSpecies([speciesType])
+      .getCumulativeSpecies([speciesType], surveyTypeId)
       .then((res) => {
         if (!active) return;
         const series = res.data.filter((d) => d.type === speciesType);
@@ -144,7 +147,7 @@ export default function CumulativeSpeciesChart({
     return () => {
       active = false;
     };
-  }, [speciesType]);
+  }, [speciesType, surveyTypeId]);
 
   const prepared = useMemo(() => prepareChartData(data), [data]);
 

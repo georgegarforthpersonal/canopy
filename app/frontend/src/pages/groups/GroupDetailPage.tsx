@@ -29,6 +29,7 @@ import SurveysPanel from '../../components/groups/SurveysPanel';
 import FilesPanel from '../../components/groups/FilesPanel';
 import LocationsPanel from '../../components/groups/LocationsPanel';
 import SpeciesCountPanel from '../../components/groups/SpeciesCountPanel';
+import SingleSpeciesCountPanel from '../../components/groups/SingleSpeciesCountPanel';
 import DataPanel from '../../components/groups/DataPanel';
 
 export default function GroupDetailPage() {
@@ -180,6 +181,9 @@ export default function GroupDetailPage() {
   }
 
   const speciesType = primarySpeciesType(surveyType);
+  // A survey type narrowed to exactly one species (e.g. Marsh Fritillary)
+  // gets the per-survey seasonal count panel instead of the diversity chart.
+  const singleSpecies = surveyType.species.length === 1 ? surveyType.species[0] : null;
   // `record` opens the survey form in record mode: saving marks the
   // scheduled survey completed. A plain open never changes the lifecycle.
   const goToSurvey = (s: Survey, opts?: { record?: boolean }) =>
@@ -224,7 +228,11 @@ export default function GroupDetailPage() {
               />
             </Box>
             <Box sx={{ order: 4, minWidth: 0 }}>
-              <SpeciesCountPanel speciesType={speciesType} />
+              {singleSpecies ? (
+                <SingleSpeciesCountPanel surveyTypeId={surveyType.id} species={singleSpecies} />
+              ) : (
+                <SpeciesCountPanel speciesType={speciesType} surveyTypeId={surveyType.id} />
+              )}
             </Box>
           </Box>
 

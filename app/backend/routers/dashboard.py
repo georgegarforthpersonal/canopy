@@ -73,6 +73,7 @@ def determine_date_range(data_points: List, start_date: Optional[date], end_date
 @router.get("/cumulative-species", response_model=CumulativeSpeciesResponse)
 async def get_cumulative_species(
     species_types: Optional[List[str]] = Query(None, description="Filter by species types (e.g., 'bird', 'butterfly')"),
+    survey_type_id: Optional[int] = Query(None, description="Only count sightings from surveys of this type"),
     start_date: Optional[date] = Query(None, description="Filter surveys from this date (inclusive)"),
     end_date: Optional[date] = Query(None, description="Filter surveys until this date (inclusive)"),
     org: Organisation = Depends(get_current_organisation),
@@ -83,9 +84,12 @@ async def get_cumulative_species(
 
     Returns the number of distinct species seen cumulatively up to each survey date,
     grouped by species type. This shows how species diversity grows over time.
+    Only completed surveys count — scheduled/cancelled surveys have no recorded
+    data and would otherwise stretch the series into the future.
 
     Args:
         species_types: Optional list of species types to filter (e.g., ['bird', 'butterfly'])
+        survey_type_id: Optional survey type filter (e.g. a group's survey type)
         start_date: Optional start date filter
         end_date: Optional end date filter
         db: Database session
@@ -103,6 +107,8 @@ async def get_cumulative_species(
             placeholders = ', '.join([f":type_{i}" for i in range(len(species_types))])
             species_filter = f"AND species_type.name IN ({placeholders})"
 
+        survey_type_filter = "AND survey.survey_type_id = :survey_type_id" if survey_type_id is not None else ""
+
         # Build date filters
         date_filter_sql = build_date_filter_sql(start_date, end_date)
 
@@ -119,6 +125,8 @@ async def get_cumulative_species(
                 JOIN species ON sighting.species_id = species.id
                 JOIN species_type ON species.species_type_id = species_type.id
                 WHERE survey.organisation_id = :org_id
+                AND survey.status = 'completed'
+                {survey_type_filter}
                 {species_filter}
                 {date_filter_sql}
                 GROUP BY species.id, species_type.name, species.name, species.scientific_name
@@ -127,6 +135,8 @@ async def get_cumulative_species(
                 SELECT DISTINCT survey.date
                 FROM survey
                 WHERE survey.organisation_id = :org_id
+                AND survey.status = 'completed'
+                {survey_type_filter}
                 {date_filter_sql}
                 ORDER BY survey.date
             ),
@@ -171,6 +181,8 @@ async def get_cumulative_species(
         if species_types:
             for i, st in enumerate(species_types):
                 params[f'type_{i}'] = st
+        if survey_type_id is not None:
+            params['survey_type_id'] = survey_type_id
         add_date_params(params, start_date, end_date)
 
         # Execute query
@@ -244,43 +256,53 @@ async def get_species_types_with_entries(
 @router.get("/species-by-count", response_model=List[SpeciesWithCount])
 async def get_species_by_count(
     species_type: str = Query(..., description="Species type to filter (e.g., 'bird', 'butterfly')"),
+    survey_type_id: Optional[int] = Query(None, description="Only count sightings from surveys of this type"),
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db)
 ) -> List[SpeciesWithCount]:
     """
     Get species ordered by total occurrence count (descending) for the current organisation.
 
-    Returns species of a given type with their total count across all surveys,
-    useful for auto-selecting the most common species.
+    Returns species of a given type with their total count across all completed
+    surveys, useful for auto-selecting the most common species. Species with no
+    sightings are omitted.
 
     Args:
         species_type: Species type to filter
+        survey_type_id: Optional survey type filter (e.g. a group's survey type)
         db: Database session
 
     Returns:
         List of species with their total counts, ordered by count descending
     """
     try:
-        query = text("""
+        survey_type_filter = "AND survey.survey_type_id = :survey_type_id" if survey_type_id is not None else ""
+
+        query = text(f"""
             SELECT
                 species.id,
                 species.name,
                 species.scientific_name,
                 species_type.name as type,
-                COALESCE(SUM(sighting.count), 0) as total_count,
-                MIN(CASE WHEN survey.organisation_id = :org_id THEN survey.date END) as first_observed
+                SUM(sighting.count) as total_count,
+                MIN(survey.date) as first_observed
             FROM species
             JOIN species_type ON species.species_type_id = species_type.id
-            LEFT JOIN sighting ON species.id = sighting.species_id
-            LEFT JOIN survey ON sighting.survey_id = survey.id
+            JOIN sighting ON species.id = sighting.species_id
+            JOIN survey ON sighting.survey_id = survey.id
             WHERE species_type.name = :species_type
-              AND (survey.organisation_id = :org_id OR survey.id IS NULL)
+              AND survey.organisation_id = :org_id
+              AND survey.status = 'completed'
+              {survey_type_filter}
             GROUP BY species.id, species.name, species.scientific_name, species_type.name
-            HAVING COALESCE(SUM(CASE WHEN survey.organisation_id = :org_id THEN sighting.count ELSE 0 END), 0) > 0
+            HAVING SUM(sighting.count) > 0
             ORDER BY total_count DESC, species.name
         """)
 
-        result = db.execute(query, {"species_type": species_type, "org_id": org.id})
+        params: Dict[str, Any] = {"species_type": species_type, "org_id": org.id}
+        if survey_type_id is not None:
+            params['survey_type_id'] = survey_type_id
+        result = db.execute(query, params)
         rows = result.fetchall()
 
         return [
@@ -305,6 +327,7 @@ async def get_species_by_count(
 @router.get("/species-occurrences", response_model=SpeciesOccurrenceResponse)
 async def get_species_occurrences(
     species_id: int = Query(..., description="Species ID to get occurrences for"),
+    survey_type_id: Optional[int] = Query(None, description="Only include surveys of this type"),
     start_date: Optional[date] = Query(None, description="Filter from this date (inclusive)"),
     end_date: Optional[date] = Query(None, description="Filter until this date (inclusive)"),
     org: Organisation = Depends(get_current_organisation),
@@ -313,11 +336,13 @@ async def get_species_occurrences(
     """
     Get occurrence counts for a specific species by survey for the current organisation.
 
-    Returns the total count of individuals seen per survey for the specified species.
-    Each survey date becomes a data point in the chart.
+    Returns the total count of individuals seen per completed survey for the
+    specified species. Each survey date becomes a data point in the chart —
+    including zero counts (surveyed, none seen), which are real observations.
 
     Args:
         species_id: ID of the species to track
+        survey_type_id: Optional survey type filter (e.g. a group's survey type)
         start_date: Optional start date filter
         end_date: Optional end date filter
         db: Database session
@@ -328,8 +353,10 @@ async def get_species_occurrences(
     try:
         # Build date filters
         date_filter_sql = build_date_filter_sql(start_date, end_date)
+        survey_type_filter = "AND survey.survey_type_id = :survey_type_id" if survey_type_id is not None else ""
 
-        # Query to get occurrences by survey - include ALL surveys with 0 for no sightings
+        # Query to get occurrences by survey - include ALL completed surveys
+        # with 0 for no sightings
         query = text(f"""
             SELECT
                 survey.id as survey_id,
@@ -338,13 +365,17 @@ async def get_species_occurrences(
             FROM survey
             LEFT JOIN sighting ON survey.id = sighting.survey_id AND sighting.species_id = :species_id
             WHERE survey.organisation_id = :org_id
+            AND survey.status = 'completed'
+            {survey_type_filter}
             {date_filter_sql}
             GROUP BY survey.id, survey.date
             ORDER BY survey.date, survey.id
         """)
 
         # Build parameters
-        params = {"species_id": species_id, "org_id": org.id}
+        params: Dict[str, Any] = {"species_id": species_id, "org_id": org.id}
+        if survey_type_id is not None:
+            params['survey_type_id'] = survey_type_id
         add_date_params(params, start_date, end_date)
 
         result = db.execute(query, params)
