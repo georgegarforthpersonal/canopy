@@ -17,12 +17,12 @@ import {
   surveyTypesAPI,
   surveysAPI,
   scheduledSurveysAPI,
+  surveyorsAPI,
   type SurveyTypeWithDetails,
   type Survey,
   type ScheduledSurvey,
   type Surveyor,
 } from '../../services/api';
-import { surveyorsAPI } from '../../services/api';
 import { recordButtonSx, groupCardSx, groupColors } from './groupsTokens';
 import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
 import { deriveSlotState, formatSurveyDate, type SlotState } from './surveyState';
@@ -195,12 +195,13 @@ export default function AllSurveysPage() {
   const recordSlot = (slot: ScheduledSurvey) =>
     navigate(`/surveys/new?scheduled_survey_id=${slot.id}`, returnTo);
 
-  // Fulfilled slots are represented by their recorded surveys; the remaining
-  // slots (open or cancelled) are the schedule. Merged date-descending so
-  // upcoming weeks sit on top of the history.
+  // Slots with linked surveys are represented by those recorded surveys
+  // (whatever the slot's status — a cancelled-then-recorded week must not
+  // appear twice); the remaining slots are the schedule. Merged
+  // date-descending so upcoming weeks sit on top of the history.
   const rows: Row[] = [
     ...slots
-      .filter((s) => deriveSlotState(s) !== 'recorded')
+      .filter((s) => s.linked_surveys.length === 0)
       .map((slot): Row => ({ kind: 'slot', slot, sortDate: slot.window_start })),
     ...surveys.map((survey): Row => ({ kind: 'survey', survey, sortDate: survey.date })),
   ].sort((a, b) => b.sortDate.localeCompare(a.sortDate));

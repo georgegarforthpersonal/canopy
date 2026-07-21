@@ -39,7 +39,7 @@ from models import (
     Organisation
 )
 from services.r2_storage import delete_media_file
-from services.scheduled_link import relink_survey
+from services.scheduled_link import link_is_valid, relink_survey
 
 logger = logging.getLogger(__name__)
 
@@ -441,6 +441,17 @@ async def update_survey(
     if not db_survey:
         raise HTTPException(status_code=404, detail=f"Survey {survey_id} not found")
 
+    # An out-of-window link can only have been set explicitly (the record flow
+    # writing up an overdue week after its window passed) — auto-managed links
+    # are window-valid at every save. Capture which kind this is before the
+    # edit lands.
+    current_slot = (
+        db.get(ScheduledSurvey, db_survey.scheduled_survey_id)
+        if db_survey.scheduled_survey_id is not None
+        else None
+    )
+    link_was_valid = link_is_valid(current_slot, db_survey)
+
     # Update only the fields that were provided
     update_data = survey.model_dump(exclude_unset=True, exclude={'surveyor_ids'})
 
@@ -450,8 +461,11 @@ async def update_survey(
     # Editing the fields that decide which slot this survey records re-runs
     # linking. It is idempotent and non-destructive: a still-valid link is
     # kept, a stale one is dropped, and the survey (re)links to whichever open
-    # slot's window now contains its date.
-    if 'date' in update_data or 'location_id' in update_data:
+    # slot's window now contains its date. An explicit out-of-window link is
+    # pinned — re-running would silently detach it over an unrelated edit.
+    if ('date' in update_data or 'location_id' in update_data) and (
+        db_survey.scheduled_survey_id is None or link_was_valid
+    ):
         relink_survey(db, db_survey)
 
     # Update surveyor associations if provided

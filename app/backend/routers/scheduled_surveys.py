@@ -16,7 +16,7 @@ A slot is a plan; a Survey row is a recorded event pointing at it via
 
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional, Any
-from datetime import date, timedelta
+from datetime import timedelta
 from sqlalchemy.orm import Session
 from sqlmodel import col
 from database.connection import get_db

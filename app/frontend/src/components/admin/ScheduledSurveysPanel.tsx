@@ -99,8 +99,16 @@ export default function ScheduledSurveysPanel({
     try {
       setLoading(true);
       setError(null);
+      // Only the actionable plan: recorded and cancelled slots drop off,
+      // exactly as recorded/cancelled rows dropped off the old scheduled
+      // list. History lives in the Groups pages.
       const res = await scheduledSurveysAPI.getAll();
-      setSlots(res);
+      setSlots(
+        res.filter((s) => {
+          const state = deriveSlotState(s);
+          return state === 'upcoming' || state === 'due-this-week' || state === 'needs-survey';
+        }),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load scheduled surveys');
     } finally {

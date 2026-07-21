@@ -125,7 +125,7 @@ def upgrade() -> None:
     op.execute("""
         UPDATE survey s SET scheduled_survey_id = ss.id
         FROM scheduled_survey ss
-        WHERE ss.migrated_from_survey_id = s.id AND s.id IS NOT NULL
+        WHERE ss.migrated_from_survey_id = s.id
           AND s.status = 'scheduled'
     """)
 
@@ -158,7 +158,16 @@ def upgrade() -> None:
 
     # 4. Degenerate scheduled/cancelled rows with no survey type cannot become
     #    slots; sighting-free ones are dropped (they were invisible plans),
-    #    any carrying sightings survive as recorded surveys.
+    #    any carrying sightings survive as recorded surveys. Surveyor links go
+    #    first — the pre-baseline survey_surveyor FK may lack ON DELETE CASCADE.
+    op.execute("""
+        DELETE FROM survey_surveyor sv
+        USING survey s
+        WHERE sv.survey_id = s.id
+          AND s.status IN ('scheduled', 'cancelled')
+          AND s.survey_type_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM sighting WHERE sighting.survey_id = s.id)
+    """)
     op.execute("""
         DELETE FROM survey s
         WHERE s.status IN ('scheduled', 'cancelled')

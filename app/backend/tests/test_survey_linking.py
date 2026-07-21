@@ -331,6 +331,29 @@ class TestRelinkOnUpdate:
         )
         assert resp.json()["scheduled_survey_id"] == slot.id
 
+    def test_date_edit_keeps_explicit_out_of_window_link(
+        self, client: TestClient, auth_headers: dict, create_survey_type, create_scheduled_survey
+    ):
+        """An out-of-window link can only have been set explicitly (a late
+        write-up); date/location edits must not silently detach it."""
+        survey_type = create_survey_type(schedule_cadence="weekly")
+        slot = create_scheduled_survey(
+            survey_type_id=survey_type.id,
+            window_start=date(2026, 6, 1), window_end=date(2026, 6, 7),
+        )
+        created = _create_survey_via_api(
+            client, auth_headers, survey_date="2026-06-20",
+            survey_type_id=survey_type.id, scheduled_survey_id=slot.id,
+        ).json()
+
+        resp = client.put(
+            f"/api/surveys/{created['id']}",
+            json={"date": "2026-06-21"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["scheduled_survey_id"] == slot.id
+
     def test_non_link_fields_do_not_relink(
         self, client: TestClient, auth_headers: dict, create_survey_type, create_scheduled_survey
     ):

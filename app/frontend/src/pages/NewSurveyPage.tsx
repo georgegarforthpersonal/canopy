@@ -245,6 +245,23 @@ export function NewSurveyPage() {
           const preassigned = surveyorsData.filter((s) => slot.surveyor_ids.includes(s.id));
           prefilledSurveyorIdsRef.current = preassigned.map((s) => s.id);
           setSelectedSurveyors(preassigned);
+        } else {
+          // No slot (plain new survey, or the record link's slot failed to
+          // load). The component survives in-app navigation between
+          // /surveys/new?scheduled_survey_id=N and /surveys/new, so the
+          // record-flow prefill must be unwound, not just skipped.
+          setRecordingSlot(null);
+          setSelectedSurveyType(null);
+          setDate(dayjs());
+          setLocationId(null);
+          autoLocationIdRef.current = null;
+          setSelectedSurveyors([]);
+          prefilledSurveyorIdsRef.current = [];
+          if (scheduledSurveyIdParam) {
+            setError(
+              'The scheduled survey could not be loaded — saving will create a survey that is not linked to it.',
+            );
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load form data');

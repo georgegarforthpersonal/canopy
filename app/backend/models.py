@@ -36,7 +36,8 @@ class ScheduledSurveyStatus(str, PyEnum):
     - open: planned; recorded surveys link to it while its window contains
       their date. Fulfilment is derived (>=1 linked survey), not stored.
     - cancelled: the plan was called off (e.g. weather, no-shows). Existing
-      linked surveys keep their link; new surveys never link to it.
+      linked surveys keep their link; surveys never auto-link to it (an
+      explicit record can — the plan turned out to happen after all).
     """
     open = "open"
     cancelled = "cancelled"
