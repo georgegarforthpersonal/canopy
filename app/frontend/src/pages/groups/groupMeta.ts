@@ -15,7 +15,7 @@ import { ORG_SLUG, surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails }
  */
 const BETA_GROUPS: Record<string, string[]> = {
   heal: ['butterfly', 'dragonfly'],
-  cannwood: ['walking', 'walking survey', 'bird', 'marsh fritillary', 'turtle dove'],
+  cannwood: ['walking', 'walking survey', 'bird', 'marsh fritillary', 'turtledove', 'turtle dove'],
 };
 
 /**

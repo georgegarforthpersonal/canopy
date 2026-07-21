@@ -30,6 +30,7 @@ describe('betaGroupNames / orgHasGroups', () => {
     expect(betaGroupNames('cannwood')).toContain('walking survey');
     expect(betaGroupNames('cannwood')).toContain('bird');
     expect(betaGroupNames('cannwood')).toContain('marsh fritillary');
+    expect(betaGroupNames('cannwood')).toContain('turtledove');
     expect(betaGroupNames('cannwood')).toContain('turtle dove');
     expect(orgHasGroups('cannwood')).toBe(true);
   });
