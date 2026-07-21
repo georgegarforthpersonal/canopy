@@ -163,6 +163,10 @@ export function NewSurveyPage() {
   // unsaved-changes guard does not block it (state would be one render stale).
   const saveCompleteRef = useRef(false);
 
+  // Location preselected because the survey type has exactly one — not a user
+  // edit, so it alone must not make the unsaved-changes guard fire.
+  const autoLocationIdRef = useRef<number | null>(null);
+
   // Dirty once the user has entered anything beyond the defaults, until the
   // survey is saved. Blocks Cancel, the back link, and browser back; the
   // confirmation dialog below lets the user proceed or stay.
@@ -171,7 +175,7 @@ export function NewSurveyPage() {
       !saveCompleteRef.current &&
       (notes.trim() !== '' ||
         pendingImageFiles.length > 0 ||
-        locationId !== null ||
+        (locationId !== null && locationId !== autoLocationIdRef.current) ||
         selectedSurveyors.length > 0 ||
         draftSightings.some((s) => s.species_id !== null)),
   );
@@ -237,10 +241,16 @@ export function NewSurveyPage() {
         setSpecies(speciesData);
         setDevices(devicesData);
 
-        // Clear location if it's no longer in the available list
-        if (locationId && !locationsData.some((l) => l.id === locationId)) {
-          setLocationId(null);
-        }
+        // Clear location if it's no longer in the available list; when the
+        // survey type has exactly one location, preselect it
+        setLocationId((prev) => {
+          const valid = prev !== null && locationsData.some((l) => l.id === prev) ? prev : null;
+          if (valid === null && locationsData.length === 1) {
+            autoLocationIdRef.current = locationsData[0].id;
+            return locationsData[0].id;
+          }
+          return valid;
+        });
 
         // Clear sightings with species no longer available
         const validSpeciesIds = new Set(speciesData.map((s) => s.id));
