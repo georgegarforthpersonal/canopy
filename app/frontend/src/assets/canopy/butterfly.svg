@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Butterfly</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <path d="M124 128C100 126 74 110 68 76C94 74 118 88 128 111Z" fill="#6CA477"/>
+  <path d="M132 111C143 88 167 74 193 76C187 110 161 126 136 128Z" fill="#51895A"/>
+  <path d="M124 133C103 136 82 151 84 182C108 183 125 164 128 145Z" fill="#51895A"/>
+  <path d="M132 145C136 164 153 183 177 182C179 151 158 136 136 133Z" fill="#3E6A45"/>
+  <rect x="124" y="103" width="8" height="76" rx="4" fill="#3E6A45"/>
+  <circle cx="128" cy="103" r="7" fill="#3E6A45"/>
+  <path d="M127 98C123 84 117 76 109 68M129 98C133 84 139 76 147 68" fill="none" stroke="#3E6A45" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="108" cy="67" r="4" fill="#3E6A45"/>
+  <circle cx="148" cy="67" r="4" fill="#3E6A45"/>
+
+</svg>

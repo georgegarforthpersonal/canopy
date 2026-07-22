@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Audio survey</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <rect x="104" y="56" width="48" height="101" rx="24" fill="#3E6A45"/>
+  <path d="M87 128V140C87 163 105 181 128 181C151 181 169 163 169 140V128" fill="none" stroke="#3E6A45" stroke-width="10" stroke-linecap="round"/>
+  <path d="M128 181V204M105 204H151" fill="none" stroke="#3E6A45" stroke-width="10" stroke-linecap="round"/>
+
+</svg>

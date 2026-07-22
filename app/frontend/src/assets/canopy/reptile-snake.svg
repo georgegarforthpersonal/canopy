@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Reptile snake</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <path d="M166 72C142 56 109 66 105 90C101 116 143 117 145 140C147 159 128 172 111 166C94 160 88 174 92 187" fill="none" stroke="#51895A" stroke-width="22" stroke-linecap="round"/>
+  <path d="M158 66L180 72L163 84Z" fill="#51895A"/>
+  <circle cx="164" cy="70" r="3.5" fill="#FFFFFF"/>
+
+</svg>

@@ -1,30 +1,22 @@
 import { createTheme } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
-import { getOrgSlug } from './services/api';
 import { FONT_SIZES, MOBILE_BREAKPOINT } from './config/responsive';
 
-// Organisation-specific color palettes
-const orgColors = {
-  heal: {
-    main: '#8B8AC7',      // HEAL purple (from logo)
-    light: '#B5B4E0',     // Lighter for hovers
-    dark: '#6968A3',      // Darker for active states
-    hover: '#7A79B6',     // Button hover state
-  },
-  cannwood: {
-    main: '#3D8B56',      // Medium forest green
-    light: '#5AA573',     // Lighter for hovers
-    dark: '#2E6B42',      // Darker for active states
-    hover: '#4A9B62',     // Button hover state
-  },
+/**
+ * Canopy brand palette — the green ramp sampled from the Canopy logo. The
+ * product identity (logo, chrome, primary colour) is Canopy for every
+ * organisation; tenant identity appears as content (org name on the login
+ * card and in the tab title), never as a colour scheme. Note: white text on
+ * `main` sits just under WCAG AA for small text — prefer `dark` for small
+ * green-on-white text.
+ */
+export const brandColors = {
+  main: '#51895A',   // Mid green (logo)
+  light: '#6CA477',  // Light green (logo)
+  dark: '#3E6A45',   // Dark green (logo)
+  hover: '#5D9668',  // Button hover state, between main and light
+  tint: '#ECF3EC',   // Badge/background tint (logo)
 } as const;
-
-// Get current org and export colors for use in hardcoded styles
-const currentOrg = getOrgSlug() as keyof typeof orgColors;
-export const brandColors = orgColors[currentOrg] || orgColors.heal;
-
-// Whether to show the logo (only for Heal)
-export const showLogo = currentOrg === 'heal';
 
 // Notion-style color palette for tags/chips
 // Each color has a background (light) and foreground (dark) shade

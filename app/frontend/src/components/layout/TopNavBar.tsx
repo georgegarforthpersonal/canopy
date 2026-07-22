@@ -4,8 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth, usePermissions } from '../../context/AuthContext';
 import { UserMenu } from './UserMenu';
-import healLogo from '../../assets/heal_logo.jpg';
-import { showLogo } from '../../theme';
+import canopyLogo from '../../assets/canopy-logo.svg';
 import { orgHasGroups } from '../../pages/groups/groupMeta';
 
 /**
@@ -102,35 +101,30 @@ export function TopNavBar() {
             </IconButton>
           )}
 
-          {/* Logo - only shown for Heal */}
-          {showLogo && (
-            <Box
-              onClick={handleLogoClick}
-              sx={{
-                width: { xs: 36, sm: 48 },
-                height: { xs: 36, sm: 48 },
-                borderRadius: '8px',
-                overflow: 'hidden',
-                cursor: 'pointer',
-                flexShrink: 0,
-                mr: { xs: 2, sm: 3 },
-                transition: 'transform 0.2s',
-                '&:hover': {
-                  transform: 'scale(1.05)',
-                }
+          {/* Canopy logo */}
+          <Box
+            onClick={handleLogoClick}
+            sx={{
+              width: { xs: 36, sm: 44 },
+              height: { xs: 36, sm: 44 },
+              cursor: 'pointer',
+              flexShrink: 0,
+              mr: { xs: 2, sm: 3 },
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'scale(1.05)',
+              }
+            }}
+          >
+            <img
+              src={canopyLogo}
+              alt="Canopy"
+              style={{
+                width: '100%',
+                height: '100%',
               }}
-            >
-              <img
-                src={healLogo}
-                alt="HEAL Rewilding"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
-              />
-            </Box>
-          )}
+            />
+          </Box>
 
           {/* Desktop/Tablet: Navigation Icons */}
           {!isMobile && (
@@ -185,30 +179,25 @@ export function TopNavBar() {
         }}
       >
         <Box sx={{ p: 2 }}>
-          {/* Drawer Header with Logo (if applicable) and Close Button */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: showLogo ? 'space-between' : 'flex-end', mb: 3 }}>
-            {showLogo && (
-              <Box
-                onClick={handleLogoClick}
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
+          {/* Drawer Header with Logo and Close Button */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+            <Box
+              onClick={handleLogoClick}
+              sx={{
+                width: 44,
+                height: 44,
+                cursor: 'pointer',
+              }}
+            >
+              <img
+                src={canopyLogo}
+                alt="Canopy"
+                style={{
+                  width: '100%',
+                  height: '100%',
                 }}
-              >
-                <img
-                  src={healLogo}
-                  alt="HEAL Rewilding"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  }}
-                />
-              </Box>
-            )}
+              />
+            </Box>
             <IconButton onClick={toggleDrawer} sx={{ color: 'text.secondary' }}>
               <Close />
             </IconButton>

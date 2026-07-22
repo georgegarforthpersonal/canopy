@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Generic bird</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <path d="M64 190C76 140 102 102 135 87C139 67 151 55 168 55C184 55 197 65 203 79L218 85L202 92C198 125 183 155 158 174C132 194 101 199 64 190Z" fill="#51895A"/>
+  <path d="M70 190C90 154 116 128 151 116C160 137 153 164 130 179C111 191 91 195 70 190Z" fill="#6CA477"/>
+  <path d="M128 181C153 168 176 148 190 121C192 151 179 175 157 188C145 195 133 198 119 198Z" fill="#3E6A45"/>
+  <circle cx="174" cy="76" r="5" fill="#FFFFFF"/>
+
+</svg>

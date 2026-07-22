@@ -1,14 +1,13 @@
 /**
  * A type card on the Groups grid. The whole card is a button that opens the
- * group page. Shows the tinted species icon tile, name + sub-label, and a
- * three-stat row (surveys, species-or-sightings count, next survey).
+ * group page. Shows the survey-type badge, name + sub-label, and a three-stat
+ * row (surveys, species-or-sightings count, next/last survey).
  */
 import { Box, Paper, ButtonBase, Typography } from '@mui/material';
 import { ChevronRight } from '@mui/icons-material';
 import type { SurveyTypeWithDetails } from '../../services/api';
 import { groupColors } from '../../pages/groups/groupsTokens';
-import { accentColors, primarySpeciesType } from '../../pages/groups/groupMeta';
-import SpeciesIconTile from './SpeciesIconTile';
+import SurveyTypeBadge from './SurveyTypeBadge';
 
 interface GroupCardProps {
   surveyType: SurveyTypeWithDetails;
@@ -48,7 +47,6 @@ export default function GroupCard({
   dateStat,
   onOpen,
 }: GroupCardProps) {
-  const accent = accentColors(surveyType);
   return (
     <Paper sx={{ border: `1px solid ${groupColors.divider}`, borderRadius: '10px', boxShadow: 'none', overflow: 'hidden' }}>
       <ButtonBase
@@ -63,13 +61,7 @@ export default function GroupCard({
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
-          <SpeciesIconTile
-            speciesType={primarySpeciesType(surveyType)}
-            size={46}
-            radius={11}
-            bg={accent.bg}
-            fg={accent.fg}
-          />
+          <SurveyTypeBadge surveyType={surveyType} size={46} radius={11} />
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontSize: 17, fontWeight: 600, color: groupColors.textPrimary }} noWrap>
               {surveyType.name}

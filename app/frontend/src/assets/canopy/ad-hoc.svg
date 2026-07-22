@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Ad hoc survey</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <path d="M128 72V184M72 128H184" fill="none" stroke="#51895A" stroke-width="22" stroke-linecap="round"/>
+
+</svg>

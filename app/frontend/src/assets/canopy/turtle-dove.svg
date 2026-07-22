@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Turtle dove</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <path d="M49 203C68 146 100 102 145 83C146 63 157 50 174 50C190 50 201 61 205 77L220 84L204 91C203 126 190 157 166 180C137 207 98 214 49 203Z" fill="#51895A"/>
+  <path d="M53 201C77 157 108 126 153 112C162 139 151 169 120 187C97 200 74 205 53 201Z" fill="#6CA477"/>
+  <path d="M129 192C156 177 181 151 195 120C197 154 184 181 160 198C145 208 129 212 111 211Z" fill="#3E6A45"/>
+  <path d="M145 91C153 96 161 99 170 101" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <path d="M144 101C153 106 162 109 171 111" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <path d="M143 111C152 116 161 119 170 121" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <path d="M81 187C102 177 123 158 142 130" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="177" cy="70" r="5" fill="#FFFFFF"/>
+
+</svg>

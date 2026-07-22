@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Marsh fritillary butterfly</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <defs>
+    <mask id="wingCut">
+      <rect width="256" height="256" fill="white"/>
+      <g fill="black">
+        <path d="M86 84C98 88 110 94 119 103L109 112C100 104 91 99 80 96Z"/>
+        <path d="M74 105C91 108 104 115 115 126L102 132C93 123 83 118 69 116Z"/>
+        <path d="M69 130C84 130 96 135 106 144L94 153C86 146 77 142 67 142Z"/>
+        <path d="M78 155C90 151 101 153 111 160L104 174C95 167 87 165 78 168Z"/>
+        <path d="M170 84C158 88 146 94 137 103L147 112C156 104 165 99 176 96Z"/>
+        <path d="M182 105C165 108 152 115 141 126L154 132C163 123 173 118 187 116Z"/>
+        <path d="M187 130C172 130 160 135 150 144L162 153C170 146 179 142 189 142Z"/>
+        <path d="M178 155C166 151 155 153 145 160L152 174C161 167 169 165 178 168Z"/>
+      </g>
+    </mask>
+  </defs>
+  <g mask="url(#wingCut)">
+    <path d="M123 126C93 124 62 102 61 62C92 60 119 80 129 111Z" fill="#51895A"/>
+    <path d="M133 111C143 80 170 60 201 62C200 102 169 124 137 126Z" fill="#3E6A45"/>
+    <path d="M122 134C96 137 72 156 77 193C105 194 124 172 129 145Z" fill="#51895A"/>
+    <path d="M134 145C139 172 158 194 186 193C191 156 167 137 138 134Z" fill="#3E6A45"/>
+  </g>
+  <rect x="124" y="100" width="8" height="80" rx="4" fill="#3E6A45"/>
+  <circle cx="128" cy="100" r="7" fill="#3E6A45"/>
+  <path d="M127 95C123 82 117 74 110 67M129 95C133 82 139 74 146 67" fill="none" stroke="#3E6A45" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="109" cy="66" r="4" fill="#3E6A45"/>
+  <circle cx="147" cy="66" r="4" fill="#3E6A45"/>
+
+</svg>

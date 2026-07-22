@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Canopy logo</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <defs>
+    <clipPath id="badgeClip"><circle cx="128" cy="128" r="112"/></clipPath>
+  </defs>
+  <g clip-path="url(#badgeClip)">
+    <path d="M34 209C55 126 113 72 196 48L201 119C133 127 83 161 48 224Z" fill="#6CA477"/>
+    <path d="M64 228C77 154 128 105 211 87L216 153C151 157 104 183 78 239Z" fill="#51895A"/>
+    <path d="M104 240C111 186 150 145 230 124L234 196C196 230 154 244 104 240Z" fill="#3E6A45"/>
+  </g>
+
+</svg>

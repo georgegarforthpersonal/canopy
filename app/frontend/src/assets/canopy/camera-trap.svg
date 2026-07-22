@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Camera trap</title>
+  <circle cx="128" cy="128" r="112" fill="#ECF3EC"/>
+  
+  <path d="M67 91H99L108 77H148L157 91H189C198 91 205 98 205 107V174C205 183 198 190 189 190H67C58 190 51 183 51 174V107C51 98 58 91 67 91Z" fill="#51895A"/>
+  <circle cx="128" cy="141" r="34" fill="#FFFFFF"/>
+  <circle cx="128" cy="141" r="21" fill="#3E6A45"/>
+
+</svg>
