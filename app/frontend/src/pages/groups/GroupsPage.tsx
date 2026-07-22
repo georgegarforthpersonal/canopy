@@ -16,7 +16,7 @@ import { PageTitle } from '../../components/layout/PageTitle';
 interface CardData {
   surveyType: SurveyTypeWithDetails;
   surveyCount: number;
-  speciesCount: number;
+  countStat: { label: 'Species' | 'Sightings'; value: number };
   nextSurvey: ScheduledSurvey | null;
 }
 
@@ -38,24 +38,41 @@ export default function GroupsPage() {
           return;
         }
         // "Surveys" is the recorded total (matching the All surveys
-        // count); "Species" is the distinct species recorded by this type's
-        // surveys; "Next survey" is the soonest scheduled future one.
+        // count); the middle stat is the distinct species recorded by this
+        // type's surveys — except for types fixed to a single species, where
+        // that would always read 1, so we show total sightings instead
+        // (matching the group page's headline); "Next survey" is the soonest
+        // scheduled future one.
         const loaded = await Promise.all(
           matched.map(async (t): Promise<CardData> => {
             const details = await surveyTypesAPI.getById(t.id);
             const speciesType = primarySpeciesType(details);
-            const [totalPage, slots, cumulative] = await Promise.all([
+            const singleSpecies = details.species.length === 1 ? details.species[0] : null;
+            const [totalPage, slots, countStat] = await Promise.all([
               surveysAPI.getAll({ survey_type_id: t.id, page: 1, limit: 1 }),
               scheduledSurveysAPI.getAll({ survey_type_id: t.id }),
-              dashboardAPI.getCumulativeSpecies([speciesType], t.id),
+              singleSpecies
+                ? dashboardAPI
+                    .getSpeciesOccurrences(singleSpecies.id, undefined, undefined, t.id)
+                    .then(
+                      (res): CardData['countStat'] => ({
+                        label: 'Sightings',
+                        value: res.data.reduce((sum, d) => sum + d.occurrence_count, 0),
+                      }),
+                    )
+                : dashboardAPI.getCumulativeSpecies([speciesType], t.id).then(
+                    (res): CardData['countStat'] => ({
+                      label: 'Species',
+                      value: res.data
+                        .filter((d) => d.type === speciesType)
+                        .reduce((max, d) => Math.max(max, d.cumulative_count), 0),
+                    }),
+                  ),
             ]);
-            const speciesCount = cumulative.data
-              .filter((d) => d.type === speciesType)
-              .reduce((max, d) => Math.max(max, d.cumulative_count), 0);
             return {
               surveyType: details,
               surveyCount: totalPage.total,
-              speciesCount,
+              countStat,
               nextSurvey: nextScheduledSurvey(slots),
             };
           }),
@@ -105,7 +122,7 @@ export default function GroupsPage() {
                 key={c.surveyType.id}
                 surveyType={c.surveyType}
                 surveyCount={c.surveyCount}
-                speciesCount={c.speciesCount}
+                countStat={c.countStat}
                 nextSurvey={c.nextSurvey}
                 onOpen={() => navigate(groupPath(c.surveyType))}
               />

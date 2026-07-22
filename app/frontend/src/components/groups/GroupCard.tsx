@@ -1,7 +1,7 @@
 /**
  * A type card on the Groups grid. The whole card is a button that opens the
- * group page. Shows the tinted species icon tile, name + sub-label, and a three-stat
- * row (surveys, unique species found, next survey).
+ * group page. Shows the tinted species icon tile, name + sub-label, and a
+ * three-stat row (surveys, species-or-sightings count, next survey).
  */
 import { Box, Paper, ButtonBase, Typography } from '@mui/material';
 import { ChevronRight } from '@mui/icons-material';
@@ -14,8 +14,12 @@ import SpeciesIconTile from './SpeciesIconTile';
 interface GroupCardProps {
   surveyType: SurveyTypeWithDetails;
   surveyCount: number;
-  /** Distinct species recorded across all surveys of this type. */
-  speciesCount: number;
+  /**
+   * Middle stat: distinct species recorded across all surveys of this type,
+   * or total sightings when the type is fixed to a single species (a species
+   * count would always read 1 there).
+   */
+  countStat: { label: 'Species' | 'Sightings'; value: number };
   /** Soonest upcoming survey, or null if none scheduled. */
   nextSurvey: ScheduledSurvey | null;
   onOpen: () => void;
@@ -38,7 +42,7 @@ function Stat({ label, value, valueColor }: { label: string; value: string; valu
 export default function GroupCard({
   surveyType,
   surveyCount,
-  speciesCount,
+  countStat,
   nextSurvey,
   onOpen,
 }: GroupCardProps) {
@@ -81,7 +85,7 @@ export default function GroupCard({
 
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: 1 }}>
           <Stat label="Surveys" value={String(surveyCount)} />
-          <Stat label="Species" value={String(speciesCount)} />
+          <Stat label={countStat.label} value={String(countStat.value)} />
           <Stat
             label="Next survey"
             value={nextSurvey ? formatSurveyDate(nextSurvey) : 'No sessions'}
