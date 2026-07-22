@@ -24,13 +24,12 @@ import {
   type Surveyor,
 } from '../../services/api';
 import { recordButtonSx, groupCardSx, groupColors } from './groupsTokens';
-import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
-import { deriveSlotState, formatSurveyDate, type SlotState } from './surveyState';
+import { groupActivity, primarySpeciesType, resolveGroupTypeId } from './groupMeta';
+import { deriveSlotState, formatRecordedDate, formatSurveyDate, type SlotState } from './surveyState';
 import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import dayjs from 'dayjs';
 import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
 import SelfSignupButton from '../../components/groups/SelfSignupButton';
 import SurveyorAvatars from '../../components/groups/SurveyorAvatars';
@@ -226,7 +225,9 @@ export default function AllSurveysPage() {
           All surveys
         </Typography>
         <Typography sx={{ fontSize: 13.5, color: '#888', mb: 2 }}>
-          {surveyType?.name ?? ''} · {total} recorded · {scheduledCount} scheduled, most recent first
+          {/* Unscheduled ('record') groups never have slots — no point saying "0 scheduled". */}
+          {surveyType?.name ?? ''} · {total} recorded
+          {groupActivity(surveyType.name) === 'worklist' ? ` · ${scheduledCount} scheduled` : ''}, most recent first
         </Typography>
 
         <Paper sx={groupCardSx}>
@@ -287,7 +288,7 @@ export default function AllSurveysPage() {
                       <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
                         {row.kind === 'slot'
                           ? formatSurveyDate(row.slot)
-                          : dayjs(row.survey.date).format('ddd D MMM YYYY')}
+                          : formatRecordedDate(row.survey.date)}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
                         <StatusChip state={state} />

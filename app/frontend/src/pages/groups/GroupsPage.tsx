@@ -6,10 +6,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Typography, CircularProgress } from '@mui/material';
-import { surveyTypesAPI, surveysAPI, scheduledSurveysAPI, dashboardAPI, type ScheduledSurvey, type SurveyTypeWithDetails } from '../../services/api';
+import { surveyTypesAPI, surveysAPI, scheduledSurveysAPI, dashboardAPI, type SurveyTypeWithDetails } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
-import { nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, groupPath, betaGroupNames } from './groupMeta';
+import { formatRecordedDate, formatSurveyDate, nextScheduledSurvey } from './surveyState';
+import { primarySpeciesType, groupPath, betaGroupNames, groupActivity } from './groupMeta';
 import GroupCard from '../../components/groups/GroupCard';
 import { PageTitle } from '../../components/layout/PageTitle';
 
@@ -17,7 +17,7 @@ interface CardData {
   surveyType: SurveyTypeWithDetails;
   surveyCount: number;
   countStat: { label: 'Species' | 'Sightings'; value: number };
-  nextSurvey: ScheduledSurvey | null;
+  dateStat: { label: 'Next survey' | 'Last survey'; value: string | null };
 }
 
 /**
@@ -59,21 +59,30 @@ export default function GroupsPage() {
           return;
         }
         // "Surveys" is the recorded total (matching the All surveys count);
-        // the middle stat is countStatFor's species-or-sightings count;
-        // "Next survey" is the soonest scheduled future one.
+        // the middle stat is countStatFor's species-or-sightings count; the
+        // date stat is the soonest scheduled survey for worklist groups, or —
+        // for unscheduled ('record') groups, which never have slots — the most
+        // recently recorded one (the list is date-descending, so it rides
+        // along on the same limit-1 totals call).
         const loaded = await Promise.all(
           matched.map(async (t): Promise<CardData> => {
             const details = await surveyTypesAPI.getById(t.id);
+            const scheduled = groupActivity(t.name) === 'worklist';
             const [totalPage, slots, countStat] = await Promise.all([
               surveysAPI.getAll({ survey_type_id: t.id, page: 1, limit: 1 }),
-              scheduledSurveysAPI.getAll({ survey_type_id: t.id }),
+              scheduled ? scheduledSurveysAPI.getAll({ survey_type_id: t.id }) : Promise.resolve([]),
               countStatFor(details),
             ]);
+            const next = nextScheduledSurvey(slots);
+            const last = totalPage.data[0] ?? null;
+            const dateStat: CardData['dateStat'] = scheduled
+              ? { label: 'Next survey', value: next ? formatSurveyDate(next) : null }
+              : { label: 'Last survey', value: last ? formatRecordedDate(last.date) : null };
             return {
               surveyType: details,
               surveyCount: totalPage.total,
               countStat,
-              nextSurvey: nextScheduledSurvey(slots),
+              dateStat,
             };
           }),
         );
@@ -123,7 +132,7 @@ export default function GroupsPage() {
                 surveyType={c.surveyType}
                 surveyCount={c.surveyCount}
                 countStat={c.countStat}
-                nextSurvey={c.nextSurvey}
+                dateStat={c.dateStat}
                 onOpen={() => navigate(groupPath(c.surveyType))}
               />
             ))}

@@ -7,15 +7,34 @@ import { notionColors } from '../../theme';
 import { ORG_SLUG, surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails } from '../../services/api';
 
 /**
- * Survey types each organisation's Groups beta surfaces, matched
- * case-insensitively against the trimmed survey type name. Organisations not
- * listed here don't see the Groups tab (or the Scheduled admin tab that feeds
- * it). Cannwood's walking survey is being renamed to "Bird" (data script), so
- * its entry lists the old and new names during the transition.
+ * How a group's activity panel behaves. 'worklist' types are slot-scheduled:
+ * the panel is the ScheduledSurvey-driven To record / This week / Upcoming
+ * list. 'record' types are unscheduled — surveys arrive opportunistically, so
+ * the panel is a record CTA plus recent history instead.
  */
-const BETA_GROUPS: Record<string, string[]> = {
-  heal: ['butterfly', 'dragonfly'],
-  cannwood: ['walking', 'walking survey', 'bird', 'marsh fritillary', 'turtledove', 'turtle dove'],
+export type GroupActivity = 'worklist' | 'record';
+
+/**
+ * Survey types each organisation's Groups beta surfaces, matched
+ * case-insensitively against the trimmed survey type name, each mapped to its
+ * activity style. Organisations not listed here don't see the Groups tab (or
+ * the Scheduled admin tab that feeds it). Cannwood's walking survey is being
+ * renamed to "Bird" (data script), so its entry lists the old and new names
+ * during the transition.
+ */
+const BETA_GROUPS: Record<string, Record<string, GroupActivity>> = {
+  heal: { butterfly: 'worklist', dragonfly: 'worklist' },
+  cannwood: {
+    walking: 'worklist',
+    'walking survey': 'worklist',
+    bird: 'worklist',
+    'marsh fritillary': 'worklist',
+    turtledove: 'worklist',
+    'turtle dove': 'worklist',
+    'ad hoc': 'record',
+    audio: 'record',
+    'camera trap': 'record',
+  },
 };
 
 /**
@@ -25,7 +44,28 @@ const BETA_GROUPS: Record<string, string[]> = {
  * navigation drops, so re-deriving it mid-session would disagree with the API.
  */
 export function betaGroupNames(orgSlug: string = ORG_SLUG): string[] {
-  return BETA_GROUPS[orgSlug] ?? [];
+  return Object.keys(BETA_GROUPS[orgSlug] ?? {});
+}
+
+/**
+ * The activity style for a survey type's group page. Unlisted names default
+ * to 'worklist' (they can't be reached — only beta names get group pages).
+ */
+export function groupActivity(name: string, orgSlug: string = ORG_SLUG): GroupActivity {
+  return BETA_GROUPS[orgSlug]?.[name.trim().toLowerCase()] ?? 'worklist';
+}
+
+/**
+ * Where recording a new survey of this type starts: media types go straight
+ * to their wizard (the same dispatch the new-survey form applies on type
+ * selection), everything else to the standard form with the type preselected.
+ */
+export function recordSurveyPath(
+  surveyType: Pick<SurveyType, 'id' | 'allow_image_upload' | 'allow_audio_upload'>,
+): string {
+  if (surveyType.allow_image_upload) return `/surveys/new/camera-trap?type=${surveyType.id}`;
+  if (surveyType.allow_audio_upload) return `/surveys/new/audio?type=${surveyType.id}`;
+  return `/surveys/new?survey_type_id=${surveyType.id}`;
 }
 
 /** Whether the given org (defaults to the current one) has the Groups beta. */

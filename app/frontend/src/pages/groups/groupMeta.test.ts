@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { groupSlug, groupPath, betaGroupNames, orgHasGroups } from './groupMeta';
+import { groupSlug, groupPath, betaGroupNames, orgHasGroups, groupActivity, recordSurveyPath } from './groupMeta';
 
 describe('groupSlug', () => {
   it('lowercases and hyphenates a multi-word name', () => {
@@ -35,9 +35,53 @@ describe('betaGroupNames / orgHasGroups', () => {
     expect(orgHasGroups('cannwood')).toBe(true);
   });
 
+  it('gives Cannwood its unscheduled ad hoc, audio and camera trap groups', () => {
+    expect(betaGroupNames('cannwood')).toContain('ad hoc');
+    expect(betaGroupNames('cannwood')).toContain('audio');
+    expect(betaGroupNames('cannwood')).toContain('camera trap');
+  });
+
   it('hides Groups for orgs not in the beta', () => {
     expect(betaGroupNames('ecotopia')).toEqual([]);
     expect(orgHasGroups('ecotopia')).toBe(false);
+  });
+});
+
+describe('groupActivity', () => {
+  it('marks slot-scheduled types as worklist groups', () => {
+    expect(groupActivity('Bird', 'cannwood')).toBe('worklist');
+    expect(groupActivity('Marsh Fritillary', 'cannwood')).toBe('worklist');
+    expect(groupActivity('Butterfly', 'heal')).toBe('worklist');
+  });
+
+  it('marks unscheduled types as record groups, matching names case-insensitively', () => {
+    expect(groupActivity('Ad hoc', 'cannwood')).toBe('record');
+    expect(groupActivity('  Audio  ', 'cannwood')).toBe('record');
+    expect(groupActivity('Camera Trap', 'cannwood')).toBe('record');
+  });
+
+  it('defaults unknown names to worklist', () => {
+    expect(groupActivity('Moth', 'cannwood')).toBe('worklist');
+  });
+});
+
+describe('recordSurveyPath', () => {
+  it('sends camera trap types to the camera trap wizard', () => {
+    expect(recordSurveyPath({ id: 7, allow_image_upload: true, allow_audio_upload: false })).toBe(
+      '/surveys/new/camera-trap?type=7',
+    );
+  });
+
+  it('sends audio types to the audio wizard', () => {
+    expect(recordSurveyPath({ id: 8, allow_image_upload: false, allow_audio_upload: true })).toBe(
+      '/surveys/new/audio?type=8',
+    );
+  });
+
+  it('sends plain types to the standard form with the type preselected', () => {
+    expect(recordSurveyPath({ id: 9, allow_image_upload: false, allow_audio_upload: false })).toBe(
+      '/surveys/new?survey_type_id=9',
+    );
   });
 });
 

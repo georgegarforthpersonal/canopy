@@ -1,8 +1,11 @@
 /**
  * Group detail: the single-screen overview for one survey type. Neutral hero
- * plus two balanced columns — Surveys worklist + Species count (left); Files,
- * Routes, Data (right). On mobile the panels stack in the order
- * Files → Surveys → Routes → Species count → Data.
+ * plus two balanced columns — Surveys + Species count (left); Files, Routes,
+ * Data (right). The Surveys panel is the slot-driven worklist for scheduled
+ * ('worklist') groups, or a record-CTA + recent-history panel for unscheduled
+ * ('record') ones; media groups additionally get a recent photos/clips panel.
+ * On mobile the panels stack in the order Files → Surveys → Routes →
+ * Species count → Recent media → Data.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -16,17 +19,20 @@ import {
   locationsAPI,
   type SurveyTypeWithDetails,
   type ScheduledSurvey,
+  type Survey,
   type Surveyor,
   type LocationWithBoundary,
   type SurveyTypeFile,
 } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
-import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
+import { groupActivity, primarySpeciesType, recordSurveyPath, resolveGroupTypeId } from './groupMeta';
 import { recordedThisWeek } from './surveyState';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
 import GroupHero from '../../components/groups/GroupHero';
 import SurveysPanel from '../../components/groups/SurveysPanel';
+import RecordPanel from '../../components/groups/RecordPanel';
+import RecentMediaPanel from '../../components/groups/RecentMediaPanel';
 import FilesPanel from '../../components/groups/FilesPanel';
 import LocationsPanel from '../../components/groups/LocationsPanel';
 import SpeciesCountPanel from '../../components/groups/SpeciesCountPanel';
@@ -39,6 +45,7 @@ export default function GroupDetailPage() {
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
   const [slots, setSlots] = useState<ScheduledSurvey[]>([]);
+  const [recentSurveys, setRecentSurveys] = useState<Survey[]>([]);
   const [recordedCount, setRecordedCount] = useState(0);
   const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
   const [locations, setLocations] = useState<LocationWithBoundary[]>([]);
@@ -84,18 +91,23 @@ export default function GroupDetailPage() {
 
         // The worklist is built from the group's slots (linked recorded
         // surveys come embedded, so fulfilment and this week's pin derive
-        // from the same list); the "All surveys" door shows a
-        // recorded/scheduled split, so the recorded side needs the surveys
-        // total.
+        // from the same list); unscheduled ('record') groups have no slots,
+        // so their panel shows the most recent surveys instead — the same
+        // paged call that gives every variant its recorded total (the list
+        // is date-descending, so page 1 IS the recent list).
+        const scheduled = groupActivity(details.name) === 'worklist';
         const [slotList, surveysPage, surveyorList, withBoundaries] = await Promise.all([
-          scheduledSurveysAPI.getAll({ survey_type_id: surveyTypeId }),
-          surveysAPI.getAll({ survey_type_id: surveyTypeId, page: 1, limit: 1 }),
+          scheduled
+            ? scheduledSurveysAPI.getAll({ survey_type_id: surveyTypeId })
+            : Promise.resolve([]),
+          surveysAPI.getAll({ survey_type_id: surveyTypeId, page: 1, limit: 3 }),
           surveyorsAPI.getAll(),
           locationsAPI.getAllWithBoundaries(),
         ]);
         if (!active) return;
 
         setSlots(slotList);
+        setRecentSurveys(surveysPage.data);
         setRecordedCount(surveysPage.total);
         setSurveyors(surveyorList);
 
@@ -182,6 +194,7 @@ export default function GroupDetailPage() {
   // A survey type narrowed to exactly one species (e.g. Marsh Fritillary)
   // gets the per-survey seasonal count panel instead of the diversity chart.
   const singleSpecies = surveyType.species.length === 1 ? surveyType.species[0] : null;
+  const activity = groupActivity(surveyType.name);
   const returnTo = { returnTo: { pathname: `/groups/${typeId}`, label: surveyType.name } };
   // Recording a slot creates a NEW survey linked to it, prefilled from the
   // slot on the new-survey form.
@@ -192,6 +205,10 @@ export default function GroupDetailPage() {
     const surveyId = slot.linked_surveys[0]?.id;
     if (surveyId != null) navigate(`/surveys/${surveyId}`, { state: returnTo });
   };
+  // Unscheduled groups record without a slot: media types jump straight to
+  // their wizard, plain types to the standard form with the type preselected.
+  const recordNew = () => navigate(recordSurveyPath(surveyType), { state: returnTo });
+  const openSurvey = (survey: Survey) => navigate(`/surveys/${survey.id}`, { state: returnTo });
 
   return (
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
@@ -217,17 +234,34 @@ export default function GroupDetailPage() {
           {/* Left column */}
           <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2.25, flex: 1, minWidth: 0 }}>
             <Box sx={{ order: 2, minWidth: 0 }}>
-              <SurveysPanel
-                slots={slots}
-                recordedThisWeek={recordedThisWeek(slots)}
-                resolveSurveyors={resolveSurveyors}
-                recordedCount={recordedCount}
-                greenIds={greenIds}
-                onAddSurvey={recordSlot}
-                onSignupSaved={handleSignupSaved}
-                onOpenSurvey={openSlotSurvey}
-                onViewAll={() => navigate(`/groups/${typeId}/all`)}
-              />
+              {activity === 'record' ? (
+                <RecordPanel
+                  surveys={recentSurveys}
+                  recordedCount={recordedCount}
+                  resolveSurveyors={resolveSurveyors}
+                  speciesType={speciesType}
+                  recordLabel={
+                    surveyType.allow_image_upload || surveyType.allow_audio_upload
+                      ? 'Record survey'
+                      : 'Log a sighting'
+                  }
+                  onRecord={recordNew}
+                  onOpenSurvey={openSurvey}
+                  onViewAll={() => navigate(`/groups/${typeId}/all`)}
+                />
+              ) : (
+                <SurveysPanel
+                  slots={slots}
+                  recordedThisWeek={recordedThisWeek(slots)}
+                  resolveSurveyors={resolveSurveyors}
+                  recordedCount={recordedCount}
+                  greenIds={greenIds}
+                  onAddSurvey={recordSlot}
+                  onSignupSaved={handleSignupSaved}
+                  onOpenSurvey={openSlotSurvey}
+                  onViewAll={() => navigate(`/groups/${typeId}/all`)}
+                />
+              )}
             </Box>
             <Box sx={{ order: 4, minWidth: 0 }}>
               {singleSpecies ? (
@@ -236,6 +270,14 @@ export default function GroupDetailPage() {
                 <SpeciesCountPanel speciesType={speciesType} surveyTypeId={surveyType.id} />
               )}
             </Box>
+            {(surveyType.allow_image_upload || surveyType.allow_audio_upload) && (
+              <Box sx={{ order: 5, minWidth: 0 }}>
+                <RecentMediaPanel
+                  kind={surveyType.allow_image_upload ? 'photos' : 'clips'}
+                  surveys={recentSurveys}
+                />
+              </Box>
+            )}
           </Box>
 
           {/* Right column */}
@@ -246,7 +288,7 @@ export default function GroupDetailPage() {
             <Box sx={{ order: 3, minWidth: 0 }}>
               <LocationsPanel locations={locations} />
             </Box>
-            <Box sx={{ order: 5, minWidth: 0 }}>
+            <Box sx={{ order: 6, minWidth: 0 }}>
               <DataPanel surveyTypeId={surveyType.id} surveyTypeName={surveyType.name} />
             </Box>
           </Box>

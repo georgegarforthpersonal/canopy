@@ -5,10 +5,9 @@
  */
 import { Box, Paper, ButtonBase, Typography } from '@mui/material';
 import { ChevronRight } from '@mui/icons-material';
-import type { ScheduledSurvey, SurveyTypeWithDetails } from '../../services/api';
+import type { SurveyTypeWithDetails } from '../../services/api';
 import { groupColors } from '../../pages/groups/groupsTokens';
 import { accentColors, primarySpeciesType } from '../../pages/groups/groupMeta';
-import { formatSurveyDate } from '../../pages/groups/surveyState';
 import SpeciesIconTile from './SpeciesIconTile';
 
 interface GroupCardProps {
@@ -20,8 +19,11 @@ interface GroupCardProps {
    * count would always read 1 there).
    */
   countStat: { label: 'Species' | 'Sightings'; value: number };
-  /** Soonest upcoming survey, or null if none scheduled. */
-  nextSurvey: ScheduledSurvey | null;
+  /**
+   * Third stat: the soonest scheduled survey for worklist groups, or the most
+   * recently recorded one for unscheduled groups. Null value = none yet.
+   */
+  dateStat: { label: 'Next survey' | 'Last survey'; value: string | null };
   onOpen: () => void;
 }
 
@@ -43,7 +45,7 @@ export default function GroupCard({
   surveyType,
   surveyCount,
   countStat,
-  nextSurvey,
+  dateStat,
   onOpen,
 }: GroupCardProps) {
   const accent = accentColors(surveyType);
@@ -86,10 +88,17 @@ export default function GroupCard({
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: 1 }}>
           <Stat label="Surveys" value={String(surveyCount)} />
           <Stat label={countStat.label} value={String(countStat.value)} />
+          {/* An upcoming date is actionable (brand green); a past one is just history. */}
           <Stat
-            label="Next survey"
-            value={nextSurvey ? formatSurveyDate(nextSurvey) : 'No sessions'}
-            valueColor={nextSurvey ? groupColors.brand : '#888'}
+            label={dateStat.label}
+            value={dateStat.value ?? (dateStat.label === 'Next survey' ? 'No sessions' : 'None yet')}
+            valueColor={
+              dateStat.value == null
+                ? '#888'
+                : dateStat.label === 'Next survey'
+                  ? groupColors.brand
+                  : undefined
+            }
           />
         </Box>
       </ButtonBase>

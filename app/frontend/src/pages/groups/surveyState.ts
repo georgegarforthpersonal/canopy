@@ -50,6 +50,11 @@ export function formatSurveyDate(slot: ScheduledSurvey): string {
   return dayjs(slot.window_start).format('ddd D MMM YYYY');
 }
 
+/** Date label for a recorded survey row, e.g. "Sat 27 Jun 2026". */
+export function formatRecordedDate(dateIso: string): string {
+  return dayjs(dateIso).format('ddd D MMM YYYY');
+}
+
 /**
  * Compact inclusive week-range label from two ISO dates, e.g.
  *   same month  → "1–7 Jun 2026"
