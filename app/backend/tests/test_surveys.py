@@ -37,6 +37,21 @@ class TestGetSurveys:
         assert data["total"] == 2
         assert data["page"] == 1
 
+    def test_get_surveys_includes_location_name(
+        self, client: TestClient, auth_headers: dict, create_survey, create_location
+    ):
+        """The list carries each survey's location name (null when unset)."""
+        location = create_location(name="Long Meadow")
+        create_survey(location_id=location.id)
+        create_survey()
+
+        response = client.get("/api/surveys", headers=auth_headers)
+        assert response.status_code == 200
+
+        by_location_id = {s["location_id"]: s for s in response.json()["data"]}
+        assert by_location_id[location.id]["location_name"] == "Long Meadow"
+        assert by_location_id[None]["location_name"] is None
+
     def test_get_surveys_pagination(
         self, client: TestClient, auth_headers: dict, create_survey, create_surveyor
     ):

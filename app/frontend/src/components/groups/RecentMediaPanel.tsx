@@ -79,9 +79,15 @@ export default function RecentMediaPanel({ kind, surveys }: RecentMediaPanelProp
 
   const title = kind === 'photos' ? 'Recent photos' : 'Recent detections';
   const empty = kind === 'photos' ? photos.length === 0 : clips.length === 0;
-  const viewerImages: ImageViewerItem[] = photos
-    .filter((p) => p.url)
-    .map((p) => ({ src: p.url as string, alt: p.speciesName ?? 'Camera trap photo', caption: p.speciesName ?? undefined }));
+  // The viewer skips tiles whose preview URL failed, so map each photo to its
+  // viewer slot by position — the same image can appear twice (one sighting
+  // per species in frame), so URLs and image ids aren't unique keys.
+  const viewerImages: ImageViewerItem[] = [];
+  const viewerIndexOf = photos.map((p) => {
+    if (!p.url) return null;
+    viewerImages.push({ src: p.url, alt: p.speciesName ?? 'Camera trap photo', caption: p.speciesName ?? undefined });
+    return viewerImages.length - 1;
+  });
 
   return (
     <Paper sx={groupCardSx}>
@@ -113,10 +119,10 @@ export default function RecentMediaPanel({ kind, surveys }: RecentMediaPanelProp
             py: 1.75,
           }}
         >
-          {photos.map((p) => (
+          {photos.map((p, i) => (
             <ButtonBase
-              key={p.imageId}
-              onClick={() => p.url && setViewerIndex(viewerImages.findIndex((v) => v.src === p.url))}
+              key={`${p.imageId}-${i}`}
+              onClick={() => viewerIndexOf[i] != null && setViewerIndex(viewerIndexOf[i])}
               sx={{ display: 'block', textAlign: 'left', borderRadius: '8px' }}
             >
               {p.url ? (
