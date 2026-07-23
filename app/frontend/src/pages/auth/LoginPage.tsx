@@ -6,7 +6,7 @@ import { AuthPageLayout } from './AuthPageLayout';
 
 /** Full-page email + password login. */
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, organisation } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = searchParams.get('next') || '/surveys';
@@ -31,7 +31,10 @@ export function LoginPage() {
   };
 
   return (
-    <AuthPageLayout title="Sign in">
+    <AuthPageLayout
+      title={organisation ? `Sign in to ${organisation.name}` : 'Sign in'}
+      hideOrgName
+    >
       <Box component="form" onSubmit={handleSubmit}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>

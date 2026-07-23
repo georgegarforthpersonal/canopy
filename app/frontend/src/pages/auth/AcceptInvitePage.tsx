@@ -155,7 +155,7 @@ export function AcceptInvitePage() {
   }
 
   return (
-    <AuthPageLayout title={`Join ${invite.organisation.name}`}>
+    <AuthPageLayout title={`Join ${invite.organisation.name}`} hideOrgName>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, textAlign: 'center' }}>
         You're joining as <strong>{invite.email}</strong> with {invite.role} access.{' '}
         {ROLE_DESCRIPTIONS[invite.role]}
