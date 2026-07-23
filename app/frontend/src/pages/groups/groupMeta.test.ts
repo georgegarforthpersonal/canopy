@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { groupSlug, groupPath, betaGroupNames, orgHasGroups, groupActivity, recordSurveyPath } from './groupMeta';
+import type { SurveyTypeWithDetails } from '../../services/api';
+import { groupSlug, groupPath, betaGroupNames, orgHasGroups, groupActivity, recordSurveyPath, compareGroups } from './groupMeta';
 
 describe('groupSlug', () => {
   it('lowercases and hyphenates a multi-word name', () => {
@@ -62,6 +63,39 @@ describe('groupActivity', () => {
 
   it('defaults unknown names to worklist', () => {
     expect(groupActivity('Moth', 'cannwood')).toBe('worklist');
+  });
+});
+
+describe('compareGroups', () => {
+  const type = (name: string, extra: Partial<SurveyTypeWithDetails> = {}): SurveyTypeWithDetails =>
+    ({
+      name,
+      species: [],
+      allow_image_upload: false,
+      allow_audio_upload: false,
+      ...extra,
+    }) as SurveyTypeWithDetails;
+
+  it('orders multi-species A–Z, then single-species A–Z, then camera → audio → ad hoc', () => {
+    const singleSpecies = [{ id: 1 }] as SurveyTypeWithDetails['species'];
+    const cards = [
+      type('Ad hoc'),
+      type('Turtle Dove', { species: singleSpecies }),
+      type('Camera Trap', { allow_image_upload: true }),
+      type('Bird'),
+      type('Audio', { allow_audio_upload: true }),
+      type('Marsh Fritillary', { species: singleSpecies }),
+      type('Butterfly'),
+    ];
+    expect(cards.sort((a, b) => compareGroups(a, b, 'cannwood')).map((t) => t.name)).toEqual([
+      'Bird',
+      'Butterfly',
+      'Marsh Fritillary',
+      'Turtle Dove',
+      'Camera Trap',
+      'Audio',
+      'Ad hoc',
+    ]);
   });
 });
 

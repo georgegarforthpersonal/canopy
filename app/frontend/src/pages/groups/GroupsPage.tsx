@@ -1,15 +1,16 @@
 /**
  * Groups grid (landing). Shows a card per survey type in the current org's
- * beta list (see BETA_GROUPS in groupMeta), ordered alphabetically. Selecting
- * a card opens that survey type's space.
+ * beta list (see BETA_GROUPS in groupMeta), ordered by tier (compareGroups):
+ * multi-species programmes, single-species programmes, then the unscheduled
+ * utilities. Selecting a card opens that survey type's space.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Typography, CircularProgress } from '@mui/material';
 import { surveyTypesAPI, surveysAPI, scheduledSurveysAPI, dashboardAPI, type SurveyTypeWithDetails } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
-import { formatRecordedDate, formatSurveyDate, nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, groupPath, betaGroupNames, groupActivity } from './groupMeta';
+import { formatRecordedDateShort, formatSurveyDateShort, nextScheduledSurvey } from './surveyState';
+import { primarySpeciesType, groupPath, betaGroupNames, groupActivity, compareGroups } from './groupMeta';
 import GroupCard from '../../components/groups/GroupCard';
 import { PageTitle } from '../../components/layout/PageTitle';
 
@@ -76,8 +77,8 @@ export default function GroupsPage() {
             const next = nextScheduledSurvey(slots);
             const last = totalPage.data[0] ?? null;
             const dateStat: CardData['dateStat'] = scheduled
-              ? { label: 'Next survey', value: next ? formatSurveyDate(next) : null }
-              : { label: 'Last survey', value: last ? formatRecordedDate(last.date) : null };
+              ? { label: 'Next survey', value: next ? formatSurveyDateShort(next) : null }
+              : { label: 'Last survey', value: last ? formatRecordedDateShort(last.date) : null };
             return {
               surveyType: details,
               surveyCount: totalPage.total,
@@ -88,7 +89,7 @@ export default function GroupsPage() {
         );
         if (!active) return;
         setCards(
-          loaded.sort((a, b) => a.surveyType.name.localeCompare(b.surveyType.name)),
+          loaded.sort((a, b) => compareGroups(a.surveyType, b.surveyType)),
         );
       } catch {
         if (active) setError(true);

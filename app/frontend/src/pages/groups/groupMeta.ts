@@ -56,6 +56,29 @@ export function groupActivity(name: string, orgSlug: string = ORG_SLUG): GroupAc
 }
 
 /**
+ * Grid ordering (George, 23 Jul 2026): multi-species sightings groups A–Z,
+ * then single-species groups A–Z, then the unscheduled utilities in fixed
+ * order camera trap → audio → ad hoc.
+ */
+export function groupTier(surveyType: SurveyTypeWithDetails, orgSlug: string = ORG_SLUG): number {
+  if (groupActivity(surveyType.name, orgSlug) === 'record') {
+    if (surveyType.allow_image_upload) return 3;
+    if (surveyType.allow_audio_upload) return 4;
+    return 5;
+  }
+  return surveyType.species.length === 1 ? 2 : 1;
+}
+
+/** Grid comparator: tier order, alphabetical within a tier. */
+export function compareGroups(
+  a: SurveyTypeWithDetails,
+  b: SurveyTypeWithDetails,
+  orgSlug: string = ORG_SLUG,
+): number {
+  return groupTier(a, orgSlug) - groupTier(b, orgSlug) || a.name.localeCompare(b.name);
+}
+
+/**
  * Where recording a new survey of this type starts: media types go straight
  * to their wizard (the same dispatch the new-survey form applies on type
  * selection), everything else to the standard form with the type preselected.

@@ -75,7 +75,9 @@ export default function GroupCard({
           <ChevronRight sx={{ color: '#bbb' }} />
         </Box>
 
-        <Box sx={{ height: '1px', bgcolor: groupColors.divider, my: 2 }} />
+        {/* Description-less headers carry less visual weight — tighten the gap
+            so the card doesn't read as missing content. */}
+        <Box sx={{ height: '1px', bgcolor: groupColors.divider, my: surveyType.description ? 2 : 1.5 }} />
 
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.4fr', gap: 1 }}>
           <Stat label="Surveys" value={String(surveyCount)} />
@@ -83,7 +85,7 @@ export default function GroupCard({
           {/* An upcoming date is actionable (brand green); a past one is just history. */}
           <Stat
             label={dateStat.label}
-            value={dateStat.value ?? (dateStat.label === 'Next survey' ? 'No sessions' : 'None yet')}
+            value={dateStat.value ?? (dateStat.label === 'Next survey' ? 'None scheduled' : 'None yet')}
             valueColor={
               dateStat.value == null
                 ? '#888'
