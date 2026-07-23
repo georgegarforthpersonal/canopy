@@ -139,17 +139,21 @@ export function TopNavBar() {
               }}
             />
             {organisation && (
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: 15, sm: 16 },
-                  fontWeight: 600,
-                  color: 'text.primary',
-                  maxWidth: { xs: 130, sm: 200 },
-                }}
-              >
-                {organisation.name}
-              </Typography>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: { xs: 15, sm: 16 },
+                    fontWeight: 600,
+                    color: 'text.primary',
+                    lineHeight: 1.2,
+                    maxWidth: { xs: 130, sm: 200 },
+                  }}
+                >
+                  {organisation.name}
+                </Typography>
+                {orgLogo && <PoweredByCanopy size={12} fontSize={10.5} align="start" />}
+              </Box>
             )}
           </Box>
 
@@ -225,9 +229,20 @@ export function TopNavBar() {
                 alt={orgLogo ? organisation?.name ?? '' : 'Canopy'}
                 style={{ width: 44, height: 44, display: 'block', flexShrink: 0, borderRadius: orgLogo ? 8 : 0, objectFit: 'cover' }}
               />
-              <Typography noWrap sx={{ fontSize: 16, fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
-                {organisation?.name ?? 'Canopy'}
-              </Typography>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography noWrap sx={{ fontSize: 16, fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
+                  {organisation?.name ?? 'Canopy'}
+                </Typography>
+                {orgLogo ? (
+                  <PoweredByCanopy size={13} fontSize={11.5} align="start" />
+                ) : (
+                  organisation && (
+                    <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                      on Canopy
+                    </Typography>
+                  )
+                )}
+              </Box>
             </Box>
             <IconButton onClick={toggleDrawer} sx={{ color: 'text.secondary' }}>
               <Close />
@@ -298,10 +313,6 @@ export function TopNavBar() {
             </ListItem>
           </List>
 
-          {/* Attribution footer — same lockup as the auth card. */}
-          <Box sx={{ mt: 'auto', pb: 1.5 }}>
-            <PoweredByCanopy />
-          </Box>
         </Box>
       </Drawer>
     </>
