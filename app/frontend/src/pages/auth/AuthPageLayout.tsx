@@ -2,6 +2,7 @@ import { Box, Paper, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { brandColors } from '../../theme';
+import { orgLogoUrl } from '../../config/orgBranding';
 import canopyLogo from '../../assets/canopy-logo.svg';
 
 /**
@@ -9,11 +10,16 @@ import canopyLogo from '../../assets/canopy-logo.svg';
  * These render outside the main app Layout (no nav bar) since the user
  * is not signed in yet.
  *
- * Branding: the Canopy mark never appears without its wordmark here — an
- * unlabelled glyph above the organisation name reads as the org's own logo.
- * Tenant identity is carried by language: the login page puts the org in the
- * heading ("Sign in to Heal") and passes hideOrgName; other pages keep their
- * action heading and show the muted org line for context.
+ * Branding: exactly one brand owns the top of the card. Orgs with a logo
+ * (orgBranding) headline it themselves — their volunteers were invited by the
+ * org, not by Canopy — and Canopy moves to a "Powered by Canopy" footer.
+ * Orgs without one get the Canopy mark + wordmark lockup on top (the word
+ * disambiguates the leaf; an unlabelled glyph above the org name would read
+ * as the org's own logo). Tenant identity is otherwise carried by language:
+ * the login page puts the org in the heading ("Sign in to Heal") and passes
+ * hideOrgName; other pages keep their action heading and show the muted org
+ * line for context. Controls stay Canopy green in both variants — tenant
+ * colour lives inside the logo image, never in the UI chrome.
  */
 export function AuthPageLayout({
   title,
@@ -26,6 +32,7 @@ export function AuthPageLayout({
   children: ReactNode;
 }) {
   const { organisation } = useAuth();
+  const orgLogo = orgLogoUrl(organisation?.slug);
 
   return (
     <Box
@@ -40,17 +47,26 @@ export function AuthPageLayout({
     >
       <Paper elevation={1} sx={{ p: 4, width: '100%', maxWidth: 420, borderRadius: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
-          {/* Mark + wordmark lockup — the word disambiguates the leaf. */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-            <img
-              src={canopyLogo}
-              alt=""
-              style={{ width: 40, height: 40, display: 'block' }}
-            />
-            <Typography sx={{ fontSize: 21, fontWeight: 600, color: brandColors.dark, letterSpacing: 0.2 }}>
-              Canopy
-            </Typography>
-          </Box>
+          {orgLogo ? (
+            <Box sx={{ width: 56, height: 56, borderRadius: '8px', overflow: 'hidden', mb: 2 }}>
+              <img
+                src={orgLogo}
+                alt={organisation?.name ?? ''}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+              <img
+                src={canopyLogo}
+                alt=""
+                style={{ width: 40, height: 40, display: 'block' }}
+              />
+              <Typography sx={{ fontSize: 21, fontWeight: 600, color: brandColors.dark, letterSpacing: 0.2 }}>
+                Canopy
+              </Typography>
+            </Box>
+          )}
           {!hideOrgName && organisation && (
             <Typography variant="body2" color="text.secondary">
               {organisation.name}
@@ -61,6 +77,14 @@ export function AuthPageLayout({
           </Typography>
         </Box>
         {children}
+        {orgLogo && (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mt: 3.5 }}>
+            <img src={canopyLogo} alt="" style={{ width: 18, height: 18, display: 'block' }} />
+            <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
+              Powered by Canopy
+            </Typography>
+          </Box>
+        )}
       </Paper>
     </Box>
   );
