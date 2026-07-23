@@ -9,9 +9,9 @@ import { Box, Paper, Typography, Button } from '@mui/material';
 import { Add, ChevronRight } from '@mui/icons-material';
 import type { Survey, Surveyor } from '../../services/api';
 import { usePermissions } from '../../context/AuthContext';
-import { getSpeciesIcon } from '../../config/speciesTypes';
 import { groupCardSx, groupColors, recordButtonSx } from '../../pages/groups/groupsTokens';
 import { formatRecordedDate } from '../../pages/groups/surveyState';
+import SpeciesCountChips from './SpeciesCountChips';
 import SurveyorAvatars from './SurveyorAvatars';
 import AllSurveysDoor from './AllSurveysDoor';
 
@@ -21,7 +21,7 @@ interface RecordPanelProps {
   /** Recorded surveys total — shown on the All surveys door. */
   recordedCount: number;
   resolveSurveyors: (ids: number[]) => Surveyor[];
-  /** Species type driving the sightings-count chip icon. */
+  /** Icon for the zero-sightings chip when a survey has no recorded species. */
   speciesType: string;
   /** CTA text — "Log a sighting" for ad hoc capture, "Record survey" for media types. */
   recordLabel: string;
@@ -41,7 +41,6 @@ export default function RecordPanel({
   onViewAll,
 }: RecordPanelProps) {
   const { canEditSurveys } = usePermissions();
-  const SpeciesIcon = getSpeciesIcon(speciesType);
 
   return (
     <Paper sx={groupCardSx}>
@@ -111,23 +110,8 @@ export default function RecordPanel({
                   </Typography>
                 )}
               </Box>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.5,
-                  px: 1,
-                  py: 0.4,
-                  borderRadius: '6px',
-                  bgcolor: '#EBECED',
-                  color: '#454648',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  flexShrink: 0,
-                }}
-              >
-                <SpeciesIcon sx={{ fontSize: 15 }} />
-                {survey.sightings_count}
+              <Box sx={{ flexShrink: 0 }}>
+                <SpeciesCountChips survey={survey} fallbackSpeciesType={speciesType} />
               </Box>
               <SurveyorAvatars surveyors={resolveSurveyors(survey.surveyor_ids)} emptyLabel="" />
               <ChevronRight sx={{ fontSize: 18, color: groupColors.textMuted, flexShrink: 0 }} />

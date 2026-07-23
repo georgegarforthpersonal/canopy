@@ -26,12 +26,12 @@ import {
 import { recordButtonSx, groupCardSx, groupColors } from './groupsTokens';
 import { groupActivity, primarySpeciesType, resolveGroupTypeId } from './groupMeta';
 import { deriveSlotState, formatRecordedDate, formatSurveyDate, type SlotState } from './surveyState';
-import { getSpeciesIcon } from '../../config/speciesTypes';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
 import SelfSignupButton from '../../components/groups/SelfSignupButton';
+import SpeciesCountChips from '../../components/groups/SpeciesCountChips';
 import SurveyorAvatars from '../../components/groups/SurveyorAvatars';
 
 const PAGE_SIZE = 25;
@@ -162,7 +162,6 @@ export default function AllSurveysPage() {
   }
 
   const speciesType = primarySpeciesType(surveyType);
-  const SpeciesIcon = getSpeciesIcon(speciesType);
 
   const loadMore = async () => {
     setLoadingMore(true);
@@ -311,23 +310,7 @@ export default function AllSurveysPage() {
                   {/* Right cell varies by status */}
                   {row.kind === 'survey' && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.5,
-                          px: 1,
-                          py: 0.4,
-                          borderRadius: '6px',
-                          bgcolor: '#EBECED',
-                          color: '#454648',
-                          fontSize: 12.5,
-                          fontWeight: 600,
-                        }}
-                      >
-                        <SpeciesIcon sx={{ fontSize: 15 }} />
-                        {row.survey.sightings_count}
-                      </Box>
+                      <SpeciesCountChips survey={row.survey} fallbackSpeciesType={speciesType} />
                       <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
                     </Box>
                   )}
