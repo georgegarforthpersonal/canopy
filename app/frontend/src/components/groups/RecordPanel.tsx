@@ -85,68 +85,62 @@ export default function RecordPanel({
               Recent
             </Typography>
           </Box>
-          {surveys.map((survey) => {
-            // Rows with many species chips stack on phones — an inline chip
-            // strip would overflow the date (same rule as AllSurveysPage).
-            const chipHeavy = survey.species_breakdown.length > 2;
-            return (
-              <Box
-                key={survey.id}
-                onClick={() => onOpenSurvey(survey)}
-                sx={{
-                  display: 'flex',
-                  flexDirection: { xs: chipHeavy ? 'column' : 'row', sm: 'row' },
-                  alignItems: { xs: chipHeavy ? 'stretch' : 'center', sm: 'center' },
-                  gap: { xs: chipHeavy ? 1 : 1.6, sm: 1.6 },
-                  px: 2.25,
-                  py: 1.6,
-                  borderTop: `1px solid ${groupColors.dividerInner}`,
-                  cursor: 'pointer',
-                  '&:hover': { bgcolor: groupColors.page },
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.6, minWidth: 0, flex: 1 }}>
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
-                      {formatRecordedDate(survey.date)}
+          {surveys.map((survey) => (
+            // Phones: rows stack uniformly — date + avatars + chevron line,
+            // chips wrapping from the left below (same rule as AllSurveysPage).
+            <Box
+              key={survey.id}
+              onClick={() => onOpenSurvey(survey)}
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { xs: 'stretch', sm: 'center' },
+                gap: { xs: 1, sm: 1.6 },
+                px: 2.25,
+                py: 1.6,
+                borderTop: `1px solid ${groupColors.dividerInner}`,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: groupColors.page },
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.6, minWidth: 0, flex: 1 }}>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
+                    {formatRecordedDate(survey.date)}
+                  </Typography>
+                  {survey.location_name && (
+                    <Typography sx={{ fontSize: 13, color: groupColors.textMuted, mt: 0.25 }} noWrap>
+                      {survey.location_name}
                     </Typography>
-                    {survey.location_name && (
-                      <Typography sx={{ fontSize: 13, color: groupColors.textMuted, mt: 0.25 }} noWrap>
-                        {survey.location_name}
-                      </Typography>
-                    )}
-                  </Box>
-                  {/* Stacked phone rows carry avatars + chevron on the date line. */}
-                  {chipHeavy && (
-                    <Box sx={{ display: { xs: 'flex', sm: 'none' }, alignItems: 'center', gap: 1, flexShrink: 0 }}>
-                      <SurveyorAvatars surveyors={resolveSurveyors(survey.surveyor_ids)} emptyLabel="" />
-                      <ChevronRight sx={{ fontSize: 18, color: groupColors.textMuted }} />
-                    </Box>
                   )}
                 </Box>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.6,
-                    minWidth: 0,
-                    justifyContent: { xs: chipHeavy ? 'flex-start' : 'flex-end', sm: 'flex-end' },
-                    flexShrink: { xs: chipHeavy ? 1 : 0, sm: 0 },
-                  }}
-                >
-                  <SpeciesCountChips
-                    survey={survey}
-                    fallbackSpeciesType={speciesType}
-                    justify={{ xs: chipHeavy ? 'flex-start' : 'flex-end', sm: 'flex-end' }}
-                  />
-                  <Box sx={{ display: { xs: chipHeavy ? 'none' : 'flex', sm: 'flex' }, alignItems: 'center', gap: 1.6, flexShrink: 0 }}>
-                    <SurveyorAvatars surveyors={resolveSurveyors(survey.surveyor_ids)} emptyLabel="" />
-                    <ChevronRight sx={{ fontSize: 18, color: groupColors.textMuted }} />
-                  </Box>
+                <Box sx={{ display: { xs: 'flex', sm: 'none' }, alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                  <SurveyorAvatars surveyors={resolveSurveyors(survey.surveyor_ids)} emptyLabel="" />
+                  <ChevronRight sx={{ fontSize: 18, color: groupColors.textMuted }} />
                 </Box>
               </Box>
-            );
-          })}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.6,
+                  minWidth: 0,
+                  justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                  flexShrink: { xs: 1, sm: 0 },
+                }}
+              >
+                <SpeciesCountChips
+                  survey={survey}
+                  fallbackSpeciesType={speciesType}
+                  justify={{ xs: 'flex-start', sm: 'flex-end' }}
+                />
+                <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.6, flexShrink: 0 }}>
+                  <SurveyorAvatars surveyors={resolveSurveyors(survey.surveyor_ids)} emptyLabel="" />
+                  <ChevronRight sx={{ fontSize: 18, color: groupColors.textMuted }} />
+                </Box>
+              </Box>
+            </Box>
+          ))}
         </>
       )}
 

@@ -246,11 +246,10 @@ export default function AllSurveysPage() {
               const clickable = row.kind === 'survey';
               // Rows carrying the sign-up toggle are too wide for a phone, so
               // they stack — same rule as SurveyWorklistRow: date + chip line
-              // with avatars top right, actions line below. Recorded rows with
-              // many species chips stack for the same reason (an inline chip
-              // strip would overflow the date).
-              const chipHeavy = row.kind === 'survey' && row.survey.species_breakdown.length > 2;
-              const stacked = state === 'due-this-week' || state === 'upcoming' || chipHeavy;
+              // with avatars top right, actions line below. Recorded rows all
+              // stack too, chips starting from the left — uniformly, so light
+              // and chip-heavy rows read the same (mixed alignment looked odd).
+              const stacked = state === 'due-this-week' || state === 'upcoming' || row.kind === 'survey';
               const recordButton = row.kind === 'slot' && (
                 <Button
                   variant="contained"
@@ -323,19 +322,18 @@ export default function AllSurveysPage() {
                         alignItems: 'center',
                         gap: 1.25,
                         minWidth: 0,
-                        // Chip-heavy rows stack on phones: chips get their own
-                        // full-width wrapping line (avatars already sit on the
-                        // date line). Inline rows keep chips + avatars right.
-                        justifyContent: { xs: chipHeavy ? 'flex-start' : 'flex-end', sm: 'flex-end' },
-                        flexShrink: { xs: chipHeavy ? 1 : 0, sm: 0 },
+                        // Phones: chips get their own full-width line, starting
+                        // from the left (avatars sit on the date line above).
+                        justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                        flexShrink: { xs: 1, sm: 0 },
                       }}
                     >
                       <SpeciesCountChips
                         survey={row.survey}
                         fallbackSpeciesType={speciesType}
-                        justify={{ xs: chipHeavy ? 'flex-start' : 'flex-end', sm: 'flex-end' }}
+                        justify={{ xs: 'flex-start', sm: 'flex-end' }}
                       />
-                      <Box sx={{ display: { xs: chipHeavy ? 'none' : 'flex', sm: 'flex' }, flexShrink: 0 }}>
+                      <Box sx={{ display: { xs: 'none', sm: 'flex' }, flexShrink: 0 }}>
                         <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
                       </Box>
                     </Box>
