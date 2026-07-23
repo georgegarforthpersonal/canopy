@@ -26,9 +26,15 @@ interface SpeciesCountChipsProps {
   survey: Survey;
   /** Icon for the zero chip when the survey has no sightings. */
   fallbackSpeciesType: string;
+  /** Wrap alignment — accepts responsive values (stacked phone rows start-align). */
+  justify?: string | Record<string, string>;
 }
 
-export default function SpeciesCountChips({ survey, fallbackSpeciesType }: SpeciesCountChipsProps) {
+export default function SpeciesCountChips({
+  survey,
+  fallbackSpeciesType,
+  justify = 'flex-end',
+}: SpeciesCountChipsProps) {
   if (survey.species_breakdown.length === 0) {
     const Icon = getSpeciesIcon(fallbackSpeciesType);
     return (
@@ -39,7 +45,7 @@ export default function SpeciesCountChips({ survey, fallbackSpeciesType }: Speci
     );
   }
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 0.75 }}>
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: justify, gap: 0.75 }}>
       {survey.species_breakdown.map((sighting) => {
         const Icon = getSpeciesIcon(sighting.type);
         return (

@@ -246,8 +246,11 @@ export default function AllSurveysPage() {
               const clickable = row.kind === 'survey';
               // Rows carrying the sign-up toggle are too wide for a phone, so
               // they stack — same rule as SurveyWorklistRow: date + chip line
-              // with avatars top right, actions line below.
-              const stacked = state === 'due-this-week' || state === 'upcoming';
+              // with avatars top right, actions line below. Recorded rows with
+              // many species chips stack for the same reason (an inline chip
+              // strip would overflow the date).
+              const chipHeavy = row.kind === 'survey' && row.survey.species_breakdown.length > 2;
+              const stacked = state === 'due-this-week' || state === 'upcoming' || chipHeavy;
               const recordButton = row.kind === 'slot' && (
                 <Button
                   variant="contained"
@@ -299,19 +302,42 @@ export default function AllSurveysPage() {
                       </Box>
                     </Box>
                     {/* On phones the date line's top-right slot carries who's
-                        going — avatars, or "No surveyors yet" when empty. */}
+                        going — avatars, or "No surveyors yet" when empty
+                        (recorded rows just omit them). */}
                     {stacked && (
                       <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexShrink: 0 }}>
-                        <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
+                        <SurveyorAvatars
+                          surveyors={assigned}
+                          greenIds={greenIds}
+                          emptyLabel={row.kind === 'survey' ? '' : undefined}
+                        />
                       </Box>
                     )}
                   </Box>
 
                   {/* Right cell varies by status */}
                   {row.kind === 'survey' && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
-                      <SpeciesCountChips survey={row.survey} fallbackSpeciesType={speciesType} />
-                      <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.25,
+                        minWidth: 0,
+                        // Chip-heavy rows stack on phones: chips get their own
+                        // full-width wrapping line (avatars already sit on the
+                        // date line). Inline rows keep chips + avatars right.
+                        justifyContent: { xs: chipHeavy ? 'flex-start' : 'flex-end', sm: 'flex-end' },
+                        flexShrink: { xs: chipHeavy ? 1 : 0, sm: 0 },
+                      }}
+                    >
+                      <SpeciesCountChips
+                        survey={row.survey}
+                        fallbackSpeciesType={speciesType}
+                        justify={{ xs: chipHeavy ? 'flex-start' : 'flex-end', sm: 'flex-end' }}
+                      />
+                      <Box sx={{ display: { xs: chipHeavy ? 'none' : 'flex', sm: 'flex' }, flexShrink: 0 }}>
+                        <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
+                      </Box>
                     </Box>
                   )}
 
