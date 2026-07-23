@@ -13,6 +13,7 @@ import adHoc from '../assets/canopy/ad-hoc.svg';
 import audio from '../assets/canopy/audio.svg';
 import butterfly from '../assets/canopy/butterfly.svg';
 import cameraTrap from '../assets/canopy/camera-trap.svg';
+import dragonfly from '../assets/canopy/dragonfly.svg';
 import genericBird from '../assets/canopy/generic-bird.svg';
 import marshFritillary from '../assets/canopy/marsh-fritillary.svg';
 import reptileSnake from '../assets/canopy/reptile-snake.svg';
@@ -23,6 +24,7 @@ const CANOPY_ICONS: Record<string, string> = {
   audio,
   butterfly,
   'camera-trap': cameraTrap,
+  dragonfly,
   'generic-bird': genericBird,
   'marsh-fritillary': marshFritillary,
   'reptile-snake': reptileSnake,

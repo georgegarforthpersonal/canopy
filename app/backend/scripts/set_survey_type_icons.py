@@ -43,6 +43,7 @@ NAME_TO_ICON: list[tuple[str, str]] = [
     ("ad hoc", "ad-hoc"),
     ("ad-hoc", "ad-hoc"),
     ("reptile", "reptile-snake"),
+    ("dragonfly", "dragonfly"),
 ]
 
 
