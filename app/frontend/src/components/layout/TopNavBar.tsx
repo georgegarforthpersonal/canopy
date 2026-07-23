@@ -1,4 +1,4 @@
-import { AppBar, Toolbar, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, useMediaQuery, useTheme } from '@mui/material';
+import { AppBar, Toolbar, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { Assignment, BarChart, Settings, SpaceDashboard, Menu as MenuIcon, Close, Logout } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
@@ -23,7 +23,7 @@ export function TopNavBar() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md')); // < 900px
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const { logout } = useAuth();
+  const { logout, organisation } = useAuth();
   const { canAccessAdmin } = usePermissions();
 
   // Groups is a beta gated per organisation (see BETA_GROUPS in groupMeta).
@@ -101,29 +101,43 @@ export function TopNavBar() {
             </IconButton>
           )}
 
-          {/* Canopy logo */}
+          {/* Canopy mark + tenant name. Canopy owns the chrome; the tenant
+              owns the words — the org name is the persistent "you are
+              entering data for Heal/Cannwood" signal on every screen. */}
           <Box
             onClick={handleLogoClick}
             sx={{
-              width: { xs: 36, sm: 44 },
-              height: { xs: 36, sm: 44 },
+              display: 'flex',
+              alignItems: 'center',
+              gap: { xs: 1, sm: 1.25 },
               cursor: 'pointer',
               flexShrink: 0,
               mr: { xs: 2, sm: 3 },
+              minWidth: 0,
               transition: 'transform 0.2s',
               '&:hover': {
-                transform: 'scale(1.05)',
+                transform: 'scale(1.03)',
               }
             }}
           >
             <img
               src={canopyLogo}
               alt="Canopy"
-              style={{
-                width: '100%',
-                height: '100%',
-              }}
+              style={{ width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, display: 'block' }}
             />
+            {organisation && (
+              <Typography
+                noWrap
+                sx={{
+                  fontSize: { xs: 15, sm: 16 },
+                  fontWeight: 600,
+                  color: 'text.primary',
+                  maxWidth: { xs: 130, sm: 200 },
+                }}
+              >
+                {organisation.name}
+              </Typography>
+            )}
           </Box>
 
           {/* Desktop/Tablet: Navigation Icons */}
@@ -179,24 +193,34 @@ export function TopNavBar() {
         }}
       >
         <Box sx={{ p: 2 }}>
-          {/* Drawer Header with Logo and Close Button */}
+          {/* Drawer Header: the workspace-header moment — tenant name with
+              the platform as the caption. */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
             <Box
               onClick={handleLogoClick}
               sx={{
-                width: 44,
-                height: 44,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
                 cursor: 'pointer',
+                minWidth: 0,
               }}
             >
               <img
                 src={canopyLogo}
                 alt="Canopy"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                }}
+                style={{ width: 44, height: 44, display: 'block', flexShrink: 0 }}
               />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography noWrap sx={{ fontSize: 16, fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
+                  {organisation?.name ?? 'Canopy'}
+                </Typography>
+                {organisation && (
+                  <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                    on Canopy
+                  </Typography>
+                )}
+              </Box>
             </Box>
             <IconButton onClick={toggleDrawer} sx={{ color: 'text.secondary' }}>
               <Close />
