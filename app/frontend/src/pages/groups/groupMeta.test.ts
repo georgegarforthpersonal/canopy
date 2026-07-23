@@ -21,9 +21,23 @@ describe('groupSlug', () => {
 });
 
 describe('betaGroupNames / orgHasGroups', () => {
-  it('gives Heal its butterfly and dragonfly groups', () => {
-    expect(betaGroupNames('heal')).toEqual(['butterfly', 'dragonfly']);
+  it('gives Heal every type with recorded surveys', () => {
+    expect(betaGroupNames('heal')).toEqual([
+      'butterfly',
+      'dragonfly',
+      'bird',
+      'birders',
+      'jenny',
+      'ad hoc',
+    ]);
     expect(orgHasGroups('heal')).toBe(true);
+  });
+
+  it('marks Heal ad hoc and Jenny as record groups, scheduled programmes as worklist', () => {
+    expect(groupActivity('Ad Hoc', 'heal')).toBe('record');
+    expect(groupActivity('Jenny', 'heal')).toBe('record');
+    expect(groupActivity('Bird', 'heal')).toBe('worklist');
+    expect(groupActivity('Birders', 'heal')).toBe('worklist');
   });
 
   it('gives Cannwood bird (old and new type names), marsh fritillary and turtle dove', () => {

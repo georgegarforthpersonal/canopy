@@ -23,7 +23,17 @@ export type GroupActivity = 'worklist' | 'record';
  * during the transition.
  */
 const BETA_GROUPS: Record<string, Record<string, GroupActivity>> = {
-  heal: { butterfly: 'worklist', dragonfly: 'worklist' },
+  // Heal's Groups cover every type with recorded surveys (expanded 23 Jul on
+  // George's ask). "Birders" was renamed "Bird" in the staging DB; both names
+  // stay listed until prod is renamed too, like the walking→bird transition.
+  heal: {
+    butterfly: 'worklist',
+    dragonfly: 'worklist',
+    bird: 'worklist',
+    birders: 'worklist',
+    jenny: 'record',
+    'ad hoc': 'record',
+  },
   cannwood: {
     walking: 'worklist',
     'walking survey': 'worklist',

@@ -726,6 +726,12 @@ class SurveyTypeBase(SQLModel):
 class SurveyType(SurveyTypeBase, table=True):  # type: ignore[call-arg]
     """Survey type configuration table"""
     __tablename__ = "survey_type"
+    __table_args__ = (
+        # Names are unique per organisation, NOT globally — two orgs can both
+        # have a "Bird" type. (A legacy global unique key from the single-org
+        # era is dropped by migration stname01.)
+        sa.UniqueConstraint('organisation_id', 'name', name='uq_survey_type_org_name'),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     organisation_id: int = Field(foreign_key="organisation.id", index=True, description="Organisation this survey type belongs to")
