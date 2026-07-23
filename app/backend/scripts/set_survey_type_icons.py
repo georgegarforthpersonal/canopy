@@ -35,6 +35,9 @@ NAME_TO_ICON: list[tuple[str, str]] = [
     ("marsh fritillary", "marsh-fritillary"),
     ("turtledove", "turtle-dove"),
     ("turtle dove", "turtle-dove"),
+    # Heal's "Jenny" insect survey type — jenny wren, hence the wren badge.
+    ("jenny", "wren"),
+    ("wren", "wren"),
     ("butterfly", "butterfly"),
     ("bird", "generic-bird"),
     ("walking", "generic-bird"),

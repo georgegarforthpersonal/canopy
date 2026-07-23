@@ -18,6 +18,7 @@ import genericBird from '../assets/canopy/generic-bird.svg';
 import marshFritillary from '../assets/canopy/marsh-fritillary.svg';
 import reptileSnake from '../assets/canopy/reptile-snake.svg';
 import turtleDove from '../assets/canopy/turtle-dove.svg';
+import wren from '../assets/canopy/wren.svg';
 
 const CANOPY_ICONS: Record<string, string> = {
   'ad-hoc': adHoc,
@@ -29,6 +30,7 @@ const CANOPY_ICONS: Record<string, string> = {
   'marsh-fritillary': marshFritillary,
   'reptile-snake': reptileSnake,
   'turtle-dove': turtleDove,
+  wren,
 };
 
 /** Asset URL for a survey type's icon slug, or null when not registered. */
