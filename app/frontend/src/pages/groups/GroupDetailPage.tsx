@@ -286,7 +286,7 @@ export default function GroupDetailPage() {
               <FilesPanel surveyTypeId={surveyType.id} files={files} loading={filesLoading} />
             </Box>
             <Box sx={{ order: 3, minWidth: 0 }}>
-              <LocationsPanel locations={locations} />
+              <LocationsPanel locations={locations} devices={surveyType.devices} />
             </Box>
             <Box sx={{ order: 6, minWidth: 0 }}>
               <DataPanel surveyTypeId={surveyType.id} surveyTypeName={surveyType.name} />

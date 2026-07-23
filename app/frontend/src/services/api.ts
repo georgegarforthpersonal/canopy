@@ -701,6 +701,8 @@ export interface SurveyTypeWithDetails extends SurveyType {
   species_types: SpeciesTypeRef[];
   /** Explicit species narrowing (empty = all species in the species types) */
   species: Species[];
+  /** Devices allocated to this survey type (shown on its group page) */
+  devices: Device[];
 }
 
 /**
@@ -741,6 +743,8 @@ export interface SurveyTypeCreate {
   species_type_ids: number[];
   /** Specific species to offer (empty/omitted = all species in the species types) */
   species_ids?: number[];
+  /** Devices allocated to this survey type (shown on its group page) */
+  device_ids?: number[];
 }
 
 /**

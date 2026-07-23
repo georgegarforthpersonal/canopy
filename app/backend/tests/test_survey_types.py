@@ -6,6 +6,8 @@ Tests CRUD operations for the /api/survey-types endpoints.
 
 from fastapi.testclient import TestClient
 
+from models import DeviceType
+
 
 class TestGetSurveyTypes:
     """Tests for GET /api/survey-types"""
@@ -167,6 +169,72 @@ class TestCreateSurveyType:
         data = response.json()
         assert data["name"] == "New Survey Type"
         assert data["is_active"] is True
+
+    def test_create_survey_type_with_devices(
+        self, client: TestClient, auth_headers: dict, create_device, create_species_type
+    ):
+        """Allocated devices round-trip through create -> details."""
+        camera = create_device(device_id="CAM001", name="Pond Camera", device_type=DeviceType.camera_trap)
+        species_type = create_species_type(name="mammal", display_name="Mammal")
+
+        response = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Camera Trap",
+                "species_type_ids": [species_type.id],
+                "device_ids": [camera.id],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+        details = client.get(f"/api/survey-types/{response.json()['id']}", headers=auth_headers).json()
+        assert [d["name"] for d in details["devices"]] == ["Pond Camera"]
+        assert details["devices"][0]["latitude"] == 51.5
+        assert details["devices"][0]["device_type"] == "camera_trap"
+
+    def test_create_survey_type_rejects_unknown_device(
+        self, client: TestClient, auth_headers: dict, create_species_type
+    ):
+        """Unknown (or other-org) device ids are a 400, not silent links."""
+        species_type = create_species_type(name="mammal", display_name="Mammal")
+        response = client.post(
+            "/api/survey-types",
+            json={"name": "Camera Trap", "species_type_ids": [species_type.id], "device_ids": [99999]},
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+        assert "device" in response.json()["detail"].lower()
+
+    def test_update_replaces_device_allocation(
+        self, client: TestClient, auth_headers: dict, create_survey_type, create_device
+    ):
+        """PUT with device_ids replaces the allocation; omitting it leaves it alone."""
+        survey_type = create_survey_type(name="Audio")
+        rec1 = create_device(device_id="REC001", name="West Recorder")
+        rec2 = create_device(device_id="REC002", name="East Recorder")
+
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"device_ids": [rec1.id]}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert [d["name"] for d in details["devices"]] == ["West Recorder"]
+
+        # An update that doesn't mention device_ids keeps the allocation.
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"description": "dawn chorus"}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert [d["name"] for d in details["devices"]] == ["West Recorder"]
+
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"device_ids": [rec2.id]}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert [d["name"] for d in details["devices"]] == ["East Recorder"]
 
     def test_create_survey_type_duplicate_name(
         self, client: TestClient, auth_headers: dict, create_survey_type

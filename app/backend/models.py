@@ -334,6 +334,17 @@ class SurveyTypeLocationLink(SQLModel, table=True):  # type: ignore[call-arg]
     location_id: int = Field(foreign_key="location.id", ondelete="CASCADE")
 
 
+class SurveyTypeDeviceLink(SQLModel, table=True):  # type: ignore[call-arg]
+    """Junction table linking survey types to their allocated devices —
+    shown alongside locations on the group page (e.g. a camera trap
+    type's cameras, an audio type's recorders)."""
+    __tablename__ = "survey_type_device"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    survey_type_id: int = Field(foreign_key="survey_type.id", ondelete="CASCADE")
+    device_id: int = Field(foreign_key="device.id", ondelete="CASCADE")
+
+
 class SurveyTypeSpeciesTypeLink(SQLModel, table=True):  # type: ignore[call-arg]
     """Junction table linking survey types to species types"""
     __tablename__ = "survey_type_species_type"
@@ -743,6 +754,7 @@ class SurveyTypeCreate(SurveyTypeBase):
     location_ids: List[int] = Field(default_factory=list, description="List of allowed location IDs")
     species_type_ids: List[int] = Field(description="List of allowed species type IDs")
     species_ids: List[int] = Field(default_factory=list, description="Specific species to offer (empty = all species in the selected species types)")
+    device_ids: List[int] = Field(default_factory=list, description="Devices allocated to this survey type (shown on its group page)")
 
 
 class SurveyTypeUpdate(SQLModel):
@@ -769,6 +781,7 @@ class SurveyTypeUpdate(SQLModel):
     location_ids: Optional[List[int]] = None
     species_type_ids: Optional[List[int]] = None
     species_ids: Optional[List[int]] = None
+    device_ids: Optional[List[int]] = None
 
 
 class SurveyTypeRead(SurveyTypeBase):
@@ -778,10 +791,11 @@ class SurveyTypeRead(SurveyTypeBase):
 
 
 class SurveyTypeWithDetails(SurveyTypeRead):
-    """Survey type with full location and species type details"""
+    """Survey type with full location, device and species type details"""
     locations: List[LocationRead] = Field(default_factory=list)
     species_types: List[SpeciesTypeRead] = Field(default_factory=list)
     species: List[SpeciesRead] = Field(default_factory=list)
+    devices: List[DeviceRead] = Field(default_factory=list)
 
 
 # ============================================================================
