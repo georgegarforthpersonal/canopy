@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useAuth, usePermissions } from '../../context/AuthContext';
 import { UserMenu } from './UserMenu';
 import canopyLogo from '../../assets/canopy-logo.svg';
+import { orgLogoUrl } from '../../config/orgBranding';
 import { orgHasGroups } from '../../pages/groups/groupMeta';
 
 /**
@@ -25,6 +26,10 @@ export function TopNavBar() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const { logout, organisation } = useAuth();
   const { canAccessAdmin } = usePermissions();
+  // Tenant-first chrome (George's call): orgs with a logo headline the bar
+  // themselves with "Powered by Canopy" as the caption; logo-less orgs get
+  // the Canopy mark with their name as text.
+  const orgLogo = orgLogoUrl(organisation?.slug);
 
   // Groups is a beta gated per organisation (see BETA_GROUPS in groupMeta).
   const showGroups = orgHasGroups();
@@ -101,9 +106,10 @@ export function TopNavBar() {
             </IconButton>
           )}
 
-          {/* Canopy mark + tenant name. Canopy owns the chrome; the tenant
-              owns the words — the org name is the persistent "you are
-              entering data for Heal/Cannwood" signal on every screen. */}
+          {/* Org mark + name — the persistent "you are entering data for
+              Heal/Cannwood" signal on every screen. Orgs with a logo headline
+              the bar themselves ("Powered by Canopy" caption); logo-less orgs
+              show the Canopy mark with their name as text. */}
           <Box
             onClick={handleLogoClick}
             sx={{
@@ -121,22 +127,36 @@ export function TopNavBar() {
             }}
           >
             <img
-              src={canopyLogo}
-              alt="Canopy"
-              style={{ width: isMobile ? 36 : 44, height: isMobile ? 36 : 44, display: 'block' }}
+              src={orgLogo ?? canopyLogo}
+              alt={orgLogo ? organisation?.name ?? '' : 'Canopy'}
+              style={{
+                width: isMobile ? 36 : 44,
+                height: isMobile ? 36 : 44,
+                display: 'block',
+                borderRadius: orgLogo ? 8 : 0,
+                objectFit: 'cover',
+              }}
             />
             {organisation && (
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: { xs: 15, sm: 16 },
-                  fontWeight: 600,
-                  color: 'text.primary',
-                  maxWidth: { xs: 130, sm: 200 },
-                }}
-              >
-                {organisation.name}
-              </Typography>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: { xs: 15, sm: 16 },
+                    fontWeight: 600,
+                    color: 'text.primary',
+                    lineHeight: 1.2,
+                    maxWidth: { xs: 130, sm: 200 },
+                  }}
+                >
+                  {organisation.name}
+                </Typography>
+                {orgLogo && (
+                  <Typography noWrap sx={{ fontSize: 10.5, color: 'text.secondary', lineHeight: 1.2 }}>
+                    Powered by Canopy
+                  </Typography>
+                )}
+              </Box>
             )}
           </Box>
 
@@ -207,9 +227,9 @@ export function TopNavBar() {
               }}
             >
               <img
-                src={canopyLogo}
-                alt="Canopy"
-                style={{ width: 44, height: 44, display: 'block', flexShrink: 0 }}
+                src={orgLogo ?? canopyLogo}
+                alt={orgLogo ? organisation?.name ?? '' : 'Canopy'}
+                style={{ width: 44, height: 44, display: 'block', flexShrink: 0, borderRadius: orgLogo ? 8 : 0, objectFit: 'cover' }}
               />
               <Box sx={{ minWidth: 0 }}>
                 <Typography noWrap sx={{ fontSize: 16, fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
@@ -217,7 +237,7 @@ export function TopNavBar() {
                 </Typography>
                 {organisation && (
                   <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                    on Canopy
+                    {orgLogo ? 'Powered by Canopy' : 'on Canopy'}
                   </Typography>
                 )}
               </Box>
