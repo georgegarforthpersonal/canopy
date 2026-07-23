@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth, usePermissions } from '../../context/AuthContext';
 import { UserMenu } from './UserMenu';
+import { PoweredByCanopy } from './PoweredByCanopy';
 import canopyLogo from '../../assets/canopy-logo.svg';
 import { orgLogoUrl } from '../../config/orgBranding';
 import { orgHasGroups } from '../../pages/groups/groupMeta';
@@ -138,25 +139,17 @@ export function TopNavBar() {
               }}
             />
             {organisation && (
-              <Box sx={{ minWidth: 0 }}>
-                <Typography
-                  noWrap
-                  sx={{
-                    fontSize: { xs: 15, sm: 16 },
-                    fontWeight: 600,
-                    color: 'text.primary',
-                    lineHeight: 1.2,
-                    maxWidth: { xs: 130, sm: 200 },
-                  }}
-                >
-                  {organisation.name}
-                </Typography>
-                {orgLogo && (
-                  <Typography noWrap sx={{ fontSize: 10.5, color: 'text.secondary', lineHeight: 1.2 }}>
-                    Powered by Canopy
-                  </Typography>
-                )}
-              </Box>
+              <Typography
+                noWrap
+                sx={{
+                  fontSize: { xs: 15, sm: 16 },
+                  fontWeight: 600,
+                  color: 'text.primary',
+                  maxWidth: { xs: 130, sm: 200 },
+                }}
+              >
+                {organisation.name}
+              </Typography>
             )}
           </Box>
 
@@ -212,9 +205,10 @@ export function TopNavBar() {
           }
         }}
       >
-        <Box sx={{ p: 2 }}>
-          {/* Drawer Header: the workspace-header moment — tenant name with
-              the platform as the caption. */}
+        <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Drawer Header: the workspace-header moment — the org's mark and
+              name; Canopy credits itself in the footer lockup below, matching
+              the auth card. */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
             <Box
               onClick={handleLogoClick}
@@ -231,16 +225,9 @@ export function TopNavBar() {
                 alt={orgLogo ? organisation?.name ?? '' : 'Canopy'}
                 style={{ width: 44, height: 44, display: 'block', flexShrink: 0, borderRadius: orgLogo ? 8 : 0, objectFit: 'cover' }}
               />
-              <Box sx={{ minWidth: 0 }}>
-                <Typography noWrap sx={{ fontSize: 16, fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
-                  {organisation?.name ?? 'Canopy'}
-                </Typography>
-                {organisation && (
-                  <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                    {orgLogo ? 'Powered by Canopy' : 'on Canopy'}
-                  </Typography>
-                )}
-              </Box>
+              <Typography noWrap sx={{ fontSize: 16, fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
+                {organisation?.name ?? 'Canopy'}
+              </Typography>
             </Box>
             <IconButton onClick={toggleDrawer} sx={{ color: 'text.secondary' }}>
               <Close />
@@ -310,6 +297,11 @@ export function TopNavBar() {
               </ListItemButton>
             </ListItem>
           </List>
+
+          {/* Attribution footer — same lockup as the auth card. */}
+          <Box sx={{ mt: 'auto', pb: 1.5 }}>
+            <PoweredByCanopy />
+          </Box>
         </Box>
       </Drawer>
     </>

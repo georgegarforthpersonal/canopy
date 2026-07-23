@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { brandColors } from '../../theme';
 import { orgLogoUrl } from '../../config/orgBranding';
+import { PoweredByCanopy } from '../../components/layout/PoweredByCanopy';
 import canopyLogo from '../../assets/canopy-logo.svg';
 
 /**
@@ -78,11 +79,8 @@ export function AuthPageLayout({
         </Box>
         {children}
         {orgLogo && (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, mt: 3.5 }}>
-            <img src={canopyLogo} alt="" style={{ width: 18, height: 18, display: 'block' }} />
-            <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
-              Powered by Canopy
-            </Typography>
+          <Box sx={{ mt: 3.5 }}>
+            <PoweredByCanopy />
           </Box>
         )}
       </Paper>
