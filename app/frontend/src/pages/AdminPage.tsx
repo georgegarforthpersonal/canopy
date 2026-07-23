@@ -1037,6 +1037,10 @@ export function AdminPage() {
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
               disabled={savingSurveyType}
+              // Capped so the group card can always show the whole description
+              // wrapped over at most two lines — never truncated with "…".
+              slotProps={{ htmlInput: { maxLength: 100 } }}
+              helperText={`${formDescription.length}/100 — shown on the group card`}
             />
             <Box sx={{ mt: 1 }}>
               <SurveyTypeColorSelector value={formColor} onChange={setFormColor} />

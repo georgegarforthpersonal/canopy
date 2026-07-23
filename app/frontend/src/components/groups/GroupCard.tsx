@@ -67,7 +67,9 @@ export default function GroupCard({
               {surveyType.name}
             </Typography>
             {surveyType.description && (
-              <Typography sx={{ fontSize: 12.5, color: '#888' }} noWrap>
+              // Wraps freely — descriptions are capped at 100 chars in admin
+              // precisely so the card never has to truncate with "…".
+              <Typography sx={{ fontSize: 12.5, color: '#888', lineHeight: 1.35 }}>
                 {surveyType.description}
               </Typography>
             )}
