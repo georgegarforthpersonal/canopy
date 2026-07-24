@@ -12,8 +12,9 @@ Endpoints:
 
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File
 from typing import List, Set, Union
+from datetime import datetime
 from sqlmodel import col
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from database.connection import get_db
 from auth import require_admin_role
@@ -21,9 +22,11 @@ from dependencies import get_current_organisation
 from models import (
     SurveyType, SurveyTypeRead, SurveyTypeCreate, SurveyTypeUpdate, SurveyTypeWithDetails,
     SurveyTypeLocationLink, SurveyTypeSpeciesTypeLink, SurveyTypeSpeciesLink,
-    SurveyTypeFile, SurveyTypeFileRead,
+    SurveyTypeDeviceLink, SurveyTypeFile, SurveyTypeFileRead,
+    SurveyTypeRecentMedia, RecentSpeciesPhoto, RecentSpeciesClip,
     Species, SpeciesType, SpeciesTypeRead,
     Location, LocationRead,
+    Device, DeviceRead,
     Organisation
 )
 from routers.species import _to_species_read
@@ -92,6 +95,19 @@ def _validate_species_ids(species_ids: List[int], species_type_ids: Set[int], db
             status_code=400,
             detail=f"Species IDs outside the selected species types: {outside_ids}"
         )
+
+
+def _validate_device_ids(device_ids: List[int], org: Organisation, db: Session) -> None:
+    """Allocated devices must exist and belong to this organisation."""
+    if not device_ids:
+        return
+    existing = db.query(Device.id).filter(
+        col(Device.id).in_(device_ids),
+        Device.organisation_id == org.id,
+    ).all()
+    invalid_ids = set(device_ids) - {row.id for row in existing}
+    if invalid_ids:
+        raise HTTPException(status_code=400, detail=f"Invalid device IDs: {invalid_ids}")
 
 
 @router.get("/species-types", response_model=List[SpeciesTypeRead])
@@ -181,6 +197,24 @@ async def get_survey_type(
         .all()
     )
 
+    # Allocated devices (raw SQL to extract lat/lng from the PostGIS point,
+    # matching the devices router). Inactive devices stay listed — an
+    # allocation is config, and hiding a broken camera would be misleading.
+    device_rows = db.execute(
+        text("""
+            SELECT d.id, d.device_id, d.name, d.device_type, d.location_id, d.is_active,
+                   ST_Y(d.point_geometry) as latitude,
+                   ST_X(d.point_geometry) as longitude,
+                   l.name as location_name
+            FROM device d
+            JOIN survey_type_device std ON std.device_id = d.id
+            LEFT JOIN location l ON d.location_id = l.id
+            WHERE std.survey_type_id = :survey_type_id AND d.organisation_id = :org_id
+            ORDER BY d.name
+        """),
+        {"survey_type_id": survey_type_id, "org_id": org.id},
+    ).fetchall()
+
     # Build response
     return SurveyTypeWithDetails(
         id=survey_type.id,
@@ -215,8 +249,93 @@ async def get_survey_type(
             for loc in locations
         ],
         species_types=[SpeciesTypeRead.model_validate(st) for st in species_types],
-        species=[_to_species_read(s) for s in narrowed_species]
+        species=[_to_species_read(s) for s in narrowed_species],
+        devices=[
+            DeviceRead(
+                id=row.id,
+                device_id=row.device_id,
+                name=row.name,
+                device_type=row.device_type,
+                latitude=row.latitude,
+                longitude=row.longitude,
+                location_id=row.location_id,
+                location_name=row.location_name,
+                is_active=row.is_active,
+            )
+            for row in device_rows
+        ],
     )
+
+
+@router.get("/{survey_type_id}/recent-media", response_model=SurveyTypeRecentMedia)
+async def get_survey_type_recent_media(
+    survey_type_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db)
+) -> SurveyTypeRecentMedia:
+    """The most recent camera trap photo and audio detection clip per species
+    across ALL of the type's surveys, most recent first — the group page's
+    species gallery. Bounded by the species count, so no pagination."""
+    survey_type = db.query(SurveyType).filter(
+        SurveyType.id == survey_type_id,
+        SurveyType.organisation_id == org.id
+    ).first()
+    if not survey_type:
+        raise HTTPException(status_code=404, detail=f"Survey type {survey_type_id} not found")
+
+    # DISTINCT ON keeps the first row per species under the ORDER BY — i.e.
+    # its latest photo (newest survey wins, then the newest image within it).
+    photo_rows = db.execute(
+        text("""
+            SELECT DISTINCT ON (s.species_id)
+                s.species_id,
+                COALESCE(sp.name, sp.scientific_name) AS species_name,
+                si.camera_trap_image_id,
+                sv.id AS survey_id,
+                sv.date
+            FROM sighting s
+            JOIN survey sv ON sv.id = s.survey_id
+            JOIN species sp ON sp.id = s.species_id
+            JOIN sighting_image si ON si.sighting_id = s.id
+            WHERE sv.survey_type_id = :survey_type_id AND sv.organisation_id = :org_id
+            ORDER BY s.species_id, sv.date DESC, sv.id DESC, si.camera_trap_image_id DESC
+        """),
+        {"survey_type_id": survey_type_id, "org_id": org.id},
+    ).fetchall()
+
+    clip_rows = db.execute(
+        text("""
+            SELECT DISTINCT ON (d.species_id)
+                d.species_id,
+                COALESCE(sp.name, sp.scientific_name) AS species_name,
+                d.audio_recording_id,
+                d.start_time,
+                d.end_time,
+                d.confidence,
+                d.detection_timestamp,
+                sv.id AS survey_id,
+                sv.date
+            FROM audio_detection d
+            JOIN survey sv ON sv.id = d.survey_id
+            JOIN species sp ON sp.id = d.species_id
+            WHERE sv.survey_type_id = :survey_type_id AND sv.organisation_id = :org_id
+              AND d.audio_recording_id IS NOT NULL
+            ORDER BY d.species_id, sv.date DESC, d.detection_timestamp DESC NULLS LAST, d.id DESC
+        """),
+        {"survey_type_id": survey_type_id, "org_id": org.id},
+    ).fetchall()
+
+    photos = sorted(
+        (RecentSpeciesPhoto.model_validate(row, from_attributes=True) for row in photo_rows),
+        key=lambda p: (p.date, p.survey_id),
+        reverse=True,
+    )
+    clips = sorted(
+        (RecentSpeciesClip.model_validate(row, from_attributes=True) for row in clip_rows),
+        key=lambda c: (c.date, c.detection_timestamp or datetime.min),
+        reverse=True,
+    )
+    return SurveyTypeRecentMedia(photos=photos, clips=clips)
 
 
 @router.post("", response_model=SurveyTypeRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin_role)])
@@ -254,6 +373,8 @@ async def create_survey_type(
             raise HTTPException(status_code=400, detail=f"Invalid species type IDs: {invalid_ids}")
 
     _validate_species_ids(survey_type.species_ids, set(survey_type.species_type_ids), db)
+
+    _validate_device_ids(survey_type.device_ids, org, db)
 
     _validate_sighting_device_selection(survey_type)
 
@@ -296,6 +417,10 @@ async def create_survey_type(
     for species_id in survey_type.species_ids:
         db.add(SurveyTypeSpeciesLink(survey_type_id=db_survey_type.id, species_id=species_id))
 
+    # Add device links
+    for device_id in survey_type.device_ids:
+        db.add(SurveyTypeDeviceLink(survey_type_id=db_survey_type.id, device_id=device_id))
+
     db.commit()
     db.refresh(db_survey_type)
     return db_survey_type
@@ -326,7 +451,7 @@ async def update_survey_type(
             raise HTTPException(status_code=400, detail=f"Survey type '{survey_type.name}' already exists")
 
     # Update basic fields
-    update_data = survey_type.model_dump(exclude_unset=True, exclude={'location_ids', 'species_type_ids', 'species_ids'})
+    update_data = survey_type.model_dump(exclude_unset=True, exclude={'location_ids', 'species_type_ids', 'species_ids', 'device_ids'})
     for field, value in update_data.items():
         setattr(db_survey_type, field, value)
 
@@ -398,6 +523,13 @@ async def update_survey_type(
             SurveyTypeSpeciesLink.survey_type_id == survey_type_id,
             ~col(SurveyTypeSpeciesLink.species_id).in_(allowed_species_subquery),
         ).delete(synchronize_session=False)
+
+    # Update device links if provided
+    if survey_type.device_ids is not None:
+        _validate_device_ids(survey_type.device_ids, org, db)
+        db.query(SurveyTypeDeviceLink).filter(SurveyTypeDeviceLink.survey_type_id == survey_type_id).delete()
+        for device_id in survey_type.device_ids:
+            db.add(SurveyTypeDeviceLink(survey_type_id=survey_type_id, device_id=device_id))
 
     db.commit()
     db.refresh(db_survey_type)

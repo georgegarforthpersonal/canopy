@@ -223,6 +223,21 @@ async def get_surveys(
                 "count": row.count
             })
 
+        # Batch query 4: survey-level location names. Sector locations (with a
+        # parent route) display as "<parent> - <child>", matching the
+        # single-survey endpoint.
+        ParentLocation = aliased(Location)
+        location_rows = db.query(
+            col(Survey.id).label('survey_id'),
+            case(
+                (col(ParentLocation.id).isnot(None), func.concat(ParentLocation.name, ' - ', Location.name)),
+                else_=Location.name,
+            ).label('location_name'),
+        ).join(Location, Survey.location_id == Location.id)\
+         .outerjoin(ParentLocation, Location.parent_location_id == ParentLocation.id)\
+         .filter(col(Survey.id).in_(survey_ids)).all()
+        location_name_map: dict[int, str] = {row.survey_id: row.location_name for row in location_rows}
+
         result = []
         for survey in surveys_query:
             # Get survey type name, icon, and color if available
@@ -244,6 +259,7 @@ async def get_surveys(
                 "conditions_met": survey.conditions_met,
                 "notes": survey.notes,
                 "location_id": survey.location_id,
+                "location_name": location_name_map.get(survey.id) if survey.id is not None else None,
                 "device_id": survey.device_id,
                 "scheduled_survey_id": survey.scheduled_survey_id,
                 "surveyor_ids": surveyor_ids_map.get(survey.id, []),

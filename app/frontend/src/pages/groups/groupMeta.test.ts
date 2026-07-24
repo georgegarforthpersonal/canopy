@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { groupSlug, groupPath, betaGroupNames, orgHasGroups } from './groupMeta';
+import type { SurveyTypeWithDetails } from '../../services/api';
+import { groupSlug, groupPath, betaGroupNames, orgHasGroups, groupActivity, recordSurveyPath, compareGroups } from './groupMeta';
 
 describe('groupSlug', () => {
   it('lowercases and hyphenates a multi-word name', () => {
@@ -20,9 +21,23 @@ describe('groupSlug', () => {
 });
 
 describe('betaGroupNames / orgHasGroups', () => {
-  it('gives Heal its butterfly and dragonfly groups', () => {
-    expect(betaGroupNames('heal')).toEqual(['butterfly', 'dragonfly']);
+  it('gives Heal every type with recorded surveys', () => {
+    expect(betaGroupNames('heal')).toEqual([
+      'butterfly',
+      'dragonfly',
+      'bird',
+      'birders',
+      'jenny',
+      'ad hoc',
+    ]);
     expect(orgHasGroups('heal')).toBe(true);
+  });
+
+  it('marks Heal ad hoc and Jenny as record groups, scheduled programmes as worklist', () => {
+    expect(groupActivity('Ad Hoc', 'heal')).toBe('record');
+    expect(groupActivity('Jenny', 'heal')).toBe('record');
+    expect(groupActivity('Bird', 'heal')).toBe('worklist');
+    expect(groupActivity('Birders', 'heal')).toBe('worklist');
   });
 
   it('gives Cannwood bird (old and new type names), marsh fritillary and turtle dove', () => {
@@ -35,9 +50,86 @@ describe('betaGroupNames / orgHasGroups', () => {
     expect(orgHasGroups('cannwood')).toBe(true);
   });
 
+  it('gives Cannwood its unscheduled ad hoc, audio and camera trap groups', () => {
+    expect(betaGroupNames('cannwood')).toContain('ad hoc');
+    expect(betaGroupNames('cannwood')).toContain('audio');
+    expect(betaGroupNames('cannwood')).toContain('camera trap');
+  });
+
   it('hides Groups for orgs not in the beta', () => {
     expect(betaGroupNames('ecotopia')).toEqual([]);
     expect(orgHasGroups('ecotopia')).toBe(false);
+  });
+});
+
+describe('groupActivity', () => {
+  it('marks slot-scheduled types as worklist groups', () => {
+    expect(groupActivity('Bird', 'cannwood')).toBe('worklist');
+    expect(groupActivity('Marsh Fritillary', 'cannwood')).toBe('worklist');
+    expect(groupActivity('Butterfly', 'heal')).toBe('worklist');
+  });
+
+  it('marks unscheduled types as record groups, matching names case-insensitively', () => {
+    expect(groupActivity('Ad hoc', 'cannwood')).toBe('record');
+    expect(groupActivity('  Audio  ', 'cannwood')).toBe('record');
+    expect(groupActivity('Camera Trap', 'cannwood')).toBe('record');
+  });
+
+  it('defaults unknown names to worklist', () => {
+    expect(groupActivity('Moth', 'cannwood')).toBe('worklist');
+  });
+});
+
+describe('compareGroups', () => {
+  const type = (name: string, extra: Partial<SurveyTypeWithDetails> = {}): SurveyTypeWithDetails =>
+    ({
+      name,
+      species: [],
+      allow_image_upload: false,
+      allow_audio_upload: false,
+      ...extra,
+    }) as SurveyTypeWithDetails;
+
+  it('orders multi-species A–Z, then single-species A–Z, then camera → audio → ad hoc', () => {
+    const singleSpecies = [{ id: 1 }] as SurveyTypeWithDetails['species'];
+    const cards = [
+      type('Ad hoc'),
+      type('Turtle Dove', { species: singleSpecies }),
+      type('Camera Trap', { allow_image_upload: true }),
+      type('Bird'),
+      type('Audio', { allow_audio_upload: true }),
+      type('Marsh Fritillary', { species: singleSpecies }),
+      type('Butterfly'),
+    ];
+    expect(cards.sort((a, b) => compareGroups(a, b, 'cannwood')).map((t) => t.name)).toEqual([
+      'Bird',
+      'Butterfly',
+      'Marsh Fritillary',
+      'Turtle Dove',
+      'Camera Trap',
+      'Audio',
+      'Ad hoc',
+    ]);
+  });
+});
+
+describe('recordSurveyPath', () => {
+  it('sends camera trap types to the camera trap wizard', () => {
+    expect(recordSurveyPath({ id: 7, allow_image_upload: true, allow_audio_upload: false })).toBe(
+      '/surveys/new/camera-trap?type=7',
+    );
+  });
+
+  it('sends audio types to the audio wizard', () => {
+    expect(recordSurveyPath({ id: 8, allow_image_upload: false, allow_audio_upload: true })).toBe(
+      '/surveys/new/audio?type=8',
+    );
+  });
+
+  it('sends plain types to the standard form with the type preselected', () => {
+    expect(recordSurveyPath({ id: 9, allow_image_upload: false, allow_audio_upload: false })).toBe(
+      '/surveys/new?survey_type_id=9',
+    );
   });
 });
 

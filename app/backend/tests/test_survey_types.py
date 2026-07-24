@@ -4,7 +4,18 @@ Tests for Survey Types Router
 Tests CRUD operations for the /api/survey-types endpoints.
 """
 
+from datetime import date, datetime, time
+
 from fastapi.testclient import TestClient
+
+from models import (
+    AudioDetection,
+    AudioRecording,
+    CameraTrapImage,
+    DeviceType,
+    Sighting,
+    SightingImage,
+)
 
 
 class TestGetSurveyTypes:
@@ -168,6 +179,72 @@ class TestCreateSurveyType:
         assert data["name"] == "New Survey Type"
         assert data["is_active"] is True
 
+    def test_create_survey_type_with_devices(
+        self, client: TestClient, auth_headers: dict, create_device, create_species_type
+    ):
+        """Allocated devices round-trip through create -> details."""
+        camera = create_device(device_id="CAM001", name="Pond Camera", device_type=DeviceType.camera_trap)
+        species_type = create_species_type(name="mammal", display_name="Mammal")
+
+        response = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Camera Trap",
+                "species_type_ids": [species_type.id],
+                "device_ids": [camera.id],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+
+        details = client.get(f"/api/survey-types/{response.json()['id']}", headers=auth_headers).json()
+        assert [d["name"] for d in details["devices"]] == ["Pond Camera"]
+        assert details["devices"][0]["latitude"] == 51.5
+        assert details["devices"][0]["device_type"] == "camera_trap"
+
+    def test_create_survey_type_rejects_unknown_device(
+        self, client: TestClient, auth_headers: dict, create_species_type
+    ):
+        """Unknown (or other-org) device ids are a 400, not silent links."""
+        species_type = create_species_type(name="mammal", display_name="Mammal")
+        response = client.post(
+            "/api/survey-types",
+            json={"name": "Camera Trap", "species_type_ids": [species_type.id], "device_ids": [99999]},
+            headers=auth_headers,
+        )
+        assert response.status_code == 400
+        assert "device" in response.json()["detail"].lower()
+
+    def test_update_replaces_device_allocation(
+        self, client: TestClient, auth_headers: dict, create_survey_type, create_device
+    ):
+        """PUT with device_ids replaces the allocation; omitting it leaves it alone."""
+        survey_type = create_survey_type(name="Audio")
+        rec1 = create_device(device_id="REC001", name="West Recorder")
+        rec2 = create_device(device_id="REC002", name="East Recorder")
+
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"device_ids": [rec1.id]}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert [d["name"] for d in details["devices"]] == ["West Recorder"]
+
+        # An update that doesn't mention device_ids keeps the allocation.
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"description": "dawn chorus"}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert [d["name"] for d in details["devices"]] == ["West Recorder"]
+
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"device_ids": [rec2.id]}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert [d["name"] for d in details["devices"]] == ["East Recorder"]
+
     def test_create_survey_type_duplicate_name(
         self, client: TestClient, auth_headers: dict, create_survey_type
     ):
@@ -193,6 +270,78 @@ class TestCreateSurveyType:
             json={"name": "Test", "location_ids": [], "species_type_ids": []},
         )
         assert response.status_code == 401
+
+
+class TestRecentMedia:
+    """Tests for GET /api/survey-types/{id}/recent-media"""
+
+    def test_latest_photo_per_species_most_recent_first(
+        self, client: TestClient, auth_headers: dict, db_session,
+        create_survey_type, create_survey, create_species,
+    ):
+        survey_type = create_survey_type(name="Camera Trap")
+        wildcat = create_species(name="Wildcat", scientific_name="Felis silvestris", species_type="mammal")
+        badger = create_species(name="Badger", scientific_name="Meles meles", species_type="mammal")
+        old = create_survey(survey_date=date(2026, 6, 1), survey_type_id=survey_type.id)
+        new = create_survey(survey_date=date(2026, 7, 1), survey_type_id=survey_type.id)
+
+        def add_photo(survey, species, r2_key):
+            image = CameraTrapImage(survey_id=survey.id, filename=f"{r2_key}.jpg", r2_key=r2_key)
+            db_session.add(image)
+            sighting = Sighting(survey_id=survey.id, species_id=species.id, count=1)
+            db_session.add(sighting)
+            db_session.commit()
+            db_session.refresh(image)
+            db_session.refresh(sighting)
+            db_session.add(SightingImage(sighting_id=sighting.id, camera_trap_image_id=image.id))
+            db_session.commit()
+            return image
+
+        add_photo(old, wildcat, "media/old-wildcat.jpg")
+        newest_wildcat = add_photo(new, wildcat, "media/new-wildcat.jpg")
+        old_badger = add_photo(old, badger, "media/old-badger.jpg")
+
+        response = client.get(f"/api/survey-types/{survey_type.id}/recent-media", headers=auth_headers)
+        assert response.status_code == 200
+        photos = response.json()["photos"]
+        # One entry per species — its latest photo — most recent species first.
+        assert [(p["species_name"], p["camera_trap_image_id"]) for p in photos] == [
+            ("Wildcat", newest_wildcat.id),
+            ("Badger", old_badger.id),
+        ]
+        assert response.json()["clips"] == []
+
+    def test_latest_clip_per_species(
+        self, client: TestClient, auth_headers: dict, db_session,
+        create_survey_type, create_survey, create_species,
+    ):
+        survey_type = create_survey_type(name="Audio")
+        skylark = create_species(name="Skylark", scientific_name="Alauda arvensis", species_type="bird")
+        survey = create_survey(survey_date=date(2026, 7, 1), survey_type_id=survey_type.id)
+        recording = AudioRecording(survey_id=survey.id, filename="dawn.wav", r2_key="media/dawn.wav")
+        db_session.add(recording)
+        db_session.commit()
+        db_session.refresh(recording)
+        for hour in (5, 6):
+            db_session.add(AudioDetection(
+                audio_recording_id=recording.id, survey_id=survey.id, species_id=skylark.id,
+                species_name="Skylark", confidence=0.9,
+                start_time=time(hour, 0), end_time=time(hour, 0, 3),
+                detection_timestamp=datetime(2026, 7, 1, hour, 0),
+            ))
+        db_session.commit()
+
+        response = client.get(f"/api/survey-types/{survey_type.id}/recent-media", headers=auth_headers)
+        assert response.status_code == 200
+        clips = response.json()["clips"]
+        assert len(clips) == 1
+        assert clips[0]["species_name"] == "Skylark"
+        # The later detection wins.
+        assert clips[0]["start_time"] == "06:00:00"
+
+    def test_recent_media_unknown_type_404(self, client: TestClient, auth_headers: dict):
+        response = client.get("/api/survey-types/99999/recent-media", headers=auth_headers)
+        assert response.status_code == 404
 
 
 class TestDeleteSurveyType:

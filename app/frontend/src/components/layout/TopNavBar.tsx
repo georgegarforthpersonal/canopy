@@ -1,11 +1,12 @@
-import { AppBar, Toolbar, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, useMediaQuery, useTheme } from '@mui/material';
-import { Assignment, BarChart, Settings, SpaceDashboard, Menu as MenuIcon, Close, Logout } from '@mui/icons-material';
+import { AppBar, Toolbar, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Assignment, BarChart, Settings, Menu as MenuIcon, Close, Logout } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth, usePermissions } from '../../context/AuthContext';
 import { UserMenu } from './UserMenu';
-import healLogo from '../../assets/heal_logo.jpg';
-import { showLogo } from '../../theme';
+import { PoweredByCanopy } from './PoweredByCanopy';
+import canopyLogo from '../../assets/canopy-logo.svg';
+import { orgLogoUrl } from '../../config/orgBranding';
 import { orgHasGroups } from '../../pages/groups/groupMeta';
 
 /**
@@ -24,27 +25,24 @@ export function TopNavBar() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md')); // < 900px
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const { logout } = useAuth();
+  const { logout, organisation } = useAuth();
   const { canAccessAdmin } = usePermissions();
+  // Tenant-first chrome (George's call): orgs with a logo headline the bar
+  // themselves with "Powered by Canopy" as the caption; logo-less orgs get
+  // the Canopy mark with their name as text.
+  const orgLogo = orgLogoUrl(organisation?.slug);
 
-  // Groups is a beta gated per organisation (see BETA_GROUPS in groupMeta).
+  // Where Groups covers the org, the groups grid IS the Surveys tab (the
+  // flat list is retired); orgs without groups keep the flat list.
   const showGroups = orgHasGroups();
+  const surveysHome = showGroups ? '/groups' : '/surveys';
 
   const navItems = [
     {
       icon: Assignment,
       label: 'Surveys',
-      path: '/surveys',
+      path: surveysHome,
     },
-    ...(showGroups
-      ? [
-          {
-            icon: SpaceDashboard,
-            label: 'Groups (Beta)',
-            path: '/groups',
-          },
-        ]
-      : []),
     {
       icon: BarChart,
       label: 'Dashboards',
@@ -63,6 +61,9 @@ export function TopNavBar() {
   ];
 
   const isActivePath = (path: string) => {
+    // Survey detail/record pages keep the Surveys tab lit even though they
+    // live under /surveys while the tab points at /groups.
+    if (path === '/groups' && location.pathname.startsWith('/surveys')) return true;
     return location.pathname.startsWith(path);
   };
 
@@ -72,7 +73,7 @@ export function TopNavBar() {
   };
 
   const handleLogoClick = () => {
-    navigate('/surveys');
+    navigate(surveysHome);
   };
 
   const toggleDrawer = () => {
@@ -102,35 +103,55 @@ export function TopNavBar() {
             </IconButton>
           )}
 
-          {/* Logo - only shown for Heal */}
-          {showLogo && (
-            <Box
-              onClick={handleLogoClick}
-              sx={{
-                width: { xs: 36, sm: 48 },
-                height: { xs: 36, sm: 48 },
-                borderRadius: '8px',
-                overflow: 'hidden',
-                cursor: 'pointer',
-                flexShrink: 0,
-                mr: { xs: 2, sm: 3 },
-                transition: 'transform 0.2s',
-                '&:hover': {
-                  transform: 'scale(1.05)',
-                }
+          {/* Org mark + name — the persistent "you are entering data for
+              Heal/Cannwood" signal on every screen. Orgs with a logo headline
+              the bar themselves ("Powered by Canopy" caption); logo-less orgs
+              show the Canopy mark with their name as text. */}
+          <Box
+            onClick={handleLogoClick}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: { xs: 1, sm: 1.25 },
+              cursor: 'pointer',
+              flexShrink: 0,
+              mr: { xs: 2, sm: 3 },
+              minWidth: 0,
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'scale(1.03)',
+              }
+            }}
+          >
+            <img
+              src={orgLogo ?? canopyLogo}
+              alt={orgLogo ? organisation?.name ?? '' : 'Canopy'}
+              style={{
+                width: isMobile ? 36 : 44,
+                height: isMobile ? 36 : 44,
+                display: 'block',
+                borderRadius: orgLogo ? 8 : 0,
+                objectFit: 'cover',
               }}
-            >
-              <img
-                src={healLogo}
-                alt="HEAL Rewilding"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
-              />
-            </Box>
-          )}
+            />
+            {organisation && (
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: { xs: 15, sm: 16 },
+                    fontWeight: 600,
+                    color: 'text.primary',
+                    lineHeight: 1.2,
+                    maxWidth: { xs: 130, sm: 200 },
+                  }}
+                >
+                  {organisation.name}
+                </Typography>
+                {orgLogo && <PoweredByCanopy size={12} fontSize={10.5} align="start" />}
+              </Box>
+            )}
+          </Box>
 
           {/* Desktop/Tablet: Navigation Icons */}
           {!isMobile && (
@@ -184,31 +205,41 @@ export function TopNavBar() {
           }
         }}
       >
-        <Box sx={{ p: 2 }}>
-          {/* Drawer Header with Logo (if applicable) and Close Button */}
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: showLogo ? 'space-between' : 'flex-end', mb: 3 }}>
-            {showLogo && (
-              <Box
-                onClick={handleLogoClick}
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                }}
-              >
-                <img
-                  src={healLogo}
-                  alt="HEAL Rewilding"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  }}
-                />
+        <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Drawer Header: the workspace-header moment — the org's mark and
+              name; Canopy credits itself in the footer lockup below, matching
+              the auth card. */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+            <Box
+              onClick={handleLogoClick}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                cursor: 'pointer',
+                minWidth: 0,
+              }}
+            >
+              <img
+                src={orgLogo ?? canopyLogo}
+                alt={orgLogo ? organisation?.name ?? '' : 'Canopy'}
+                style={{ width: 44, height: 44, display: 'block', flexShrink: 0, borderRadius: orgLogo ? 8 : 0, objectFit: 'cover' }}
+              />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography noWrap sx={{ fontSize: 16, fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
+                  {organisation?.name ?? 'Canopy'}
+                </Typography>
+                {orgLogo ? (
+                  <PoweredByCanopy size={13} fontSize={11.5} align="start" />
+                ) : (
+                  organisation && (
+                    <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                      on Canopy
+                    </Typography>
+                  )
+                )}
               </Box>
-            )}
+            </Box>
             <IconButton onClick={toggleDrawer} sx={{ color: 'text.secondary' }}>
               <Close />
             </IconButton>
@@ -277,6 +308,7 @@ export function TopNavBar() {
               </ListItemButton>
             </ListItem>
           </List>
+
         </Box>
       </Drawer>
     </>

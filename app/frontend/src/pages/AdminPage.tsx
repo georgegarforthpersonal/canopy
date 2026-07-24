@@ -46,6 +46,7 @@ import {
   surveyTypesAPI,
   locationsAPI,
   speciesAPI,
+  devicesAPI,
   exportAPI,
   locationDisplayName,
   type Surveyor,
@@ -56,6 +57,7 @@ import {
   type Species,
   type SpeciesTypeRef,
   type Location,
+  type Device,
   type DeviceType,
   type ScheduleCadence,
 } from '../services/api';
@@ -149,6 +151,7 @@ export function AdminPage() {
   const [surveyTypesLoading, setSurveyTypesLoading] = useState(true);
   const [surveyTypesError, setSurveyTypesError] = useState<string | null>(null);
   const [allLocations, setAllLocations] = useState<Location[]>([]);
+  const [allDevices, setAllDevices] = useState<Device[]>([]);
   const [allSpeciesTypes, setAllSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
   const [allSpecies, setAllSpecies] = useState<Species[]>([]);
   const [surveyTypeDialogOpen, setSurveyTypeDialogOpen] = useState(false);
@@ -179,6 +182,7 @@ export function AdminPage() {
   const [formScheduleCadence, setFormScheduleCadence] = useState<ScheduleCadence>('date');
   const [formColor, setFormColor] = useState<string | null>(null);
   const [formSelectedLocations, setFormSelectedLocations] = useState<Location[]>([]);
+  const [formSelectedDevices, setFormSelectedDevices] = useState<Device[]>([]);
   const [formSelectedSpeciesTypes, setFormSelectedSpeciesTypes] = useState<SpeciesTypeRef[]>([]);
   const [formSelectedSpecies, setFormSelectedSpecies] = useState<Species[]>([]);
 
@@ -222,12 +226,14 @@ export function AdminPage() {
 
   const loadReferenceData = async () => {
     try {
-      const [locations, speciesTypes, species] = await Promise.all([
+      const [locations, devices, speciesTypes, species] = await Promise.all([
         locationsAPI.getAll(),
+        devicesAPI.getAll(),
         surveyTypesAPI.getSpeciesTypes(),
         speciesAPI.getAll(),
       ]);
       setAllLocations(locations);
+      setAllDevices(devices);
       setAllSpeciesTypes(speciesTypes);
       setAllSpecies(species);
     } catch (err) {
@@ -364,6 +370,7 @@ export function AdminPage() {
       setFormScheduleCadence(details.schedule_cadence);
       setFormColor(details.color);
       setFormSelectedLocations(details.locations);
+      setFormSelectedDevices(details.devices);
       setFormSelectedSpeciesTypes(details.species_types);
       setFormSelectedSpecies(details.species);
       setSurveyTypeDialogOpen(true);
@@ -391,6 +398,7 @@ export function AdminPage() {
     setFormScheduleCadence('date');
     setFormColor(null);
     setFormSelectedLocations([]);
+    setFormSelectedDevices([]);
     setFormSelectedSpeciesTypes([]);
     setFormSelectedSpecies([]);
     setSurveyTypeFormError(null);
@@ -442,6 +450,7 @@ export function AdminPage() {
         schedule_cadence: formScheduleCadence,
         color: formColor || undefined,
         location_ids: formSelectedLocations.map((l) => l.id),
+        device_ids: formSelectedDevices.map((d) => d.id),
         species_type_ids: formSelectedSpeciesTypes.map((st) => st.id),
         species_ids: formSelectedSpecies.map((s) => s.id),
       };
@@ -1028,6 +1037,10 @@ export function AdminPage() {
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
               disabled={savingSurveyType}
+              // Capped so the group card can always show the whole description
+              // wrapped over at most two lines — never truncated with "…".
+              slotProps={{ htmlInput: { maxLength: 100 } }}
+              helperText={`${formDescription.length}/100 — shown on the group card`}
             />
             <Box sx={{ mt: 1 }}>
               <SurveyTypeColorSelector value={formColor} onChange={setFormColor} />
@@ -1319,6 +1332,19 @@ export function AdminPage() {
                 Camera trap survey types use devices instead of locations. Devices can be managed in the Locations &amp; Devices tab.
               </Typography>
             )}
+            <Autocomplete
+              multiple
+              options={allDevices}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              value={formSelectedDevices}
+              onChange={(_, newValue) => setFormSelectedDevices(newValue)}
+              disabled={savingSurveyType}
+              renderInput={(params) => (
+                <TextField {...params} margin="normal" label="Allocated Devices" placeholder="Select devices to show on this type's group page" />
+              )}
+              sx={{ mt: 1 }}
+            />
             <Autocomplete
               multiple
               options={allSpeciesTypes}

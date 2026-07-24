@@ -96,6 +96,12 @@ export function NewSurveyPage() {
   const scheduledSurveyIdParam = searchParams.get('scheduled_survey_id');
   const [recordingSlot, setRecordingSlot] = useState<ScheduledSurvey | null>(null);
 
+  // Group record flow: ?survey_type_id=N preselects the type (still
+  // changeable, unlike a slot's locked type). Media types never link here —
+  // their record CTAs go straight to the wizards — so they're ignored rather
+  // than re-dispatched.
+  const presetTypeIdParam = searchParams.get('survey_type_id');
+
   // ============================================================================
   // Form State - Survey Type
   // ============================================================================
@@ -251,7 +257,15 @@ export function NewSurveyPage() {
           // /surveys/new?scheduled_survey_id=N and /surveys/new, so the
           // record-flow prefill must be unwound, not just skipped.
           setRecordingSlot(null);
-          setSelectedSurveyType(null);
+          const preset = presetTypeIdParam
+            ? surveyTypesData.find(
+                (t) =>
+                  t.id === Number(presetTypeIdParam) &&
+                  !t.allow_image_upload &&
+                  !t.allow_audio_upload,
+              ) ?? null
+            : null;
+          setSelectedSurveyType(preset);
           setDate(dayjs());
           setLocationId(null);
           autoLocationIdRef.current = null;
@@ -273,7 +287,7 @@ export function NewSurveyPage() {
     };
 
     fetchInitialData();
-  }, [scheduledSurveyIdParam]);
+  }, [scheduledSurveyIdParam, presetTypeIdParam]);
 
   // ============================================================================
   // Data Fetching - When Survey Type Changes
@@ -528,14 +542,11 @@ export function NewSurveyPage() {
         resume.surveyImagesUploaded = true;
       }
 
-      // Success - navigate to survey detail page or surveys list
+      // Success — land on the survey just recorded (the flat list and its
+      // ?created highlight are retired where Groups covers the org).
       saveCompleteRef.current = true;
       saveResumeRef.current = emptySaveResumeState();
-      if (allowImageUpload && pendingImageFiles.length > 0) {
-        navigate(`/surveys/${surveyId}`);
-      } else {
-        navigate(`/surveys?created=${surveyId}`);
-      }
+      navigate(`/surveys/${surveyId}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create survey';
       setError(

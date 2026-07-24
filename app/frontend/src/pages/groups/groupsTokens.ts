@@ -1,16 +1,16 @@
 /**
  * Groups design tokens.
  *
- * Groups is a beta surface that deliberately uses its OWN neutral + green
- * palette regardless of the org brand colour (Heal's brand is purple). The
- * green here is the single data/action colour for the feature, per the design
- * handoff. Keep these scoped to Groups — do not leak into the global theme.
+ * The greens derive from the Canopy brand ramp (theme.ts) — Groups pioneered
+ * the green-on-neutral look that is now the whole app's identity. The
+ * neutrals and amber treatment stay scoped to Groups.
  */
+import { brandColors } from '../../theme';
 
 export const groupColors = {
-  brand: '#3D8B56',
-  brandDark: '#2E6B42',
-  brandHover: '#4A9B62',
+  brand: brandColors.main,
+  brandDark: brandColors.dark,
+  brandHover: brandColors.hover,
 
   page: '#fafafa',
   paper: '#ffffff',

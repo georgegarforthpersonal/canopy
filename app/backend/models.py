@@ -334,6 +334,17 @@ class SurveyTypeLocationLink(SQLModel, table=True):  # type: ignore[call-arg]
     location_id: int = Field(foreign_key="location.id", ondelete="CASCADE")
 
 
+class SurveyTypeDeviceLink(SQLModel, table=True):  # type: ignore[call-arg]
+    """Junction table linking survey types to their allocated devices —
+    shown alongside locations on the group page (e.g. a camera trap
+    type's cameras, an audio type's recorders)."""
+    __tablename__ = "survey_type_device"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    survey_type_id: int = Field(foreign_key="survey_type.id", ondelete="CASCADE")
+    device_id: int = Field(foreign_key="device.id", ondelete="CASCADE")
+
+
 class SurveyTypeSpeciesTypeLink(SQLModel, table=True):  # type: ignore[call-arg]
     """Junction table linking survey types to species types"""
     __tablename__ = "survey_type_species_type"
@@ -715,6 +726,12 @@ class SurveyTypeBase(SQLModel):
 class SurveyType(SurveyTypeBase, table=True):  # type: ignore[call-arg]
     """Survey type configuration table"""
     __tablename__ = "survey_type"
+    __table_args__ = (
+        # Names are unique per organisation, NOT globally — two orgs can both
+        # have a "Bird" type. (A legacy global unique key from the single-org
+        # era is dropped by migration stname01.)
+        sa.UniqueConstraint('organisation_id', 'name', name='uq_survey_type_org_name'),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     organisation_id: int = Field(foreign_key="organisation.id", index=True, description="Organisation this survey type belongs to")
@@ -743,6 +760,7 @@ class SurveyTypeCreate(SurveyTypeBase):
     location_ids: List[int] = Field(default_factory=list, description="List of allowed location IDs")
     species_type_ids: List[int] = Field(description="List of allowed species type IDs")
     species_ids: List[int] = Field(default_factory=list, description="Specific species to offer (empty = all species in the selected species types)")
+    device_ids: List[int] = Field(default_factory=list, description="Devices allocated to this survey type (shown on its group page)")
 
 
 class SurveyTypeUpdate(SQLModel):
@@ -769,6 +787,7 @@ class SurveyTypeUpdate(SQLModel):
     location_ids: Optional[List[int]] = None
     species_type_ids: Optional[List[int]] = None
     species_ids: Optional[List[int]] = None
+    device_ids: Optional[List[int]] = None
 
 
 class SurveyTypeRead(SurveyTypeBase):
@@ -778,15 +797,44 @@ class SurveyTypeRead(SurveyTypeBase):
 
 
 class SurveyTypeWithDetails(SurveyTypeRead):
-    """Survey type with full location and species type details"""
+    """Survey type with full location, device and species type details"""
     locations: List[LocationRead] = Field(default_factory=list)
     species_types: List[SpeciesTypeRead] = Field(default_factory=list)
     species: List[SpeciesRead] = Field(default_factory=list)
+    devices: List[DeviceRead] = Field(default_factory=list)
 
 
 # ============================================================================
 # Survey Type File Models (reference files: methodology PDFs, recording forms)
 # ============================================================================
+
+class RecentSpeciesPhoto(SQLModel):
+    """A species' most recent camera trap photo for a survey type's gallery."""
+    species_id: int
+    species_name: Optional[str] = None
+    camera_trap_image_id: int
+    survey_id: int
+    date: date_type
+
+
+class RecentSpeciesClip(SQLModel):
+    """A species' most recent audio detection clip for a survey type's gallery."""
+    species_id: int
+    species_name: Optional[str] = None
+    audio_recording_id: int
+    start_time: time_type
+    end_time: time_type
+    confidence: float
+    detection_timestamp: Optional[datetime] = None
+    survey_id: int
+    date: date_type
+
+
+class SurveyTypeRecentMedia(SQLModel):
+    """Latest media per species for a survey type, most recent first."""
+    photos: List[RecentSpeciesPhoto] = Field(default_factory=list)
+    clips: List[RecentSpeciesClip] = Field(default_factory=list)
+
 
 class SurveyTypeFile(SQLModel, table=True):  # type: ignore[call-arg]
     """A reference file attached to a survey type, stored in R2."""

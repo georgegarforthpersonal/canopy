@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import type { ScheduledSurvey } from '../../services/api';
-import { deriveSlotState, buildWorklist, nextScheduledSurvey, formatWeekRange, recordedThisWeek } from './surveyState';
+import {
+  deriveSlotState,
+  buildWorklist,
+  nextScheduledSurvey,
+  formatWeekRange,
+  formatSurveyDateShort,
+  formatRecordedDateShort,
+  recordedThisWeek,
+} from './surveyState';
 
 const TODAY = '2026-06-25';
 
@@ -107,6 +115,36 @@ describe('formatWeekRange', () => {
 
   it('formats a window spanning two years', () => {
     expect(formatWeekRange('2025-12-29', '2026-01-04')).toBe('29 Dec 2025 – 4 Jan 2026');
+  });
+});
+
+describe('formatSurveyDateShort / formatRecordedDateShort', () => {
+  it('drops the year from a current-year day slot', () => {
+    expect(formatSurveyDateShort(slot({ id: 1, window_start: '2026-07-27' }), TODAY)).toBe('Mon 27 Jul');
+  });
+
+  it('keeps the year on a different-year day slot', () => {
+    expect(formatSurveyDateShort(slot({ id: 1, window_start: '2027-01-04' }), TODAY)).toBe('Mon 4 Jan 2027');
+  });
+
+  it('drops the year from a current-year week window, same and cross month', () => {
+    expect(
+      formatSurveyDateShort(slot({ id: 1, window_start: '2026-07-01', window_end: '2026-07-07' }), TODAY),
+    ).toBe('1–7 Jul');
+    expect(
+      formatSurveyDateShort(slot({ id: 1, window_start: '2026-07-27', window_end: '2026-08-02' }), TODAY),
+    ).toBe('27 Jul – 2 Aug');
+  });
+
+  it('falls back to the full range when the window leaves the current year', () => {
+    expect(
+      formatSurveyDateShort(slot({ id: 1, window_start: '2026-12-28', window_end: '2027-01-03' }), TODAY),
+    ).toBe('28 Dec 2026 – 3 Jan 2027');
+  });
+
+  it('drops the year from a current-year recorded date and keeps it otherwise', () => {
+    expect(formatRecordedDateShort('2026-07-21', TODAY)).toBe('Tue 21 Jul');
+    expect(formatRecordedDateShort('2025-11-02', TODAY)).toBe('Sun 2 Nov 2025');
   });
 });
 

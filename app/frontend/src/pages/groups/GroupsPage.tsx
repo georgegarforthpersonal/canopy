@@ -1,15 +1,22 @@
 /**
- * Groups grid (landing). Shows a card per survey type in the current org's
- * beta list (see BETA_GROUPS in groupMeta), ordered alphabetically. Selecting
- * a card opens that survey type's space.
+ * The Surveys landing page: a card per survey type in the current org's
+ * group list (see BETA_GROUPS in groupMeta), ordered by tier (compareGroups):
+ * multi-species programmes, single-species programmes, then the unscheduled
+ * utilities. Selecting a card opens that survey type's group page. The
+ * header's Record survey button keeps the old flat-list muscle memory — the
+ * standard form with its type selector, which dispatches media types to
+ * their wizards.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Box, Typography, CircularProgress } from '@mui/material';
-import { surveyTypesAPI, surveysAPI, scheduledSurveysAPI, dashboardAPI, type ScheduledSurvey, type SurveyTypeWithDetails } from '../../services/api';
+import { Alert, Box, Button, Typography, CircularProgress } from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { usePermissions } from '../../context/AuthContext';
+import { surveyTypesAPI, surveysAPI, scheduledSurveysAPI, dashboardAPI, type SurveyTypeWithDetails } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
-import { nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, groupPath, betaGroupNames } from './groupMeta';
+import { formatRecordedDateShort, formatSurveyDateShort, nextScheduledSurvey } from './surveyState';
+import { groupPath, betaGroupNames, groupActivity, compareGroups } from './groupMeta';
+import { totalUniqueSpecies } from '../../components/dashboard/cumulativeSeries';
 import GroupCard from '../../components/groups/GroupCard';
 import { PageTitle } from '../../components/layout/PageTitle';
 
@@ -17,13 +24,15 @@ interface CardData {
   surveyType: SurveyTypeWithDetails;
   surveyCount: number;
   countStat: { label: 'Species' | 'Sightings'; value: number };
-  nextSurvey: ScheduledSurvey | null;
+  dateStat: { label: 'Next survey' | 'Last survey'; value: string | null };
 }
 
 /**
- * Middle card stat: distinct species recorded by this type's surveys — except
- * for types fixed to a single species, where that would always read 1, so we
- * show total sightings instead (same source as the group page's headline).
+ * Middle card stat: distinct species recorded by this type's surveys across
+ * ALL its species types (counting only the first type read 0 on exactly the
+ * grab-bag groups with the most variety) — except for types fixed to a
+ * single species, where that would always read 1, so we show total sightings
+ * instead (same source as the group page's headline).
  */
 async function countStatFor(details: SurveyTypeWithDetails): Promise<CardData['countStat']> {
   const singleSpecies = details.species.length === 1 ? details.species[0] : null;
@@ -31,18 +40,14 @@ async function countStatFor(details: SurveyTypeWithDetails): Promise<CardData['c
     const res = await dashboardAPI.getSpeciesOccurrences(singleSpecies.id, undefined, undefined, details.id);
     return { label: 'Sightings', value: res.data.reduce((sum, d) => sum + d.occurrence_count, 0) };
   }
-  const speciesType = primarySpeciesType(details);
-  const res = await dashboardAPI.getCumulativeSpecies([speciesType], details.id);
-  return {
-    label: 'Species',
-    value: res.data
-      .filter((d) => d.type === speciesType)
-      .reduce((max, d) => Math.max(max, d.cumulative_count), 0),
-  };
+  const types = details.species_types.map((st) => st.name);
+  const res = await dashboardAPI.getCumulativeSpecies(types.length > 0 ? types : undefined, details.id);
+  return { label: 'Species', value: totalUniqueSpecies(res.data) };
 }
 
 export default function GroupsPage() {
   const navigate = useNavigate();
+  const { canEditSurveys } = usePermissions();
   const [cards, setCards] = useState<CardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -59,27 +64,36 @@ export default function GroupsPage() {
           return;
         }
         // "Surveys" is the recorded total (matching the All surveys count);
-        // the middle stat is countStatFor's species-or-sightings count;
-        // "Next survey" is the soonest scheduled future one.
+        // the middle stat is countStatFor's species-or-sightings count; the
+        // date stat is the soonest scheduled survey for worklist groups, or —
+        // for unscheduled ('record') groups, which never have slots — the most
+        // recently recorded one (the list is date-descending, so it rides
+        // along on the same limit-1 totals call).
         const loaded = await Promise.all(
           matched.map(async (t): Promise<CardData> => {
             const details = await surveyTypesAPI.getById(t.id);
+            const scheduled = groupActivity(t.name) === 'worklist';
             const [totalPage, slots, countStat] = await Promise.all([
               surveysAPI.getAll({ survey_type_id: t.id, page: 1, limit: 1 }),
-              scheduledSurveysAPI.getAll({ survey_type_id: t.id }),
+              scheduled ? scheduledSurveysAPI.getAll({ survey_type_id: t.id }) : Promise.resolve([]),
               countStatFor(details),
             ]);
+            const next = nextScheduledSurvey(slots);
+            const last = totalPage.data[0] ?? null;
+            const dateStat: CardData['dateStat'] = scheduled
+              ? { label: 'Next survey', value: next ? formatSurveyDateShort(next) : null }
+              : { label: 'Last survey', value: last ? formatRecordedDateShort(last.date) : null };
             return {
               surveyType: details,
               surveyCount: totalPage.total,
               countStat,
-              nextSurvey: nextScheduledSurvey(slots),
+              dateStat,
             };
           }),
         );
         if (!active) return;
         setCards(
-          loaded.sort((a, b) => a.surveyType.name.localeCompare(b.surveyType.name)),
+          loaded.sort((a, b) => compareGroups(a.surveyType, b.surveyType)),
         );
       } catch {
         if (active) setError(true);
@@ -96,8 +110,26 @@ export default function GroupsPage() {
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
       <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto' }}>
         <PageTitle
-          title="Groups"
+          title="Surveys"
           subtitle="Sign-up, instructions, and records for each survey type."
+          actions={
+            canEditSurveys ? (
+              <Button
+                variant="contained"
+                startIcon={<Add sx={{ fontSize: 18 }} />}
+                onClick={() => navigate('/surveys/new')}
+                sx={{
+                  bgcolor: groupColors.brand,
+                  '&:hover': { bgcolor: groupColors.brandHover },
+                  borderRadius: '7px',
+                  textTransform: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                Record survey
+              </Button>
+            ) : undefined
+          }
         />
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -123,7 +155,7 @@ export default function GroupsPage() {
                 surveyType={c.surveyType}
                 surveyCount={c.surveyCount}
                 countStat={c.countStat}
-                nextSurvey={c.nextSurvey}
+                dateStat={c.dateStat}
                 onOpen={() => navigate(groupPath(c.surveyType))}
               />
             ))}

@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Alert, Box, Button, Link, TextField, Typography } from '@mui/material';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { PasswordField } from '../../components/auth/PasswordField';
 import { AuthPageLayout } from './AuthPageLayout';
 
 /** Full-page email + password login. */
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, organisation } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = searchParams.get('next') || '/surveys';
@@ -31,7 +32,10 @@ export function LoginPage() {
   };
 
   return (
-    <AuthPageLayout title="Sign in">
+    <AuthPageLayout
+      title={organisation ? `Sign in to ${organisation.name}` : 'Sign in'}
+      hideOrgName
+    >
       <Box component="form" onSubmit={handleSubmit}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -50,9 +54,8 @@ export function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
           disabled={submitting}
         />
-        <TextField
+        <PasswordField
           label="Password"
-          type="password"
           fullWidth
           margin="normal"
           autoComplete="current-password"

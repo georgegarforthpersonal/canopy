@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Box, Typography, Paper, Stack, Button, Divider, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Tooltip } from '@mui/material';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
@@ -45,6 +45,55 @@ function SightingImageThumbnail({ imageId }: { imageId: number }) {
       alt=""
       sx={{ width: 60, height: 45, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }}
     />
+  );
+}
+
+/**
+ * A sighting's notes as their own full-width line, clamped to two lines with
+ * a tap-to-expand toggle when longer — notes are content, not a column, so
+ * they never truncate to a few useless letters on phones.
+ */
+function SightingNote({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const textRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const el = textRef.current;
+    if (el) setClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  const toggleable = clamped || expanded;
+  return (
+    <Box
+      onClick={toggleable ? () => setExpanded((v) => !v) : undefined}
+      sx={{ px: 1.5, pb: 1.25, mt: -0.5, cursor: toggleable ? 'pointer' : 'default' }}
+    >
+      <Typography
+        ref={textRef}
+        variant="body2"
+        sx={{
+          fontSize: '0.85rem',
+          color: 'text.secondary',
+          whiteSpace: 'pre-wrap',
+          ...(expanded
+            ? {}
+            : {
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }),
+        }}
+      >
+        {text}
+      </Typography>
+      {toggleable && (
+        <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+          {expanded ? 'Show less' : 'Show more'}
+        </Typography>
+      )}
+    </Box>
   );
 }
 
@@ -1042,18 +1091,14 @@ export function SurveyDetailPage() {
               ) : (
               /* Sightings Table */
               (() => {
-                // In view mode, only show the notes column if at least one sighting
-                // actually has notes — an empty column for a survey type that allows
-                // notes but has none recorded is just dead space.
-                const showNotesColumn = allowSightingNotes && sightings.some(
-                  (s: any) => s.notes && String(s.notes).trim() !== ''
-                );
-
+                // Notes render as their own full-width line under each row
+                // (SightingNote) rather than a grid column — a column truncates
+                // to a few useless letters on phones.
                 const gridConfig = getSightingsGridConfig({
                   locationAtSightingLevel,
                   allowGeolocation,
                   allowSightingDeviceSelection,
-                  showNotesColumn,
+                  showNotesColumn: false,
                   includeDeleteColumn: false,
                 });
                 const { gridColumns } = gridConfig;
@@ -1102,11 +1147,6 @@ export function SurveyDetailPage() {
                     <Typography variant="body2" fontWeight={600} color="text.secondary">
                       COUNT
                     </Typography>
-                    {showNotesColumn && (
-                      <Typography variant="body2" fontWeight={600} color="text.secondary">
-                        NOTES
-                      </Typography>
-                    )}
                   </Box>
 
                   {/* Table Rows - Grouped by Species Type */}
@@ -1239,22 +1279,12 @@ export function SurveyDetailPage() {
                                 {sighting.count}
                               </Typography>
 
-                              {/* Notes Column — only rendered when at least one sighting has notes */}
-                              {showNotesColumn && (
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    fontSize: '0.875rem',
-                                    color: sighting.notes ? 'text.secondary' : 'text.disabled',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {sighting.notes || '-'}
-                                </Typography>
-                              )}
                             </Box>
+
+                            {/* Notes — full-width line, clamped with tap-to-expand */}
+                            {allowSightingNotes && sighting.notes && String(sighting.notes).trim() !== '' && (
+                              <SightingNote text={sighting.notes} />
+                            )}
 
                             {/* Camera Trap Image Thumbnails — click to view */}
                             {imageIds.length > 0 && (

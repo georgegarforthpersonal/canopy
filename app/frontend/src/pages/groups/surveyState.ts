@@ -50,6 +50,41 @@ export function formatSurveyDate(slot: ScheduledSurvey): string {
   return dayjs(slot.window_start).format('ddd D MMM YYYY');
 }
 
+/** Date label for a recorded survey row, e.g. "Sat 27 Jun 2026". */
+export function formatRecordedDate(dateIso: string): string {
+  return dayjs(dateIso).format('ddd D MMM YYYY');
+}
+
+/**
+ * Compact date labels for the group card stat, which truncates on phones:
+ * the year is dropped when the date falls in the current year (the common
+ * case for a next/last survey) and kept when it genuinely differs.
+ */
+export function formatSurveyDateShort(slot: ScheduledSurvey, today: string = todayIso()): string {
+  const year = today.slice(0, 4);
+  if (hasWindow(slot)) {
+    const start = dayjs(slot.window_start);
+    const end = dayjs(slot.window_end);
+    if (start.format('YYYY') !== year || end.format('YYYY') !== year) {
+      return formatWeekRange(slot.window_start, slot.window_end);
+    }
+    if (start.isSame(end, 'month')) {
+      return `${start.format('D')}–${end.format('D')} ${end.format('MMM')}`;
+    }
+    return `${start.format('D MMM')} – ${end.format('D MMM')}`;
+  }
+  const day = dayjs(slot.window_start);
+  return day.format('YYYY') === year ? day.format('ddd D MMM') : day.format('ddd D MMM YYYY');
+}
+
+/** Compact recorded-date label — same year-dropping rule as formatSurveyDateShort. */
+export function formatRecordedDateShort(dateIso: string, today: string = todayIso()): string {
+  const day = dayjs(dateIso);
+  return day.format('YYYY') === today.slice(0, 4)
+    ? day.format('ddd D MMM')
+    : day.format('ddd D MMM YYYY');
+}
+
 /**
  * Compact inclusive week-range label from two ISO dates, e.g.
  *   same month  → "1–7 Jun 2026"

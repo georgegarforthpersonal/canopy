@@ -24,15 +24,14 @@ import {
   type Surveyor,
 } from '../../services/api';
 import { recordButtonSx, groupCardSx, groupColors } from './groupsTokens';
-import { primarySpeciesType, resolveGroupTypeId } from './groupMeta';
-import { deriveSlotState, formatSurveyDate, type SlotState } from './surveyState';
-import { getSpeciesIcon } from '../../config/speciesTypes';
+import { groupActivity, primarySpeciesType, resolveGroupTypeId } from './groupMeta';
+import { deriveSlotState, formatRecordedDate, formatSurveyDate, type SlotState } from './surveyState';
 import { useSignupSaved, useSurveyorLookup } from '../../hooks';
 import { usePermissions } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import dayjs from 'dayjs';
 import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
 import SelfSignupButton from '../../components/groups/SelfSignupButton';
+import SpeciesCountChips from '../../components/groups/SpeciesCountChips';
 import SurveyorAvatars from '../../components/groups/SurveyorAvatars';
 
 const PAGE_SIZE = 25;
@@ -145,7 +144,7 @@ export default function AllSurveysPage() {
   if (error) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Error' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Error' }]} />
         <Alert severity="error">Failed to load surveys. Please try again.</Alert>
       </Box>
     );
@@ -154,7 +153,7 @@ export default function AllSurveysPage() {
   if (notFound || !surveyType) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Not found' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Not found' }]} />
         <Typography sx={{ color: groupColors.textSecondary }}>
           This group could not be found.
         </Typography>
@@ -163,7 +162,6 @@ export default function AllSurveysPage() {
   }
 
   const speciesType = primarySpeciesType(surveyType);
-  const SpeciesIcon = getSpeciesIcon(speciesType);
 
   const loadMore = async () => {
     setLoadingMore(true);
@@ -216,7 +214,7 @@ export default function AllSurveysPage() {
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
         <GroupBreadcrumb
           crumbs={[
-            { label: 'Groups', to: '/groups' },
+            { label: 'Surveys', to: '/groups' },
             { label: surveyType?.name ?? 'Survey type', to: `/groups/${typeId}` },
             { label: 'All surveys' },
           ]}
@@ -226,7 +224,9 @@ export default function AllSurveysPage() {
           All surveys
         </Typography>
         <Typography sx={{ fontSize: 13.5, color: '#888', mb: 2 }}>
-          {surveyType?.name ?? ''} · {total} recorded · {scheduledCount} scheduled, most recent first
+          {/* Unscheduled ('record') groups never have slots — no point saying "0 scheduled". */}
+          {surveyType?.name ?? ''} · {total} recorded
+          {groupActivity(surveyType.name) === 'worklist' ? ` · ${scheduledCount} scheduled` : ''}, most recent first
         </Typography>
 
         <Paper sx={groupCardSx}>
@@ -246,8 +246,10 @@ export default function AllSurveysPage() {
               const clickable = row.kind === 'survey';
               // Rows carrying the sign-up toggle are too wide for a phone, so
               // they stack — same rule as SurveyWorklistRow: date + chip line
-              // with avatars top right, actions line below.
-              const stacked = state === 'due-this-week' || state === 'upcoming';
+              // with avatars top right, actions line below. Recorded rows all
+              // stack too, chips starting from the left — uniformly, so light
+              // and chip-heavy rows read the same (mixed alignment looked odd).
+              const stacked = state === 'due-this-week' || state === 'upcoming' || row.kind === 'survey';
               const recordButton = row.kind === 'slot' && (
                 <Button
                   variant="contained"
@@ -287,7 +289,7 @@ export default function AllSurveysPage() {
                       <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: groupColors.textPrimary }} noWrap>
                         {row.kind === 'slot'
                           ? formatSurveyDate(row.slot)
-                          : dayjs(row.survey.date).format('ddd D MMM YYYY')}
+                          : formatRecordedDate(row.survey.date)}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, minWidth: 0 }}>
                         <StatusChip state={state} />
@@ -299,35 +301,41 @@ export default function AllSurveysPage() {
                       </Box>
                     </Box>
                     {/* On phones the date line's top-right slot carries who's
-                        going — avatars, or "No surveyors yet" when empty. */}
+                        going — avatars, or "No surveyors yet" when empty
+                        (recorded rows just omit them). */}
                     {stacked && (
                       <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexShrink: 0 }}>
-                        <SurveyorAvatars surveyors={assigned} greenIds={greenIds} />
+                        <SurveyorAvatars
+                          surveyors={assigned}
+                          greenIds={greenIds}
+                          emptyLabel={row.kind === 'survey' ? '' : undefined}
+                        />
                       </Box>
                     )}
                   </Box>
 
                   {/* Right cell varies by status */}
                   {row.kind === 'survey' && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 0.5,
-                          px: 1,
-                          py: 0.4,
-                          borderRadius: '6px',
-                          bgcolor: '#EBECED',
-                          color: '#454648',
-                          fontSize: 12.5,
-                          fontWeight: 600,
-                        }}
-                      >
-                        <SpeciesIcon sx={{ fontSize: 15 }} />
-                        {row.survey.sightings_count}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.25,
+                        minWidth: 0,
+                        // Phones: chips get their own full-width line, starting
+                        // from the left (avatars sit on the date line above).
+                        justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                        flexShrink: { xs: 1, sm: 0 },
+                      }}
+                    >
+                      <SpeciesCountChips
+                        survey={row.survey}
+                        fallbackSpeciesType={speciesType}
+                        justify={{ xs: 'flex-start', sm: 'flex-end' }}
+                      />
+                      <Box sx={{ display: { xs: 'none', sm: 'flex' }, flexShrink: 0 }}>
+                        <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
                       </Box>
-                      <SurveyorAvatars surveyors={assigned} emptyLabel="" greenIds={greenIds} />
                     </Box>
                   )}
 

@@ -1,20 +1,18 @@
 /**
- * Neutral hero band for a group: tinted species icon tile + name + description.
+ * Neutral hero band for a group: survey-type badge + name + description.
  * No action button (recording and sign-up live on the survey rows) and no
  * season/coordinator meta (not modelled in the backend for the beta).
  */
 import { Box, Paper, Typography } from '@mui/material';
 import type { SurveyTypeWithDetails } from '../../services/api';
 import { groupColors } from '../../pages/groups/groupsTokens';
-import { accentColors, primarySpeciesType } from '../../pages/groups/groupMeta';
-import SpeciesIconTile from './SpeciesIconTile';
+import SurveyTypeBadge from './SurveyTypeBadge';
 
 interface GroupHeroProps {
   surveyType: SurveyTypeWithDetails;
 }
 
 export default function GroupHero({ surveyType }: GroupHeroProps) {
-  const accent = accentColors(surveyType);
   return (
     <Paper
       sx={{
@@ -29,13 +27,7 @@ export default function GroupHero({ surveyType }: GroupHeroProps) {
         gap: 2.5,
       }}
     >
-      <SpeciesIconTile
-        speciesType={primarySpeciesType(surveyType)}
-        size={60}
-        radius={14}
-        bg={accent.bg}
-        fg={accent.fg}
-      />
+      <SurveyTypeBadge surveyType={surveyType} size={60} radius={14} />
       <Box sx={{ minWidth: 0 }}>
         <Typography sx={{ fontSize: 24, fontWeight: 600, color: groupColors.textPrimary, lineHeight: 1.2 }}>
           {surveyType.name}

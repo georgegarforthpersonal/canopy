@@ -701,6 +701,35 @@ export interface SurveyTypeWithDetails extends SurveyType {
   species_types: SpeciesTypeRef[];
   /** Explicit species narrowing (empty = all species in the species types) */
   species: Species[];
+  /** Devices allocated to this survey type (shown on its group page) */
+  devices: Device[];
+}
+
+/** A species' most recent camera trap photo for a survey type's gallery. */
+export interface RecentSpeciesPhoto {
+  species_id: number;
+  species_name: string | null;
+  camera_trap_image_id: number;
+  survey_id: number;
+  date: string;
+}
+
+/** A species' most recent audio detection clip for a survey type's gallery. */
+export interface RecentSpeciesClip {
+  species_id: number;
+  species_name: string | null;
+  audio_recording_id: number;
+  start_time: string;
+  end_time: string;
+  confidence: number;
+  detection_timestamp: string | null;
+  survey_id: number;
+  date: string;
+}
+
+export interface SurveyTypeRecentMedia {
+  photos: RecentSpeciesPhoto[];
+  clips: RecentSpeciesClip[];
 }
 
 /**
@@ -741,6 +770,8 @@ export interface SurveyTypeCreate {
   species_type_ids: number[];
   /** Specific species to offer (empty/omitted = all species in the species types) */
   species_ids?: number[];
+  /** Devices allocated to this survey type (shown on its group page) */
+  device_ids?: number[];
 }
 
 /**
@@ -1344,6 +1375,14 @@ export const surveyTypesAPI = {
   /**
    * Get a specific survey type by ID with full details
    */
+  /**
+   * Latest camera trap photo and audio clip per species across all of the
+   * type's surveys, most recent first (the group page's species gallery).
+   */
+  getRecentMedia: (id: number): Promise<SurveyTypeRecentMedia> => {
+    return fetchAPI(`/survey-types/${id}/recent-media`);
+  },
+
   getById: (id: number): Promise<SurveyTypeWithDetails> => {
     return fetchAPI(`/survey-types/${id}`);
   },
