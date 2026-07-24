@@ -147,7 +147,7 @@ export function DashboardsPage() {
           {/* Cumulative species chart */}
           <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', minHeight: 500 }}>
             <CumulativeSpeciesChart
-              speciesType={selectedSpeciesTypes[0]}
+              speciesTypes={[selectedSpeciesTypes[0]]}
               height={400}
               emptyMessage="No data available for selected species groups"
             />

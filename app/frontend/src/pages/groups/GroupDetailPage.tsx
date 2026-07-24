@@ -268,7 +268,7 @@ export default function GroupDetailPage() {
               {singleSpecies ? (
                 <SingleSpeciesCountPanel surveyTypeId={surveyType.id} species={singleSpecies} />
               ) : (
-                <SpeciesCountPanel speciesType={speciesType} surveyTypeId={surveyType.id} />
+                <SpeciesCountPanel speciesTypes={surveyType.species_types.map((st) => st.name)} surveyTypeId={surveyType.id} />
               )}
             </Box>
             {(surveyType.allow_image_upload || surveyType.allow_audio_upload) && (

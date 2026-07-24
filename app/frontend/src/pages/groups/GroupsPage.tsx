@@ -15,7 +15,8 @@ import { usePermissions } from '../../context/AuthContext';
 import { surveyTypesAPI, surveysAPI, scheduledSurveysAPI, dashboardAPI, type SurveyTypeWithDetails } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
 import { formatRecordedDateShort, formatSurveyDateShort, nextScheduledSurvey } from './surveyState';
-import { primarySpeciesType, groupPath, betaGroupNames, groupActivity, compareGroups } from './groupMeta';
+import { groupPath, betaGroupNames, groupActivity, compareGroups } from './groupMeta';
+import { totalUniqueSpecies } from '../../components/dashboard/cumulativeSeries';
 import GroupCard from '../../components/groups/GroupCard';
 import { PageTitle } from '../../components/layout/PageTitle';
 
@@ -27,9 +28,11 @@ interface CardData {
 }
 
 /**
- * Middle card stat: distinct species recorded by this type's surveys — except
- * for types fixed to a single species, where that would always read 1, so we
- * show total sightings instead (same source as the group page's headline).
+ * Middle card stat: distinct species recorded by this type's surveys across
+ * ALL its species types (counting only the first type read 0 on exactly the
+ * grab-bag groups with the most variety) — except for types fixed to a
+ * single species, where that would always read 1, so we show total sightings
+ * instead (same source as the group page's headline).
  */
 async function countStatFor(details: SurveyTypeWithDetails): Promise<CardData['countStat']> {
   const singleSpecies = details.species.length === 1 ? details.species[0] : null;
@@ -37,14 +40,9 @@ async function countStatFor(details: SurveyTypeWithDetails): Promise<CardData['c
     const res = await dashboardAPI.getSpeciesOccurrences(singleSpecies.id, undefined, undefined, details.id);
     return { label: 'Sightings', value: res.data.reduce((sum, d) => sum + d.occurrence_count, 0) };
   }
-  const speciesType = primarySpeciesType(details);
-  const res = await dashboardAPI.getCumulativeSpecies([speciesType], details.id);
-  return {
-    label: 'Species',
-    value: res.data
-      .filter((d) => d.type === speciesType)
-      .reduce((max, d) => Math.max(max, d.cumulative_count), 0),
-  };
+  const types = details.species_types.map((st) => st.name);
+  const res = await dashboardAPI.getCumulativeSpecies(types.length > 0 ? types : undefined, details.id);
+  return { label: 'Species', value: totalUniqueSpecies(res.data) };
 }
 
 export default function GroupsPage() {

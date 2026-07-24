@@ -13,7 +13,8 @@ import CumulativeSpeciesChart, { type CumulativeSummary } from '../dashboard/Cum
 import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
 
 interface SpeciesCountPanelProps {
-  speciesType: string;
+  /** The survey type's linked species types; empty = count everything it recorded. */
+  speciesTypes: string[];
   /** The group's survey type — counts only cover this type's surveys. */
   surveyTypeId: number;
 }
@@ -33,32 +34,33 @@ const listGridSx = {
   px: 2.25,
 } as const;
 
-export default function SpeciesCountPanel({ speciesType, surveyTypeId }: SpeciesCountPanelProps) {
-  const [summary, setSummary] = useState<CumulativeSummary>({ total: 0 });
+export default function SpeciesCountPanel({ speciesTypes, surveyTypeId }: SpeciesCountPanelProps) {
+  const [summary, setSummary] = useState<CumulativeSummary>({ total: 0, types: [] });
   const [view, setView] = useState<'chart' | 'list'>('chart');
   const [species, setSpecies] = useState<SpeciesWithCount[] | null>(null);
 
-  // Fetch the per-species breakdown the first time the list is shown.
+  // Fetch the per-species breakdown the first time the list is shown — one
+  // call per species type actually present in the data (the chart's summary
+  // reports them), merged into a single newest-discovery-first list.
   useEffect(() => {
-    if (view !== 'list' || species !== null) return;
+    if (view !== 'list' || species !== null || summary.types.length === 0) return;
     let active = true;
-    dashboardAPI
-      .getSpeciesByCount(speciesType, surveyTypeId)
-      .then((rows) => {
+    Promise.all(summary.types.map((t) => dashboardAPI.getSpeciesByCount(t, surveyTypeId)))
+      .then((perType) => {
         if (!active) return;
         // Newest discovery first; species with no date (shouldn't happen for
         // recorded species) sink to the bottom.
         setSpecies(
-          [...rows].sort((a, b) =>
-            (b.first_observed ?? '').localeCompare(a.first_observed ?? ''),
-          ),
+          perType
+            .flat()
+            .sort((a, b) => (b.first_observed ?? '').localeCompare(a.first_observed ?? '')),
         );
       })
       .catch(() => active && setSpecies([]));
     return () => {
       active = false;
     };
-  }, [view, species, speciesType, surveyTypeId]);
+  }, [view, species, summary.types, surveyTypeId]);
 
   return (
     <Paper sx={groupCardSx}>
@@ -121,7 +123,7 @@ export default function SpeciesCountPanel({ speciesType, surveyTypeId }: Species
           summary keeps feeding the headline count. */}
       <Box sx={{ p: 2.25, display: view === 'chart' ? 'block' : 'none' }}>
         <CumulativeSpeciesChart
-          speciesType={speciesType}
+          speciesTypes={speciesTypes}
           surveyTypeId={surveyTypeId}
           color={groupColors.brand}
           height={240}
