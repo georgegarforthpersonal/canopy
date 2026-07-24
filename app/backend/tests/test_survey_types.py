@@ -4,9 +4,18 @@ Tests for Survey Types Router
 Tests CRUD operations for the /api/survey-types endpoints.
 """
 
+from datetime import date, datetime, time
+
 from fastapi.testclient import TestClient
 
-from models import DeviceType
+from models import (
+    AudioDetection,
+    AudioRecording,
+    CameraTrapImage,
+    DeviceType,
+    Sighting,
+    SightingImage,
+)
 
 
 class TestGetSurveyTypes:
@@ -261,6 +270,78 @@ class TestCreateSurveyType:
             json={"name": "Test", "location_ids": [], "species_type_ids": []},
         )
         assert response.status_code == 401
+
+
+class TestRecentMedia:
+    """Tests for GET /api/survey-types/{id}/recent-media"""
+
+    def test_latest_photo_per_species_most_recent_first(
+        self, client: TestClient, auth_headers: dict, db_session,
+        create_survey_type, create_survey, create_species,
+    ):
+        survey_type = create_survey_type(name="Camera Trap")
+        wildcat = create_species(name="Wildcat", scientific_name="Felis silvestris", species_type="mammal")
+        badger = create_species(name="Badger", scientific_name="Meles meles", species_type="mammal")
+        old = create_survey(survey_date=date(2026, 6, 1), survey_type_id=survey_type.id)
+        new = create_survey(survey_date=date(2026, 7, 1), survey_type_id=survey_type.id)
+
+        def add_photo(survey, species, r2_key):
+            image = CameraTrapImage(survey_id=survey.id, filename=f"{r2_key}.jpg", r2_key=r2_key)
+            db_session.add(image)
+            sighting = Sighting(survey_id=survey.id, species_id=species.id, count=1)
+            db_session.add(sighting)
+            db_session.commit()
+            db_session.refresh(image)
+            db_session.refresh(sighting)
+            db_session.add(SightingImage(sighting_id=sighting.id, camera_trap_image_id=image.id))
+            db_session.commit()
+            return image
+
+        add_photo(old, wildcat, "media/old-wildcat.jpg")
+        newest_wildcat = add_photo(new, wildcat, "media/new-wildcat.jpg")
+        old_badger = add_photo(old, badger, "media/old-badger.jpg")
+
+        response = client.get(f"/api/survey-types/{survey_type.id}/recent-media", headers=auth_headers)
+        assert response.status_code == 200
+        photos = response.json()["photos"]
+        # One entry per species — its latest photo — most recent species first.
+        assert [(p["species_name"], p["camera_trap_image_id"]) for p in photos] == [
+            ("Wildcat", newest_wildcat.id),
+            ("Badger", old_badger.id),
+        ]
+        assert response.json()["clips"] == []
+
+    def test_latest_clip_per_species(
+        self, client: TestClient, auth_headers: dict, db_session,
+        create_survey_type, create_survey, create_species,
+    ):
+        survey_type = create_survey_type(name="Audio")
+        skylark = create_species(name="Skylark", scientific_name="Alauda arvensis", species_type="bird")
+        survey = create_survey(survey_date=date(2026, 7, 1), survey_type_id=survey_type.id)
+        recording = AudioRecording(survey_id=survey.id, filename="dawn.wav", r2_key="media/dawn.wav")
+        db_session.add(recording)
+        db_session.commit()
+        db_session.refresh(recording)
+        for hour in (5, 6):
+            db_session.add(AudioDetection(
+                audio_recording_id=recording.id, survey_id=survey.id, species_id=skylark.id,
+                species_name="Skylark", confidence=0.9,
+                start_time=time(hour, 0), end_time=time(hour, 0, 3),
+                detection_timestamp=datetime(2026, 7, 1, hour, 0),
+            ))
+        db_session.commit()
+
+        response = client.get(f"/api/survey-types/{survey_type.id}/recent-media", headers=auth_headers)
+        assert response.status_code == 200
+        clips = response.json()["clips"]
+        assert len(clips) == 1
+        assert clips[0]["species_name"] == "Skylark"
+        # The later detection wins.
+        assert clips[0]["start_time"] == "06:00:00"
+
+    def test_recent_media_unknown_type_404(self, client: TestClient, auth_headers: dict):
+        response = client.get("/api/survey-types/99999/recent-media", headers=auth_headers)
+        assert response.status_code == 404
 
 
 class TestDeleteSurveyType:

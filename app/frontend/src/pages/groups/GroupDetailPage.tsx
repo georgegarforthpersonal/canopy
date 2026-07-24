@@ -274,7 +274,8 @@ export default function GroupDetailPage() {
               <Box sx={{ order: 5, minWidth: 0 }}>
                 <RecentMediaPanel
                   kind={surveyType.allow_image_upload ? 'photos' : 'clips'}
-                  surveys={recentSurveys}
+                  surveyTypeId={surveyType.id}
+                  onViewAll={() => navigate(`/groups/${typeId}/media`)}
                 />
               </Box>
             )}

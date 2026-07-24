@@ -30,6 +30,7 @@ import { NewAudioSurveyPage } from './pages/NewAudioSurveyPage';
 import GroupsPage from './pages/groups/GroupsPage';
 import GroupDetailPage from './pages/groups/GroupDetailPage';
 import AllSurveysPage from './pages/groups/AllSurveysPage';
+import GroupMediaPage from './pages/groups/GroupMediaPage';
 
 // Set dayjs to use UK locale globally (dd/mm/yyyy format)
 dayjs.locale('en-gb');
@@ -88,6 +89,7 @@ const router = createBrowserRouter([
           { path: '/groups', element: <GroupsPage /> },
           { path: '/groups/:typeId', element: <GroupDetailPage /> },
           { path: '/groups/:typeId/all', element: <AllSurveysPage /> },
+          { path: '/groups/:typeId/media', element: <GroupMediaPage /> },
           { path: '/teams/*', element: <LegacyTeamsRedirect /> },
 
           // Dashboard page

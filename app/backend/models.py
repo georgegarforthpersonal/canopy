@@ -808,6 +808,34 @@ class SurveyTypeWithDetails(SurveyTypeRead):
 # Survey Type File Models (reference files: methodology PDFs, recording forms)
 # ============================================================================
 
+class RecentSpeciesPhoto(SQLModel):
+    """A species' most recent camera trap photo for a survey type's gallery."""
+    species_id: int
+    species_name: Optional[str] = None
+    camera_trap_image_id: int
+    survey_id: int
+    date: date_type
+
+
+class RecentSpeciesClip(SQLModel):
+    """A species' most recent audio detection clip for a survey type's gallery."""
+    species_id: int
+    species_name: Optional[str] = None
+    audio_recording_id: int
+    start_time: time_type
+    end_time: time_type
+    confidence: float
+    detection_timestamp: Optional[datetime] = None
+    survey_id: int
+    date: date_type
+
+
+class SurveyTypeRecentMedia(SQLModel):
+    """Latest media per species for a survey type, most recent first."""
+    photos: List[RecentSpeciesPhoto] = Field(default_factory=list)
+    clips: List[RecentSpeciesClip] = Field(default_factory=list)
+
+
 class SurveyTypeFile(SQLModel, table=True):  # type: ignore[call-arg]
     """A reference file attached to a survey type, stored in R2."""
     __tablename__ = "survey_type_file"

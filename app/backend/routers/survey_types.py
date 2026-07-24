@@ -12,6 +12,7 @@ Endpoints:
 
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File
 from typing import List, Set, Union
+from datetime import datetime
 from sqlmodel import col
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -22,6 +23,7 @@ from models import (
     SurveyType, SurveyTypeRead, SurveyTypeCreate, SurveyTypeUpdate, SurveyTypeWithDetails,
     SurveyTypeLocationLink, SurveyTypeSpeciesTypeLink, SurveyTypeSpeciesLink,
     SurveyTypeDeviceLink, SurveyTypeFile, SurveyTypeFileRead,
+    SurveyTypeRecentMedia, RecentSpeciesPhoto, RecentSpeciesClip,
     Species, SpeciesType, SpeciesTypeRead,
     Location, LocationRead,
     Device, DeviceRead,
@@ -263,6 +265,77 @@ async def get_survey_type(
             for row in device_rows
         ],
     )
+
+
+@router.get("/{survey_type_id}/recent-media", response_model=SurveyTypeRecentMedia)
+async def get_survey_type_recent_media(
+    survey_type_id: int,
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db)
+) -> SurveyTypeRecentMedia:
+    """The most recent camera trap photo and audio detection clip per species
+    across ALL of the type's surveys, most recent first — the group page's
+    species gallery. Bounded by the species count, so no pagination."""
+    survey_type = db.query(SurveyType).filter(
+        SurveyType.id == survey_type_id,
+        SurveyType.organisation_id == org.id
+    ).first()
+    if not survey_type:
+        raise HTTPException(status_code=404, detail=f"Survey type {survey_type_id} not found")
+
+    # DISTINCT ON keeps the first row per species under the ORDER BY — i.e.
+    # its latest photo (newest survey wins, then the newest image within it).
+    photo_rows = db.execute(
+        text("""
+            SELECT DISTINCT ON (s.species_id)
+                s.species_id,
+                COALESCE(sp.name, sp.scientific_name) AS species_name,
+                si.camera_trap_image_id,
+                sv.id AS survey_id,
+                sv.date
+            FROM sighting s
+            JOIN survey sv ON sv.id = s.survey_id
+            JOIN species sp ON sp.id = s.species_id
+            JOIN sighting_image si ON si.sighting_id = s.id
+            WHERE sv.survey_type_id = :survey_type_id AND sv.organisation_id = :org_id
+            ORDER BY s.species_id, sv.date DESC, sv.id DESC, si.camera_trap_image_id DESC
+        """),
+        {"survey_type_id": survey_type_id, "org_id": org.id},
+    ).fetchall()
+
+    clip_rows = db.execute(
+        text("""
+            SELECT DISTINCT ON (d.species_id)
+                d.species_id,
+                COALESCE(sp.name, sp.scientific_name) AS species_name,
+                d.audio_recording_id,
+                d.start_time,
+                d.end_time,
+                d.confidence,
+                d.detection_timestamp,
+                sv.id AS survey_id,
+                sv.date
+            FROM audio_detection d
+            JOIN survey sv ON sv.id = d.survey_id
+            JOIN species sp ON sp.id = d.species_id
+            WHERE sv.survey_type_id = :survey_type_id AND sv.organisation_id = :org_id
+              AND d.audio_recording_id IS NOT NULL
+            ORDER BY d.species_id, sv.date DESC, d.detection_timestamp DESC NULLS LAST, d.id DESC
+        """),
+        {"survey_type_id": survey_type_id, "org_id": org.id},
+    ).fetchall()
+
+    photos = sorted(
+        (RecentSpeciesPhoto.model_validate(row, from_attributes=True) for row in photo_rows),
+        key=lambda p: (p.date, p.survey_id),
+        reverse=True,
+    )
+    clips = sorted(
+        (RecentSpeciesClip.model_validate(row, from_attributes=True) for row in clip_rows),
+        key=lambda c: (c.date, c.detection_timestamp or datetime.min),
+        reverse=True,
+    )
+    return SurveyTypeRecentMedia(photos=photos, clips=clips)
 
 
 @router.post("", response_model=SurveyTypeRead, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin_role)])
