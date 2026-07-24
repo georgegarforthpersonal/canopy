@@ -1,5 +1,5 @@
 import { AppBar, Toolbar, Box, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { Assignment, BarChart, Settings, SpaceDashboard, Menu as MenuIcon, Close, Logout } from '@mui/icons-material';
+import { Assignment, BarChart, Settings, Menu as MenuIcon, Close, Logout } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth, usePermissions } from '../../context/AuthContext';
@@ -32,24 +32,17 @@ export function TopNavBar() {
   // the Canopy mark with their name as text.
   const orgLogo = orgLogoUrl(organisation?.slug);
 
-  // Groups is a beta gated per organisation (see BETA_GROUPS in groupMeta).
+  // Where Groups covers the org, the groups grid IS the Surveys tab (the
+  // flat list is retired); orgs without groups keep the flat list.
   const showGroups = orgHasGroups();
+  const surveysHome = showGroups ? '/groups' : '/surveys';
 
   const navItems = [
     {
       icon: Assignment,
       label: 'Surveys',
-      path: '/surveys',
+      path: surveysHome,
     },
-    ...(showGroups
-      ? [
-          {
-            icon: SpaceDashboard,
-            label: 'Groups (Beta)',
-            path: '/groups',
-          },
-        ]
-      : []),
     {
       icon: BarChart,
       label: 'Dashboards',
@@ -68,6 +61,9 @@ export function TopNavBar() {
   ];
 
   const isActivePath = (path: string) => {
+    // Survey detail/record pages keep the Surveys tab lit even though they
+    // live under /surveys while the tab points at /groups.
+    if (path === '/groups' && location.pathname.startsWith('/surveys')) return true;
     return location.pathname.startsWith(path);
   };
 
@@ -77,7 +73,7 @@ export function TopNavBar() {
   };
 
   const handleLogoClick = () => {
-    navigate('/surveys');
+    navigate(surveysHome);
   };
 
   const toggleDrawer = () => {

@@ -8,9 +8,11 @@
  * record and Upcoming hide when empty; This week hides only when the panel
  * has nothing at all to show.
  */
-import { Box, Paper, Typography } from '@mui/material';
+import { Box, Paper, Typography, Button } from '@mui/material';
+import { Add } from '@mui/icons-material';
 import type { ScheduledSurvey, Surveyor } from '../../services/api';
-import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
+import { usePermissions } from '../../context/AuthContext';
+import { groupCardSx, groupColors, recordButtonSx } from '../../pages/groups/groupsTokens';
 import { buildWorklist } from '../../pages/groups/surveyState';
 import SurveyWorklistRow from './SurveyWorklistRow';
 import AllSurveysDoor from './AllSurveysDoor';
@@ -30,6 +32,9 @@ interface SurveysPanelProps {
   /** Open a recorded slot's survey read-only. */
   onOpenSurvey: (slot: ScheduledSurvey) => void;
   onViewAll: () => void;
+  /** Record a survey outside the schedule (extra visits — the backend still
+   * auto-links it to an open slot when the date falls in its window). */
+  onRecordNew: () => void;
 }
 
 function SectionHeader({ label, color, suffix }: { label: string; color: string; suffix?: string }) {
@@ -65,7 +70,9 @@ export default function SurveysPanel({
   onSignupSaved,
   onOpenSurvey,
   onViewAll,
+  onRecordNew,
 }: SurveysPanelProps) {
+  const { canEditSurveys } = usePermissions();
   const { dueThisWeek, overdue, upcoming, upcomingTotal } = buildWorklist(slots);
   const scheduledCount = overdue.length + dueThisWeek.length + upcomingTotal;
   const thisWeekCount = dueThisWeek.length + recordedThisWeek.length;
@@ -73,10 +80,30 @@ export default function SurveysPanel({
 
   return (
     <Paper sx={groupCardSx}>
-      <Box sx={{ px: 2.25, py: 1.75, borderBottom: `1px solid ${groupColors.divider}` }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1,
+          px: 2.25,
+          py: 1.75,
+          borderBottom: `1px solid ${groupColors.divider}`,
+        }}
+      >
         <Typography sx={{ fontSize: 15, fontWeight: 600, color: groupColors.textPrimary }}>
           Surveys
         </Typography>
+        {canEditSurveys && (
+          <Button
+            variant="contained"
+            startIcon={<Add sx={{ fontSize: 18 }} />}
+            onClick={onRecordNew}
+            sx={recordButtonSx}
+          >
+            Record survey
+          </Button>
+        )}
       </Box>
 
       {empty && (

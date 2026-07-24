@@ -144,7 +144,7 @@ export default function AllSurveysPage() {
   if (error) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Error' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Error' }]} />
         <Alert severity="error">Failed to load surveys. Please try again.</Alert>
       </Box>
     );
@@ -153,7 +153,7 @@ export default function AllSurveysPage() {
   if (notFound || !surveyType) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Not found' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Not found' }]} />
         <Typography sx={{ color: groupColors.textSecondary }}>
           This group could not be found.
         </Typography>
@@ -214,7 +214,7 @@ export default function AllSurveysPage() {
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
         <GroupBreadcrumb
           crumbs={[
-            { label: 'Groups', to: '/groups' },
+            { label: 'Surveys', to: '/groups' },
             { label: surveyType?.name ?? 'Survey type', to: `/groups/${typeId}` },
             { label: 'All surveys' },
           ]}

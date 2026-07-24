@@ -173,7 +173,7 @@ export default function GroupDetailPage() {
   if (error) {
     return (
       <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Error' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Error' }]} />
         <Alert severity="error">Failed to load this group. Please try again.</Alert>
       </Box>
     );
@@ -182,7 +182,7 @@ export default function GroupDetailPage() {
   if (notFound || !surveyType) {
     return (
       <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Not found' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Not found' }]} />
         <Typography sx={{ color: groupColors.textSecondary }}>
           This group could not be found.
         </Typography>
@@ -214,7 +214,7 @@ export default function GroupDetailPage() {
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
       <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto' }}>
         <GroupBreadcrumb
-          crumbs={[{ label: 'Groups', to: '/groups' }, { label: surveyType.name }]}
+          crumbs={[{ label: 'Surveys', to: '/groups' }, { label: surveyType.name }]}
         />
 
         <GroupHero surveyType={surveyType} />
@@ -260,6 +260,7 @@ export default function GroupDetailPage() {
                   onSignupSaved={handleSignupSaved}
                   onOpenSurvey={openSlotSurvey}
                   onViewAll={() => navigate(`/groups/${typeId}/all`)}
+                  onRecordNew={recordNew}
                 />
               )}
             </Box>

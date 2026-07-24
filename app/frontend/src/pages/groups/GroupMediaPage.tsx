@@ -93,7 +93,7 @@ export default function GroupMediaPage() {
   if (error) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Error' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Error' }]} />
         <Alert severity="error">Failed to load the species gallery. Please try again.</Alert>
       </Box>
     );
@@ -102,7 +102,7 @@ export default function GroupMediaPage() {
   if (notFound || !surveyType) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Groups', to: '/groups' }, { label: 'Not found' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Not found' }]} />
         <Typography sx={{ color: groupColors.textSecondary }}>
           This group could not be found.
         </Typography>
@@ -128,7 +128,7 @@ export default function GroupMediaPage() {
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
         <GroupBreadcrumb
           crumbs={[
-            { label: 'Groups', to: '/groups' },
+            { label: 'Surveys', to: '/groups' },
             { label: surveyType.name, to: `/groups/${typeId}` },
             { label: 'All species' },
           ]}

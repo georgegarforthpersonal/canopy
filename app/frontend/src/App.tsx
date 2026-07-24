@@ -31,6 +31,7 @@ import GroupsPage from './pages/groups/GroupsPage';
 import GroupDetailPage from './pages/groups/GroupDetailPage';
 import AllSurveysPage from './pages/groups/AllSurveysPage';
 import GroupMediaPage from './pages/groups/GroupMediaPage';
+import { orgHasGroups } from './pages/groups/groupMeta';
 
 // Set dayjs to use UK locale globally (dd/mm/yyyy format)
 dayjs.locale('en-gb');
@@ -98,8 +99,11 @@ const router = createBrowserRouter([
           // Admin page
           { path: '/admin', element: <AdminPage /> },
 
-          // Main surveys list page
-          { path: '/surveys', element: <SurveysPage /> },
+          // The flat surveys list is retired where Groups covers the org —
+          // /surveys (the list URL only) aliases the Groups landing so every
+          // legacy target (back buttons, cancel, post-save) lands correctly.
+          // Orgs without Groups keep the flat list as their fallback.
+          { path: '/surveys', element: orgHasGroups() ? <Navigate to="/groups" replace /> : <SurveysPage /> },
 
           // New survey page
           { path: '/surveys/new', element: <NewSurveyPage /> },
@@ -113,8 +117,8 @@ const router = createBrowserRouter([
           // Survey detail page
           { path: '/surveys/:id', element: <SurveyDetailPage /> },
 
-          // Redirect root to surveys
-          { path: '/', element: <Navigate to="/surveys" replace /> },
+          // Redirect root to the landing page
+          { path: '/', element: <Navigate to={orgHasGroups() ? '/groups' : '/surveys'} replace /> },
 
           // Unmatched routes render an empty layout (as with <Routes> before)
           { path: '*', element: null },

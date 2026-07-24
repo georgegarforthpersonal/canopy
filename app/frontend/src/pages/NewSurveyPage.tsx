@@ -542,14 +542,11 @@ export function NewSurveyPage() {
         resume.surveyImagesUploaded = true;
       }
 
-      // Success - navigate to survey detail page or surveys list
+      // Success — land on the survey just recorded (the flat list and its
+      // ?created highlight are retired where Groups covers the org).
       saveCompleteRef.current = true;
       saveResumeRef.current = emptySaveResumeState();
-      if (allowImageUpload && pendingImageFiles.length > 0) {
-        navigate(`/surveys/${surveyId}`);
-      } else {
-        navigate(`/surveys?created=${surveyId}`);
-      }
+      navigate(`/surveys/${surveyId}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create survey';
       setError(

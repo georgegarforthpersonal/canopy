@@ -1,12 +1,17 @@
 /**
- * Groups grid (landing). Shows a card per survey type in the current org's
- * beta list (see BETA_GROUPS in groupMeta), ordered by tier (compareGroups):
+ * The Surveys landing page: a card per survey type in the current org's
+ * group list (see BETA_GROUPS in groupMeta), ordered by tier (compareGroups):
  * multi-species programmes, single-species programmes, then the unscheduled
- * utilities. Selecting a card opens that survey type's space.
+ * utilities. Selecting a card opens that survey type's group page. The
+ * header's Record survey button keeps the old flat-list muscle memory — the
+ * standard form with its type selector, which dispatches media types to
+ * their wizards.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Box, Typography, CircularProgress } from '@mui/material';
+import { Alert, Box, Button, Typography, CircularProgress } from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { usePermissions } from '../../context/AuthContext';
 import { surveyTypesAPI, surveysAPI, scheduledSurveysAPI, dashboardAPI, type SurveyTypeWithDetails } from '../../services/api';
 import { groupColors, GROUP_MAX_WIDTH } from './groupsTokens';
 import { formatRecordedDateShort, formatSurveyDateShort, nextScheduledSurvey } from './surveyState';
@@ -44,6 +49,7 @@ async function countStatFor(details: SurveyTypeWithDetails): Promise<CardData['c
 
 export default function GroupsPage() {
   const navigate = useNavigate();
+  const { canEditSurveys } = usePermissions();
   const [cards, setCards] = useState<CardData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -106,8 +112,26 @@ export default function GroupsPage() {
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3.5 } }}>
       <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto' }}>
         <PageTitle
-          title="Groups"
+          title="Surveys"
           subtitle="Sign-up, instructions, and records for each survey type."
+          actions={
+            canEditSurveys ? (
+              <Button
+                variant="contained"
+                startIcon={<Add sx={{ fontSize: 18 }} />}
+                onClick={() => navigate('/surveys/new')}
+                sx={{
+                  bgcolor: groupColors.brand,
+                  '&:hover': { bgcolor: groupColors.brandHover },
+                  borderRadius: '7px',
+                  textTransform: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                Record survey
+              </Button>
+            ) : undefined
+          }
         />
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
