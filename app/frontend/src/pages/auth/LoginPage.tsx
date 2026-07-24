@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Box, Button, Link, TextField, Typography } from '@mui/material';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { PasswordField } from '../../components/auth/PasswordField';
 import { AuthPageLayout } from './AuthPageLayout';
 
 /** Full-page email + password login. */
@@ -53,9 +54,8 @@ export function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
           disabled={submitting}
         />
-        <TextField
+        <PasswordField
           label="Password"
-          type="password"
           fullWidth
           margin="normal"
           autoComplete="current-password"
