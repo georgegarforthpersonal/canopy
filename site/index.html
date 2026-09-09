@@ -90,9 +90,6 @@
   .hero-ctas { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
   .btn-hero { padding: 14px 28px; font-size: 16px; }
   .hero-email { font-size: 15px; font-weight: 500; }
-  .hero-media { margin-top: 60px; }
-  .hero-media video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #ECF3EC; border-radius: 10px; box-shadow: 0 2px 14px rgba(0,0,0,0.14); }
-  .hero-media .caption { margin: 12px auto 0; font-size: 13px; color: #666666; max-width: 42em; }
 
   .services { padding-top: 24px; padding-bottom: 88px; }
   .services h2 { margin: 0 0 10px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
@@ -120,7 +117,7 @@
   .case .story { margin: 0 0 36px; font-size: 17px; line-height: 1.65; color: #333333; max-width: 46em; text-wrap: pretty; }
   .case .next { margin: 28px 0 0; font-size: 15px; font-weight: 500; }
 
-  .demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 28px; }
+  .demo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 28px; }
   .demo-card { background: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); overflow: hidden; }
   .demo-media { aspect-ratio: 16 / 9; background: #ECF3EC; display: flex; align-items: center; justify-content: center; }
   .demo-media img, .demo-media video { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -191,13 +188,6 @@
       <div class="hero-ctas">
         <a class="btn btn-hero" href="#contact">Tell us about your project</a>
         <a class="hero-email" href="mailto:info@canopydata.app">info@canopydata.app</a>
-      </div>
-      <div class="hero-media">
-        <video autoplay muted loop playsinline preload="metadata" poster="/assets/demo-land-management-poster.jpg" aria-label="Canopy land management view: an aerial imagery slider sweeping between 2000 and 2024 at Cannwood, showing fields returning to woodland">
-          <source src="/assets/demo-land-management-v2.mp4" type="video/mp4">
-          <source src="/assets/demo-land-management-v2.webm" type="video/webm">
-        </video>
-        <p class="caption">The Canopy land-management view at Cannwood: aerial imagery from 2000 to 2024, fields returning to woodland.</p>
       </div>
     </section>
 
@@ -284,13 +274,16 @@
         </div>
         <div class="demo-card">
           <div class="demo-media">
-            <img src="/assets/demo-species-charts.png" alt="Canopy screenshot: 79 bird species and 2,260 individuals recorded at Cannwood, with the species discovery curve over time" loading="lazy">
+            <video autoplay muted loop playsinline preload="metadata" poster="/assets/demo-land-management-poster.jpg" aria-label="Canopy land management view: an aerial imagery slider sweeping between 2000 and 2024 at Cannwood, showing fields returning to woodland">
+              <source src="/assets/demo-land-management-v2.mp4" type="video/mp4">
+              <source src="/assets/demo-land-management-v2.webm" type="video/webm">
+            </video>
           </div>
           <div class="demo-meta">
-            <img src="/assets/wren.png" alt="">
+            <img src="/assets/favicon.png" alt="">
             <div>
-              <div class="title">Surveys &amp; trends</div>
-              <div class="caption">Species records and seasonal charts across every survey type.</div>
+              <div class="title">Land management</div>
+              <div class="caption">Aerial imagery on one timeline, 2000 to 2024: fields returning to woodland.</div>
             </div>
           </div>
         </div>
@@ -302,6 +295,20 @@
       <h2>Heal Rewilding</h2>
       <p class="where">Heal Somerset, a rewilding charity</p>
       <p class="story">Heal runs on volunteers, so their Canopy is shaped around them. Survey groups for butterflies and dragonflies plan their season, recorders enter counts from a phone in the field, and every walk feeds the same living record the staff team works from. It's the same platform as Cannwood underneath, with a different application on top. That's what bespoke means.</p>
+      <div class="demo-grid">
+        <div class="demo-card">
+          <div class="demo-media">
+            <img src="/assets/demo-species-charts.png" alt="Canopy screenshot: 79 bird species and 2,260 individuals recorded, with the species discovery curve over time" loading="lazy">
+          </div>
+          <div class="demo-meta">
+            <img src="/assets/wren.png" alt="">
+            <div>
+              <div class="title">Surveys &amp; trends</div>
+              <div class="caption">Species records and seasonal charts across every survey type.</div>
+            </div>
+          </div>
+        </div>
+      </div>
       <p class="next">Your project could be next. <a href="#contact">Tell us about it &rarr;</a></p>
     </section>
 
