@@ -99,13 +99,17 @@
   .svc h3 { margin: 0 0 10px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
   .svc p { margin: 0; font-size: 15px; line-height: 1.6; color: #555555; }
 
-  .field { background: #ECF3EC; }
-  .field-inner { padding-top: 64px; padding-bottom: 64px; }
+  .field { position: relative; background: #1E3423; overflow: hidden; }
+  .field-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 40%; }
+  .field-scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(20, 32, 22, 0.82), rgba(20, 32, 22, 0.58)); }
+  .field-inner { position: relative; padding-top: 96px; padding-bottom: 96px; }
   .field .kicker, .case .kicker { margin: 0 0 14px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #3E6A45; }
-  .field .intro { margin: 0 0 40px; font-size: 18px; line-height: 1.6; color: #1a1a1a; max-width: 42em; text-wrap: pretty; }
+  .field .kicker { color: #A9C7AE; }
+  .field .intro { margin: 0 0 40px; font-size: 18px; line-height: 1.6; color: #F4F7F4; max-width: 42em; text-wrap: pretty; }
   .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 32px; }
-  .field-stat .num { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #3E6A45; }
-  .field-stat .txt { margin-top: 6px; font-size: 15px; line-height: 1.5; color: #1a1a1a; }
+  .field-stat .num { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #ffffff; }
+  .field-stat .txt { margin-top: 6px; font-size: 15px; line-height: 1.5; color: #DCE7DD; }
+  .field-credit { position: absolute; right: 20px; bottom: 12px; margin: 0; font-size: 12px; color: rgba(255, 255, 255, 0.65); }
 
   .case { padding-top: 80px; }
   /* :last-of-type matches by tag, so `.case:last-of-type` would never match
@@ -215,6 +219,9 @@
     </section>
 
     <section class="field">
+      <img class="field-photo" src="/assets/cannwood-turtle-doves-1600.jpg" srcset="/assets/cannwood-turtle-doves-800.jpg 800w, /assets/cannwood-turtle-doves-1600.jpg 1600w" sizes="100vw" width="1600" height="1067" alt="A flock of turtle doves and chaffinches taking flight from rough grassland at Cannwood" loading="lazy">
+      <div class="field-scrim"></div>
+      <p class="field-credit">Turtle doves at Cannwood</p>
       <div class="shell field-inner">
         <p class="kicker">In the field</p>
         <p class="intro">We don't just advise. We build, deploy and run. The Canopy platform began as a bespoke build for one rewilding estate and is now in daily use at two.</p>
