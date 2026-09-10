@@ -129,6 +129,7 @@
   .demo-card { background: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); overflow: hidden; }
   .demo-media { aspect-ratio: 16 / 9; background: #ECF3EC; display: flex; align-items: center; justify-content: center; }
   .demo-media img, .demo-media video { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .demo-media .placeholder { font-size: 14px; font-weight: 500; color: #5E7A63; }
   .demo-meta { padding: 18px 20px 22px; display: flex; gap: 14px; align-items: flex-start; }
   .demo-meta img { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; }
   .demo-meta .title { font-size: 16px; font-weight: 600; }
@@ -194,9 +195,9 @@
       <p class="hero-credit">Turtle doves roosting at dusk, Cannwood, Somerset</p>
       <div class="shell hero-inner">
         <div class="hero-card">
-          <p class="kicker">Bespoke data platforms for ecology and rewilding</p>
-          <h1>Ecological data, made useful</h1>
-          <p class="lede">Camera traps, acoustic surveys, GPS tags, decades of spreadsheets. Most projects are sitting on more data than they can use. Canopy designs and builds the software that pulls it all together and puts it to work.</p>
+          <p class="kicker">Bespoke data solutions for nature recovery</p>
+          <h1>One living record of your land</h1>
+          <p class="lede">Camera traps, acoustic recorders, GPS tags, surveys in the field: a rewilding project generates data every day. Canopy builds the software that brings it together as it arrives, so you can see what's changing on your land and act on it.</p>
           <div class="hero-ctas">
             <a class="btn btn-hero" href="#contact">Tell us about your project</a>
             <a class="hero-email" href="mailto:info@canopydata.app">info@canopydata.app</a>
@@ -210,8 +211,8 @@
       <p class="sub">From a shoebox of SD cards to a live platform your whole team logs into. We take on the whole journey, or any one part of it.</p>
       <div class="svc-grid">
         <div class="svc">
-          <h3>One living record of your land</h3>
-          <p>We consolidate survey spreadsheets, consultant reports and historic records into a single database and map, so every sighting, survey and device is in one place your whole team can use.</p>
+          <h3>All your data in one place</h3>
+          <p>We consolidate survey spreadsheets, consultant reports and historic records into one shared platform, so every sighting, survey and device is at your whole team's fingertips.</p>
         </div>
         <div class="svc">
           <h3>Bespoke applications</h3>
@@ -258,6 +259,54 @@
 
     <section class="case shell">
       <p class="kicker">Case study</p>
+      <h2>Heal Rewilding</h2>
+      <p class="where">Heal Somerset, a rewilding charity</p>
+      <p class="story">Heal runs on volunteers, so their Canopy is shaped around them. Survey groups for butterflies and dragonflies plan their season, recorders enter counts from a phone in the field, and every walk feeds the same living record the staff team works from. It's the same platform as Cannwood underneath, with a different application on top. That's what bespoke means.</p>
+      <div class="demo-grid">
+        <div class="demo-card">
+          <div class="demo-media">
+            <span class="placeholder">Field recording video coming soon</span>
+          </div>
+          <div class="demo-meta">
+            <img src="/assets/wren.png" alt="">
+            <div>
+              <div class="title">Recording in the field</div>
+              <div class="caption">Birds added to the map as you walk, by BTO code, from a phone.</div>
+            </div>
+          </div>
+        </div>
+        <div class="demo-card">
+          <div class="demo-media">
+            <img src="/assets/demo-species-charts.png" alt="Canopy screenshot: 79 bird species and 2,260 individuals recorded, with the species discovery curve over time" loading="lazy">
+          </div>
+          <div class="demo-meta">
+            <img src="/assets/marsh-fritillary.png" alt="">
+            <div>
+              <div class="title">The season at a glance</div>
+              <div class="caption">Species totals and trends, live from every walk; no end-of-year spreadsheet.</div>
+            </div>
+          </div>
+        </div>
+        <div class="demo-card">
+          <div class="demo-media">
+            <video autoplay muted loop playsinline preload="metadata" aria-label="Canopy on a phone: a volunteer signs up for two scheduled survey weeks and gets a you're signed up confirmation">
+              <source src="/assets/demo-heal-signup.mp4" type="video/mp4">
+              <source src="/assets/demo-heal-signup.webm" type="video/webm">
+            </video>
+          </div>
+          <div class="demo-meta">
+            <img src="/assets/butterfly.png" alt="">
+            <div>
+              <div class="title">Surveyor management</div>
+              <div class="caption">Scheduled weeks with sign-up from a phone; everyone can see who's covering what.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="case shell">
+      <p class="kicker">Case study</p>
       <h2>Cannwood</h2>
       <p class="where">A 400-acre rewilding estate in Somerset</p>
       <p class="story">Cannwood is where Canopy began: one estate's camera traps, bird surveys and historic records pulled into a single living map. Today the platform runs the estate's day-to-day ecological record. Satellite-tagged turtle doves are followed through the season, camera-trap cards are identified by AI and reviewed by eye, and decades of aerial imagery show the land changing on one timeline.</p>
@@ -269,8 +318,23 @@
           <div class="demo-meta">
             <img src="/assets/camera-trap.png" alt="">
             <div>
-              <div class="title">Camera trap AI</div>
-              <div class="caption">Upload a card of images; AI identifies the species and you review the calls.</div>
+              <div class="title">AI species ID</div>
+              <div class="caption">A card of camera-trap images identified in minutes; you review the calls, not the folders.</div>
+            </div>
+          </div>
+        </div>
+        <div class="demo-card">
+          <div class="demo-media">
+            <video autoplay muted loop playsinline preload="metadata" poster="/assets/demo-land-management-poster.jpg" aria-label="Canopy land management view: an aerial imagery slider sweeping between 2000 and 2024 at Cannwood, showing fields returning to woodland">
+              <source src="/assets/demo-land-management-v2.mp4" type="video/mp4">
+              <source src="/assets/demo-land-management-v2.webm" type="video/webm">
+            </video>
+          </div>
+          <div class="demo-meta">
+            <img src="/assets/favicon.png" alt="">
+            <div>
+              <div class="title">The land, changing</div>
+              <div class="caption">Aerial imagery on one timeline, 2000 to 2024: fields returning to woodland.</div>
             </div>
           </div>
         </div>
@@ -285,43 +349,7 @@
             <img src="/assets/turtle-dove.png" alt="">
             <div>
               <div class="title">GPS tracking</div>
-              <div class="caption">Tagged birds on the map, alongside your survey locations.</div>
-            </div>
-          </div>
-        </div>
-        <div class="demo-card">
-          <div class="demo-media">
-            <video autoplay muted loop playsinline preload="metadata" poster="/assets/demo-land-management-poster.jpg" aria-label="Canopy land management view: an aerial imagery slider sweeping between 2000 and 2024 at Cannwood, showing fields returning to woodland">
-              <source src="/assets/demo-land-management-v2.mp4" type="video/mp4">
-              <source src="/assets/demo-land-management-v2.webm" type="video/webm">
-            </video>
-          </div>
-          <div class="demo-meta">
-            <img src="/assets/favicon.png" alt="">
-            <div>
-              <div class="title">Land management</div>
-              <div class="caption">Aerial imagery on one timeline, 2000 to 2024: fields returning to woodland.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="case shell">
-      <p class="kicker">Case study</p>
-      <h2>Heal Rewilding</h2>
-      <p class="where">Heal Somerset, a rewilding charity</p>
-      <p class="story">Heal runs on volunteers, so their Canopy is shaped around them. Survey groups for butterflies and dragonflies plan their season, recorders enter counts from a phone in the field, and every walk feeds the same living record the staff team works from. It's the same platform as Cannwood underneath, with a different application on top. That's what bespoke means.</p>
-      <div class="demo-grid">
-        <div class="demo-card">
-          <div class="demo-media">
-            <img src="/assets/demo-species-charts.png" alt="Canopy screenshot: 79 bird species and 2,260 individuals recorded, with the species discovery curve over time" loading="lazy">
-          </div>
-          <div class="demo-meta">
-            <img src="/assets/wren.png" alt="">
-            <div>
-              <div class="title">Surveys &amp; trends</div>
-              <div class="caption">Species records and seasonal charts across every survey type.</div>
+              <div class="caption">Satellite-tagged turtle doves followed through the season, on the same map as the surveys.</div>
             </div>
           </div>
         </div>
