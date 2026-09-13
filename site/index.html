@@ -97,6 +97,14 @@
   @media (min-width: 1440px) and (min-aspect-ratio: 41/20) {
     .hero-photo { object-position: center 32%; }
   }
+  /* Small screens: the card would fill the width and hide the photo entirely,
+     so stack instead — the full frame as a band up top, the card below it. */
+  @media (max-width: 719px) {
+    .hero-photo { position: static; height: auto; aspect-ratio: 3 / 2; display: block; }
+    .hero-inner { min-height: 0; padding-top: 28px; padding-bottom: 48px; }
+    .hero-card { max-width: none; }
+    .hero-credit { font-size: 11px; }
+  }
   .hero-card { background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2); padding: clamp(28px, 4vw, 44px); max-width: 560px; }
   .hero .kicker { margin: 0 0 16px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #3E6A45; }
   .hero h1 { margin: 0 0 18px; font-size: clamp(32px, 4.5vw, 46px); line-height: 1.12; font-weight: 700; letter-spacing: -0.025em; text-wrap: balance; }
