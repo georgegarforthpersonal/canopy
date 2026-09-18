@@ -1,0 +1,22 @@
+{
+  "_comment": "Field parcels referenced by the Cannwood annual monitoring reports. `key` is what table files reference. The import script matches existing DB locations by name or alias (case-insensitive) before creating; created locations get location_type below and no geometry (boundaries drawn later in the admin map).",
+  "locations": [
+    {"key": "2991", "name": "SSSI (2991)", "aliases": ["SSSI", "SSSI meadow", "North Brewham Meadows SSSI"], "location_type": "area", "notes": "North Brewham Meadows SSSI parcel at Cannwood, adjoining Hicks' Park Wood"},
+    {"key": "2207", "name": "Field 2207", "aliases": ["2207"], "location_type": "area", "notes": "Meadow immediately west of the SSSI, alongside Hicks' Park Wood"},
+    {"key": "1417", "name": "Field 1417", "aliases": ["1417"], "location_type": "area", "notes": "Meadow west of 2207, alongside Hicks' Park Wood"},
+    {"key": "1970", "name": "Field 1970", "aliases": ["1970"], "location_type": "area", "notes": "Large meadow south of Cannwood Lane, retained in the Meadows Management Plan"},
+    {"key": "4483", "name": "Field 4483", "aliases": ["4483"], "location_type": "area", "notes": "Eastern strip between Hicks' Park Wood and Cannwood Lane"},
+    {"key": "5474", "name": "Field 5474", "aliases": ["5474"], "location_type": "area", "notes": "Easternmost strip between Hicks' Park Wood and Cannwood Lane"},
+    {"key": "7494", "name": "Field 7494 (Animal House)", "aliases": ["7494", "Animal House field", "pond-spoil field"], "location_type": "area", "notes": "Received the swimming-pond spoil in 2018; Westerwolds ryegrass then SSSI hay strewing 2019; later part rewilded, part pony paddock"},
+    {"key": "lark-0259", "name": "Lark Farm 0259", "aliases": ["0259", "0269", "Lark Farm 0269"], "location_type": "area", "notes": "North of Cannwood Lane between Hicks' Park Wood and West End Wood. Printed as 0269 in the 2021 table and 2024 caption, 0259 in the 2023 and 2025 reports; treated as the same field"},
+    {"key": "lark-1765", "name": "Lark Farm 1765", "aliases": ["1765"], "location_type": "area", "notes": "Northern grassy field"},
+    {"key": "lark-0845", "name": "Lark Farm 0845", "aliases": ["0845"], "location_type": "area", "notes": "Northern grassy field"},
+    {"key": "lark-6046", "name": "Lark Farm 6046", "aliases": ["6046"], "location_type": "area", "notes": "Grassy field by the farmstead, south of Cannwood Lane"},
+    {"key": "lark-7937", "name": "Lark Farm 7937", "aliases": ["7937"], "location_type": "area", "notes": "Docky eastern field"},
+    {"key": "lark-9826", "name": "Lark Farm 9826", "aliases": ["9826", "7826", "Lark Farm 7826"], "location_type": "area", "notes": "Easternmost docky field with pond near Druly Hill. Printed as 7826 in the 2021 table header, 9826 everywhere else (including the 2021 report's own prose)"},
+    {"key": "plot-a", "name": "Drive-side plot A", "aliases": ["Plot A"], "location_type": "area", "notes": "Wildflower-sown strip between Cannwood Lane and the new farmhouse drive (sown 2024)"},
+    {"key": "plot-b", "name": "Drive-side plot B", "aliases": ["Plot B"], "location_type": "area", "notes": "Wildflower-sown patch between the new drive and the boundary tree belt (sown 2024)"},
+    {"key": "plot-c", "name": "Garden bank plot C", "aliases": ["Plot C"], "location_type": "area", "notes": "Sown bank between the lawn and the sunken garden/patio (sown 2024)"},
+    {"key": "wew", "name": "West End Wood (West)", "aliases": ["West End Wood"], "location_type": "area", "notes": "Leased western sector of West End Wood (PAWS), north of Lark Farm"}
+  ]
+}

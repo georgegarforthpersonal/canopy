@@ -1,0 +1,96 @@
+{
+  "_comment": "Curated, dated, notable fauna records stated explicitly in the reports. The import script resolves each species by name against the EXISTING species table (it never creates fauna species) and imports resolvable records as sightings on ad hoc surveys; unresolvable species are skipped with a warning. Location keys reference locations.json; a null location means the survey is created without one and the note carries the place.",
+  "records": [
+    {
+      "date": "2025-05-20",
+      "species_name": "Marsh Fritillary",
+      "scientific_name": "Euphydryas aurinia",
+      "count": 3,
+      "location": "2991",
+      "notes": "First Marsh Fritillaries at Cannwood for twenty years, seen in the SSSI alongside Hicks' Park Wood; one photographed. Reported to Steve Portch at Natural England. Source: Monitoring Report 2025, section 1.2 and photo 5."
+    },
+    {
+      "date": "2026-08-31",
+      "species_name": "Marsh Fritillary",
+      "scientific_name": "Euphydryas aurinia",
+      "count": 1,
+      "location": "2991",
+      "notes": "Larval web with larvae found in the SE quarter of the SSSI by Steve Davis (date approximate: August 2026). No adults seen on the June visits. That area left uncut for 2027. Source: Annual Monitoring Report 2026, section 5."
+    },
+    {
+      "date": "2026-08-04",
+      "species_name": "Clouded Yellow",
+      "scientific_name": "Colias croceus",
+      "count": 1,
+      "location": "2991",
+      "notes": "Flitting briefly from flower to flower on Devil's-bit and Saw-wort before making off unphotographed. Source: Annual Monitoring Report 2026, section 2.1.3."
+    },
+    {
+      "date": "2023-07-06",
+      "species_name": "Essex Skipper",
+      "scientific_name": "Thymelicus lineola",
+      "count": 1,
+      "location": "2991",
+      "notes": "A lone Essex Skipper among the more abundant Large and Small Skippers; identified by the dark antenna clubs (photo 8). Source: Annual Monitoring Report 2023, section 1.5."
+    },
+    {
+      "date": "2023-05-16",
+      "species_name": "Emerald Damselfly",
+      "scientific_name": "Lestes sponsa",
+      "count": 1,
+      "location": null,
+      "notes": "In field 4968 on 16 May; may have come from the lane-side pond nearby or one of the newer ponds. Source: Annual Monitoring Report 2023, section 2.2.3."
+    },
+    {
+      "date": "2023-07-06",
+      "species_name": "Broad-bodied Chaser",
+      "scientific_name": "Libellula depressa",
+      "count": 1,
+      "location": "lark-9826",
+      "notes": "Seen in 9826, doubtless from the pond at the easternmost end of the parcel. Source: Annual Monitoring Report 2023, section 2.3.2."
+    },
+    {
+      "date": "2023-07-06",
+      "species_name": "Common Darter",
+      "scientific_name": "Sympetrum striolatum",
+      "count": 1,
+      "location": "lark-9826",
+      "notes": "Seen in 9826 with the Broad-bodied Chaser. Source: Annual Monitoring Report 2023, section 2.3.2."
+    },
+    {
+      "date": "2023-08-10",
+      "species_name": "Wasp Spider",
+      "scientific_name": "Argiope bruennichi",
+      "count": 1,
+      "location": "2991",
+      "notes": "Shown to the author by Hamish and Chris in the SSSI (photo 11); first seen at Cannwood by Ben in 2022, the species spreading north from the south coast. Source: Annual Monitoring Report 2023, section 1.5.",
+      "optional": true
+    },
+    {
+      "date": "2024-06-10",
+      "species_name": "Wasp Spider",
+      "scientific_name": "Argiope bruennichi",
+      "count": 1,
+      "location": "2207",
+      "notes": "In 2207, with its distinctive stabilimentum clearly visible (photo 15). Source: Annual Monitoring Report 2024, photos II.",
+      "optional": true
+    },
+    {
+      "date": "2026-06-29",
+      "species_name": "White Stork",
+      "scientific_name": "Ciconia ciconia",
+      "count": 1,
+      "location": null,
+      "notes": "Croaking in the tree belt by the farmhouse ('like someone wielding a huge pair of shears') before flying off; reportedly about for several days. Recorded in the report as 'a Stork'. Source: Annual Monitoring Report 2026, section 4.2.",
+      "optional": true
+    },
+    {
+      "date": "2020-07-28",
+      "species_name": "Silver-washed Fritillary",
+      "scientific_name": "Argynnis paphia",
+      "count": 1,
+      "location": "2207",
+      "notes": "Spectacular Silver-washed Fritillaries making their way over from Hicks' Park Wood as usual. Source: Annual Monitoring Report 2020, section 2.1.2."
+    }
+  ]
+}
