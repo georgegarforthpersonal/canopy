@@ -40,6 +40,7 @@ from models import (
     SpeciesType,
     SpeciesTypeRead,
     STAGE_COUNT_FIELDS,
+    FREQUENCY_FIELDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -293,6 +294,9 @@ RECORD_HEADERS = ["common_name", "species_name", "count", "date", "location"]
 #: actually carry them, so a bird or bat sheet keeps its original five columns.
 STAGE_COUNT_HEADERS = list(STAGE_COUNT_FIELDS)
 
+#: Botanical frequency columns, appended on the same only-when-present rule.
+FREQUENCY_HEADERS = list(FREQUENCY_FIELDS)
+
 
 def _safe_filename_part(name: str) -> str:
     """Sanitise a name for use in a download filename."""
@@ -316,6 +320,7 @@ def _records_query(db: Session, org_id: Optional[int]) -> Any:
             Survey.date,
             func.coalesce(sighting_location.name, survey_location.name),
             *(getattr(Sighting, field) for field in STAGE_COUNT_FIELDS),
+            *(getattr(Sighting, field) for field in FREQUENCY_FIELDS),
         )
         .join(Survey, Sighting.survey_id == Survey.id)
         .join(Species, Sighting.species_id == Species.id)
@@ -333,15 +338,25 @@ def _records_to_xlsx(rows: list[Any]) -> bytes:
     original five columns rather than gaining five empty ones.
     """
     base_width = len(RECORD_HEADERS)
+    stages_end = base_width + len(STAGE_COUNT_HEADERS)
+    frequency_end = stages_end + len(FREQUENCY_HEADERS)
     include_stages = any(
-        any(value is not None for value in row[base_width:base_width + len(STAGE_COUNT_HEADERS)])
+        any(value is not None for value in row[base_width:stages_end])
+        for row in rows
+    )
+    include_frequency = any(
+        any(value is not None for value in row[stages_end:frequency_end])
         for row in rows
     )
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Records"
-    ws.append(RECORD_HEADERS + (STAGE_COUNT_HEADERS if include_stages else []))
+    ws.append(
+        RECORD_HEADERS
+        + (STAGE_COUNT_HEADERS if include_stages else [])
+        + (FREQUENCY_HEADERS if include_frequency else [])
+    )
     for row in rows:
         common_name, species_name, count, survey_date, location_name = row[:base_width]
         record = [
@@ -355,7 +370,12 @@ def _records_to_xlsx(rows: list[Any]) -> bytes:
             # Blank rather than 0 for "not recorded", matching the app's NULL.
             record.extend(
                 "" if value is None else value
-                for value in row[base_width:base_width + len(STAGE_COUNT_HEADERS)]
+                for value in row[base_width:stages_end]
+            )
+        if include_frequency:
+            record.extend(
+                "" if value is None else value
+                for value in row[stages_end:frequency_end]
             )
         ws.append(record)
     buffer = io.BytesIO()

@@ -444,6 +444,109 @@ class TestSurveySightings:
         )
         assert response.status_code == 422
 
+    def test_create_sighting_persists_frequency_score(
+        self, client: TestClient, auth_headers: dict,
+        create_survey, create_surveyor, create_species
+    ):
+        """Botanical frequency values must survive create and list reads."""
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id])
+        species = create_species(name="Devil's-bit Scabious")
+
+        response = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={
+                "species_id": species.id,
+                "count": 1,
+                "percent_frequency": 53.3,
+                "frequency_band": "3",
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        created = response.json()
+        assert float(created["percent_frequency"]) == 53.3
+        assert created["frequency_band"] == "3"
+
+        listing = client.get(
+            f"/api/surveys/{survey.id}/sightings", headers=auth_headers
+        )
+        assert listing.status_code == 200
+        listed = listing.json()[0]
+        assert float(listed["percent_frequency"]) == 53.3
+        assert listed["frequency_band"] == "3"
+
+    def test_frequency_defaults_to_null_when_absent(
+        self, client: TestClient, auth_headers: dict,
+        create_survey, create_surveyor, create_species
+    ):
+        """Non-botanical sightings carry no frequency score at all."""
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id])
+        species = create_species(name="Red Admiral")
+
+        response = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={"species_id": species.id, "count": 5},
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["percent_frequency"] is None
+        assert data["frequency_band"] is None
+
+    def test_update_sighting_changes_frequency_score(
+        self, client: TestClient, auth_headers: dict,
+        create_survey, create_surveyor, create_species
+    ):
+        """Frequency values can be edited, including cleared back to null."""
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id])
+        species = create_species(name="Saw-wort")
+
+        created = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={
+                "species_id": species.id,
+                "count": 1,
+                "percent_frequency": 41.66,
+                "frequency_band": "3",
+            },
+            headers=auth_headers,
+        ).json()
+
+        response = client.put(
+            f"/api/surveys/{survey.id}/sightings/{created['id']}",
+            json={"percent_frequency": None, "frequency_band": "+"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["percent_frequency"] is None
+        assert response.json()["frequency_band"] == "+"
+
+    def test_invalid_frequency_values_rejected(
+        self, client: TestClient, auth_headers: dict,
+        create_survey, create_surveyor, create_species
+    ):
+        """The band must come from the scale and the percent from 0-100."""
+        surveyor = create_surveyor()
+        survey = create_survey(surveyor_ids=[surveyor.id])
+        species = create_species(name="Saw-wort")
+
+        response = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={"species_id": species.id, "count": 1, "frequency_band": "6"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
+
+        response = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={"species_id": species.id, "count": 1, "percent_frequency": 120},
+            headers=auth_headers,
+        )
+        assert response.status_code == 422
+
     def test_zero_count_allowed_with_breeding_evidence(
         self, client: TestClient, auth_headers: dict,
         create_survey, create_surveyor, create_species

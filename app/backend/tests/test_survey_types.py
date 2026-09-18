@@ -294,6 +294,32 @@ class TestCreateSurveyType:
         details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
         assert details["record_mode"] == "map"
 
+    def test_allow_frequency_score_defaults_off_and_is_updatable(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """allow_frequency_score gates botanical frequency entry; off by default."""
+        survey_type = create_survey_type(name="Botanical")
+
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_frequency_score"] is False
+
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}",
+            json={"allow_frequency_score": True},
+            headers=auth_headers,
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_frequency_score"] is True
+
+        # An update that doesn't mention the flag leaves it alone.
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"description": "quadrats"}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_frequency_score"] is True
+
     def test_update_replaces_device_allocation(
         self, client: TestClient, auth_headers: dict, create_survey_type, create_device
     ):
