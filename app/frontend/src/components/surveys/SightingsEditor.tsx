@@ -10,8 +10,11 @@ import { MapModeSightings } from './MapModeSightings';
 import ViewModeToggle from '../ViewModeToggle';
 import { getSightingsGridConfig } from './sightingsGridConfig';
 import { hasPositiveStageCounts, pickStageCounts, recordsStageCounts, type StageCounts } from '../../config/stageCounts';
+import { hasFrequencyScore, pickFrequencyScore, type FrequencyScore } from '../../config/frequencyScore';
 import StageCountsFields from './StageCountsFields';
 import StageCountsSummary from './StageCountsSummary';
+import FrequencyScoreFields from './FrequencyScoreFields';
+import FrequencyScoreSummary from './FrequencyScoreSummary';
 import { getSpeciesIcon } from '../../config';
 import { useResponsive } from '../../hooks/useResponsive';
 import { orderSpeciesForEntry, recentSpeciesIds } from '../../utils/speciesOrder';
@@ -64,7 +67,7 @@ function PendingPhotoThumbnail({ file }: { file: File }) {
   );
 }
 
-export interface DraftSighting extends StageCounts {
+export interface DraftSighting extends StageCounts, FrequencyScore {
   tempId: string;
   species_id: number | null;
   count: number;
@@ -102,6 +105,7 @@ interface SightingsEditorProps {
   allowCoordinateEntry?: boolean; // Whether typed coordinates can place sighting locations
   allowSightingNotes?: boolean; // Whether notes can be entered for individual sightings
   allowSightingPhotoUpload?: boolean; // Whether photos can be attached to individual sightings
+  allowFrequencyScore?: boolean; // Whether sightings carry a botanical frequency score
   allowSightingDeviceSelection?: boolean; // When true, each sighting picks a device that supplies its location
   devices?: Device[]; // Available devices (already filtered by configured device type) when device selection is on
   surveyLocationId?: number | null; // Survey-level location ID for initial map zoom
@@ -129,6 +133,7 @@ export function SightingsEditor({
   allowCoordinateEntry = false,
   allowSightingNotes = true,
   allowSightingPhotoUpload = false,
+  allowFrequencyScore = false,
   allowSightingDeviceSelection = false,
   devices = [],
   surveyLocationId,
@@ -198,8 +203,9 @@ export function SightingsEditor({
               location_id: sightingData.location_id,
               device_id: sightingData.device_id,
               notes: sightingData.notes,
-              // All five keys, nulls included, so cleared counts clear here too.
+              // All keys, nulls included, so cleared values clear here too.
               ...pickStageCounts(sightingData),
+              ...pickFrequencyScore(sightingData),
               pendingPhotos: sightingData.pendingPhotos,
               existingImageIds: sightingData.existingImageIds,
               removedImageIds: sightingData.removedImageIds,
@@ -219,6 +225,7 @@ export function SightingsEditor({
           device_id: sightingData.device_id,
           notes: sightingData.notes,
           ...pickStageCounts(sightingData),
+          ...pickFrequencyScore(sightingData),
           pendingPhotos: sightingData.pendingPhotos,
         },
       ]);
@@ -575,6 +582,11 @@ export function SightingsEditor({
                               <StageCountsSummary counts={pickStageCounts(sighting)} />
                             </Box>
                           )}
+                          {allowFrequencyScore && hasFrequencyScore(sighting) && (
+                            <Box sx={{ mt: 0.5 }}>
+                              <FrequencyScoreSummary score={pickFrequencyScore(sighting)} />
+                            </Box>
+                          )}
                         </Box>
 
                         <Stack direction="row" spacing={0.5}>
@@ -633,6 +645,7 @@ export function SightingsEditor({
                   device_id: editingSighting.device_id,
                   notes: editingSighting.notes,
                   ...pickStageCounts(editingSighting),
+                  ...pickFrequencyScore(editingSighting),
                   pendingPhotos: editingSighting.pendingPhotos,
                   existingImageIds: editingSighting.existingImageIds,
                   removedImageIds: editingSighting.removedImageIds,
@@ -647,6 +660,7 @@ export function SightingsEditor({
           allowCoordinateEntry={allowCoordinateEntry}
           allowSightingNotes={allowSightingNotes}
           allowSightingPhotoUpload={allowSightingPhotoUpload}
+          allowFrequencyScore={allowFrequencyScore}
           allowSightingDeviceSelection={allowSightingDeviceSelection}
           devices={devices}
           surveyLocationId={surveyLocationId}
@@ -1073,6 +1087,16 @@ export function SightingsEditor({
                     <StageCountsFields
                       value={sighting}
                       adultTotal={sighting.count}
+                      onChange={(key, next) => updateSighting(sighting.tempId, key, next)}
+                    />
+                  </Box>
+                )}
+
+                {/* Botanical frequency score, full width beneath the row */}
+                {allowFrequencyScore && !isEmptyLastRow && (
+                  <Box sx={{ px: 1.5, pb: 2 }}>
+                    <FrequencyScoreFields
+                      value={sighting}
                       onChange={(key, next) => updateSighting(sighting.tempId, key, next)}
                     />
                   </Box>

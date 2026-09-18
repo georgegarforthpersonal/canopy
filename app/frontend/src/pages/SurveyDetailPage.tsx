@@ -23,6 +23,7 @@ import { MapModeSightings } from '../components/surveys/MapModeSightings';
 import { getSightingsGridConfig } from '../components/surveys/sightingsGridConfig';
 import { getSpeciesIcon } from '../config';
 import { hasPositiveStageCounts, pickStageCounts } from '../config/stageCounts';
+import { formatFrequencyCell, hasFrequencyScore, pickFrequencyScore } from '../config/frequencyScore';
 import StageCountsSummary from '../components/surveys/StageCountsSummary';
 import { PageHeader } from '../components/layout/PageHeader';
 import { getSurveyorName, formatDate } from '../utils/formatters';
@@ -350,6 +351,7 @@ export function SurveyDetailPage() {
       notes: sighting.notes,
       // Include BDS life stage / behaviour counts
       ...pickStageCounts(sighting),
+      ...pickFrequencyScore(sighting),
       // Include individuals if present (from SightingWithIndividuals)
       individuals: sighting.individuals?.map((ind: any) => ({
         ...ind,
@@ -533,6 +535,7 @@ export function SurveyDetailPage() {
   const allowCoordinateEntry = allowGeolocation && (surveyType?.allow_coordinate_entry ?? false);
   const allowSightingNotes = surveyType?.allow_sighting_notes ?? true;
   const allowSightingPhotoUpload = surveyType?.allow_sighting_photo_upload ?? false;
+  const allowFrequencyScore = surveyType?.allow_frequency_score ?? false;
   const showStartEndTime = surveyType?.allow_start_end_time ?? false;
   const showSunPercentage = surveyType?.allow_sun_percentage ?? false;
   const showTemperature = surveyType?.allow_temperature ?? false;
@@ -756,6 +759,7 @@ export function SurveyDetailPage() {
             device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
             notes: sighting.notes,
             ...pickStageCounts(sighting),
+            ...pickFrequencyScore(sighting),
             image_ids: finalImageIds,
           });
 
@@ -841,6 +845,7 @@ export function SurveyDetailPage() {
             device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
             notes: sighting.notes,
             ...pickStageCounts(sighting),
+            ...pickFrequencyScore(sighting),
             client_uuid: sighting.client_uuid,
             individuals: sighting.individuals?.map((ind) => ({
               latitude: ind.latitude,
@@ -1260,6 +1265,7 @@ export function SurveyDetailPage() {
               allowCoordinateEntry={allowCoordinateEntry}
               allowSightingNotes={allowSightingNotes}
               allowSightingPhotoUpload={allowSightingPhotoUpload}
+              allowFrequencyScore={allowFrequencyScore}
               allowSightingDeviceSelection={allowSightingDeviceSelection}
               devices={visibleDevices}
               surveyLocationId={editLocationId}
@@ -1310,6 +1316,7 @@ export function SurveyDetailPage() {
                   allowSightingDeviceSelection,
                   showNotesColumn: false,
                   includeDeleteColumn: false,
+                  wideCountColumn: allowFrequencyScore,
                 });
                 const { gridColumns } = gridConfig;
 
@@ -1355,7 +1362,7 @@ export function SurveyDetailPage() {
                       <Box /> // Empty spacer
                     )}
                     <Typography variant="body2" fontWeight={600} color="text.secondary">
-                      COUNT
+                      {allowFrequencyScore ? 'FREQUENCY' : 'COUNT'}
                     </Typography>
                   </Box>
 
@@ -1484,10 +1491,17 @@ export function SurveyDetailPage() {
                                 <Box /> // Empty spacer
                               )}
 
-                              {/* Count Column */}
-                              <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
-                                {sighting.count}
-                              </Typography>
+                              {/* Count column; botanical types show the
+                                  frequency instead (count is always 1 there). */}
+                              {allowFrequencyScore && hasFrequencyScore(sighting) ? (
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+                                  {formatFrequencyCell(sighting)}
+                                </Typography>
+                              ) : (
+                                <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.875rem' }}>
+                                  {sighting.count}
+                                </Typography>
+                              )}
 
                             </Box>
 

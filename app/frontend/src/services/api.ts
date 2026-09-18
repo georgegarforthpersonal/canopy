@@ -563,6 +563,10 @@ export interface Sighting {
   larvae?: number | null;
   exuviae?: number | null;
   emerging_adults?: number | null;
+  // Botanical frequency score; null = not recorded (see config/frequencyScore).
+  // The percent arrives as a string (NUMERIC serialisation).
+  percent_frequency?: number | string | null;
+  frequency_band?: string | null;
   client_uuid?: string | null; // Client-minted idempotency uuid (see Survey.client_uuid)
 }
 
@@ -626,6 +630,9 @@ export interface SightingCreateRequest {
   larvae?: number | null;
   exuviae?: number | null;
   emerging_adults?: number | null;
+  // Botanical frequency score; omit or null when not recorded
+  percent_frequency?: number | string | null;
+  frequency_band?: string | null;
   client_uuid?: string; // Client-minted idempotency uuid; retries return the existing sighting
 }
 
@@ -731,6 +738,7 @@ export interface SurveyType {
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
   allow_sighting_photo_upload: boolean;
+  allow_frequency_score: boolean;
   allow_start_end_time: boolean;
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
@@ -806,6 +814,7 @@ export interface SurveyTypeCreate {
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
   allow_sighting_photo_upload: boolean;
+  allow_frequency_score?: boolean;
   allow_start_end_time: boolean;
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
@@ -837,6 +846,7 @@ export interface SurveyTypeUpdate {
   allow_audio_upload?: boolean;
   allow_image_upload?: boolean;
   allow_sighting_photo_upload?: boolean;
+  allow_frequency_score?: boolean;
   allow_start_end_time?: boolean;
   allow_sun_percentage?: boolean;
   allow_temperature?: boolean;

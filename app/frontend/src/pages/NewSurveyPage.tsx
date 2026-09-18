@@ -15,6 +15,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, usePermissions } from '../context/AuthContext';
 import { hasPositiveStageCounts, pickStageCounts, stageCountErrors } from '../config/stageCounts';
+import { frequencyScoreErrors, pickFrequencyScore } from '../config/frequencyScore';
 import { AccessNotice } from '../components/auth/AccessNotice';
 import {
   surveysAPI,
@@ -467,7 +468,10 @@ export function NewSurveyPage() {
     // Stage counts contradicting the adult total are impossible by definition
     // (only dragonfly sightings carry them; everything else has none).
     if (!errors.sightings) {
-      const stageErrs = validSightings.flatMap((s) => stageCountErrors(pickStageCounts(s), s.count));
+      const stageErrs = validSightings.flatMap((s) => [
+        ...stageCountErrors(pickStageCounts(s), s.count),
+        ...frequencyScoreErrors(pickFrequencyScore(s)),
+      ]);
       if (stageErrs.length > 0) {
         errors.sightings = stageErrs[0];
       }
@@ -669,6 +673,7 @@ export function NewSurveyPage() {
               device_id: allowSightingDeviceSelection ? sighting.device_id : undefined,
               notes: sighting.notes,
               ...pickStageCounts(sighting),
+              ...pickFrequencyScore(sighting),
               // Retried creates with the same uuid return the existing row
               client_uuid: sighting.client_uuid,
               // Include individual locations with count and breeding status codes
@@ -794,6 +799,7 @@ export function NewSurveyPage() {
   const allowSightingNotes = selectedSurveyType?.allow_sighting_notes ?? true;
   const allowImageUpload = selectedSurveyType?.allow_image_upload ?? false;
   const allowSightingPhotoUpload = selectedSurveyType?.allow_sighting_photo_upload ?? false;
+  const allowFrequencyScore = selectedSurveyType?.allow_frequency_score ?? false;
   const showStartEndTime = selectedSurveyType?.allow_start_end_time ?? false;
   const showSunPercentage = selectedSurveyType?.allow_sun_percentage ?? false;
   const showTemperature = selectedSurveyType?.allow_temperature ?? false;
@@ -1070,6 +1076,7 @@ export function NewSurveyPage() {
             allowCoordinateEntry={allowCoordinateEntry}
             allowSightingNotes={allowSightingNotes}
             allowSightingPhotoUpload={allowSightingPhotoUpload}
+            allowFrequencyScore={allowFrequencyScore}
             allowSightingDeviceSelection={allowSightingDeviceSelection}
             devices={devices}
             surveyLocationId={locationId}

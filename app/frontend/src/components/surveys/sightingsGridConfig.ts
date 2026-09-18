@@ -21,6 +21,11 @@ export interface SightingsGridOptions {
   showPhotosColumn?: boolean;
   /** When true, include a trailing delete column (edit mode only). */
   includeDeleteColumn: boolean;
+  /**
+   * Widen the count column for botanical frequency cells ("3 · 41.66%"),
+   * which replace the bare count in view mode when allow_frequency_score is on.
+   */
+  wideCountColumn?: boolean;
 }
 
 export interface SightingsGridConfig {
@@ -56,7 +61,7 @@ export function getSightingsGridConfig(opts: SightingsGridOptions): SightingsGri
 
   if (showGps || showSpacer) cols.push('70px');
 
-  cols.push('60px'); // COUNT
+  cols.push(opts.wideCountColumn ? '100px' : '60px'); // COUNT (or FREQUENCY)
 
   if (showNotesColumn) cols.push('2fr');
 
