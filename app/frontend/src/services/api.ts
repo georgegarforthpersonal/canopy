@@ -679,6 +679,24 @@ export interface SpeciesWithCount {
   first_observed: string | null;
 }
 
+/** One frequency-scored sighting, flattened for the sward composition panel. */
+export interface SwardCompositionRow {
+  location_id: number | null;
+  location_name: string | null;
+  survey_id: number;
+  survey_date: string;
+  species_id: number;
+  species_name: string | null;
+  species_scientific_name: string | null;
+  conservation_status: string | null;
+  percent_frequency: number | string | null; // NUMERIC serialises as a string
+  frequency_band: string | null;
+}
+
+export interface SwardCompositionResponse {
+  rows: SwardCompositionRow[];
+}
+
 export interface SpeciesSightingLocation {
   id: number;
   survey_id: number;
@@ -1583,6 +1601,16 @@ export const dashboardAPI = {
     if (endDate) params.append('end_date', endDate);
     if (surveyTypeId != null) params.append('survey_type_id', surveyTypeId.toString());
     return fetchAPI(`/dashboard/species-occurrences?${params.toString()}`);
+  },
+
+  /**
+   * Get every frequency-scored sighting for a survey type (the sward
+   * composition panel pivots the rows client-side).
+   */
+  getSwardComposition: (surveyTypeId: number): Promise<SwardCompositionResponse> => {
+    const params = new URLSearchParams();
+    params.append('survey_type_id', surveyTypeId.toString());
+    return fetchAPI(`/dashboard/sward-composition?${params.toString()}`);
   },
 
   /**

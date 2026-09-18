@@ -1459,6 +1459,25 @@ class SpeciesOccurrenceResponse(SQLModel):
     species_name: str = Field(description="Name of the species")
 
 
+class SwardCompositionRow(SQLModel):
+    """One frequency-scored sighting, flattened for the sward composition panel."""
+    location_id: Optional[int] = None
+    location_name: Optional[str] = None
+    survey_id: int
+    survey_date: date_type
+    species_id: int
+    species_name: Optional[str] = None
+    species_scientific_name: Optional[str] = None
+    conservation_status: Optional[str] = None
+    percent_frequency: Optional[Decimal] = None
+    frequency_band: Optional[str] = None
+
+
+class SwardCompositionResponse(SQLModel):
+    """Every frequency-scored sighting for a survey type; the client pivots."""
+    rows: List[SwardCompositionRow] = Field(default_factory=list)
+
+
 class SpeciesWithCount(SQLModel):
     """Species with total occurrence count"""
     id: int = Field(description="Species ID")

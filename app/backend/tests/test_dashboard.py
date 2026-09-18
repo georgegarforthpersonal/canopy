@@ -274,3 +274,65 @@ class TestSpeciesSightings:
             headers=auth_headers,
         )
         assert response.status_code == 200
+
+
+class TestSwardComposition:
+    """Tests for GET /api/dashboard/sward-composition"""
+
+    def test_requires_survey_type(self, client: TestClient, auth_headers: dict):
+        response = client.get("/api/dashboard/sward-composition", headers=auth_headers)
+        assert response.status_code == 422
+
+    def test_returns_only_frequency_scored_sightings(
+        self, client: TestClient, auth_headers: dict,
+        create_species, create_survey, create_survey_type,
+    ):
+        """Plain count records of the same type stay out of the panel data."""
+        botanical = create_survey_type(name="Botanical")
+        scabious = create_species(name="Devil's-bit Scabious", species_type="butterfly")
+        buttercup = create_species(name="Meadow Buttercup", species_type="butterfly")
+
+        survey = create_survey(survey_date=date(2024, 6, 10), survey_type_id=botanical.id)
+        resp = client.post(
+            f"/api/surveys/{survey.id}/sightings",
+            json={
+                "species_id": scabious.id, "count": 1,
+                "percent_frequency": 53.3, "frequency_band": "3",
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+        # A frequency-less sighting on the same survey is excluded.
+        _add_sighting(client, auth_headers, survey.id, buttercup.id, 4)
+
+        data = client.get(
+            f"/api/dashboard/sward-composition?survey_type_id={botanical.id}",
+            headers=auth_headers,
+        ).json()
+        assert len(data["rows"]) == 1
+        row = data["rows"][0]
+        assert row["species_id"] == scabious.id
+        assert row["survey_date"] == "2024-06-10"
+        assert float(row["percent_frequency"]) == 53.3
+        assert row["frequency_band"] == "3"
+
+    def test_scoped_to_survey_type(
+        self, client: TestClient, auth_headers: dict,
+        create_species, create_survey, create_survey_type,
+    ):
+        botanical = create_survey_type(name="Botanical")
+        other = create_survey_type(name="Other")
+        species = create_species(name="Saw-wort", species_type="butterfly")
+        other_survey = create_survey(survey_date=date(2024, 6, 1), survey_type_id=other.id)
+        resp = client.post(
+            f"/api/surveys/{other_survey.id}/sightings",
+            json={"species_id": species.id, "count": 1, "frequency_band": "+"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 201
+
+        data = client.get(
+            f"/api/dashboard/sward-composition?survey_type_id={botanical.id}",
+            headers=auth_headers,
+        ).json()
+        assert data["rows"] == []

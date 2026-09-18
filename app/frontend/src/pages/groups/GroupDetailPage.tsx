@@ -40,6 +40,7 @@ import SpeciesCountPanel from '../../components/groups/SpeciesCountPanel';
 import SingleSpeciesCountPanel from '../../components/groups/SingleSpeciesCountPanel';
 import SeasonalCountPanel from '../../components/groups/SeasonalCountPanel';
 import DataPanel from '../../components/groups/DataPanel';
+import SwardCompositionPanel from '../../components/groups/SwardCompositionPanel';
 
 export default function GroupDetailPage() {
   const { typeId } = useParams<{ typeId: string }>();
@@ -313,6 +314,13 @@ export default function GroupDetailPage() {
             {!hasSeasonal && dataPanel}
           </Box>
         </Box>
+
+        {/* Full width: the species x survey heatmap needs the whole row. */}
+        {surveyType.allow_frequency_score && (
+          <Box sx={{ mt: 2.25, minWidth: 0 }}>
+            <SwardCompositionPanel surveyTypeId={surveyType.id} />
+          </Box>
+        )}
       </Box>
 
     </Box>
