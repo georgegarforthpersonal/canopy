@@ -20,6 +20,7 @@ import type { SurveyDraftForm, SurveyDraftRecord } from '../services/draftStore'
 import { draftFingerprint, ensureClientUuids, adoptServerIds } from '../utils/surveyDraftSync';
 import { AudioClipPlayer } from '../components/audio/AudioClipPlayer';
 import { MapModeSightings } from '../components/surveys/MapModeSightings';
+import { SurveyPhotosPanel } from '../components/surveys/SurveyPhotosPanel';
 import { getSightingsGridConfig } from '../components/surveys/sightingsGridConfig';
 import { getSpeciesIcon } from '../config';
 import { hasPositiveStageCounts, pickStageCounts } from '../config/stageCounts';
@@ -536,6 +537,8 @@ export function SurveyDetailPage() {
   const allowSightingNotes = surveyType?.allow_sighting_notes ?? true;
   const allowSightingPhotoUpload = surveyType?.allow_sighting_photo_upload ?? false;
   const allowFrequencyScore = surveyType?.allow_frequency_score ?? false;
+  // Photos of the visit itself, not of any one sighting.
+  const allowSurveyPhotos = surveyType?.allow_survey_photos ?? false;
   const showStartEndTime = surveyType?.allow_start_end_time ?? false;
   const showSunPercentage = surveyType?.allow_sun_percentage ?? false;
   const showTemperature = surveyType?.allow_temperature ?? false;
@@ -1241,6 +1244,11 @@ export function SurveyDetailPage() {
             </Stack>
           )}
         </Paper>
+
+        {/* Survey Photos Section: habitat and landscape shots for the whole visit */}
+        {allowSurveyPhotos && (
+          <SurveyPhotosPanel surveyId={survey.id} canEdit={canEditSurveys} />
+        )}
 
         {/* Sightings Section */}
         <Paper

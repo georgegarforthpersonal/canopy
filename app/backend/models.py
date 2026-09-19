@@ -731,6 +731,7 @@ class SurveyTypeBase(SQLModel):
     allow_image_upload: bool = Field(default=False, description="Whether camera trap images can be uploaded for this survey type")
     allow_sighting_photo_upload: bool = Field(default=False, description="Whether photos can be attached to individual sightings for documentation")
     allow_frequency_score: bool = Field(default=False, description="Whether sightings carry a botanical frequency score (percent of quadrats and/or relative frequency band)")
+    allow_survey_photos: bool = Field(default=False, description="Whether photos can be attached to the survey itself (habitat and landscape shots that describe a visit rather than a species)")
     allow_start_end_time: bool = Field(default=False, description="Whether start/end time fields are shown for this survey type")
     allow_sun_percentage: bool = Field(default=False, description="Whether sun percentage field is shown for this survey type")
     allow_temperature: bool = Field(default=False, description="Whether temperature field is shown for this survey type")
@@ -811,6 +812,7 @@ class SurveyTypeUpdate(SQLModel):
     allow_image_upload: Optional[bool] = None
     allow_sighting_photo_upload: Optional[bool] = None
     allow_frequency_score: Optional[bool] = None
+    allow_survey_photos: Optional[bool] = None
     allow_start_end_time: Optional[bool] = None
     allow_sun_percentage: Optional[bool] = None
     allow_temperature: Optional[bool] = None

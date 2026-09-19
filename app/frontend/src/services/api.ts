@@ -757,6 +757,7 @@ export interface SurveyType {
   allow_image_upload: boolean;
   allow_sighting_photo_upload: boolean;
   allow_frequency_score: boolean;
+  allow_survey_photos: boolean;
   allow_start_end_time: boolean;
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
@@ -833,6 +834,7 @@ export interface SurveyTypeCreate {
   allow_image_upload: boolean;
   allow_sighting_photo_upload: boolean;
   allow_frequency_score?: boolean;
+  allow_survey_photos?: boolean;
   allow_start_end_time: boolean;
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
@@ -865,6 +867,7 @@ export interface SurveyTypeUpdate {
   allow_image_upload?: boolean;
   allow_sighting_photo_upload?: boolean;
   allow_frequency_score?: boolean;
+  allow_survey_photos?: boolean;
   allow_start_end_time?: boolean;
   allow_sun_percentage?: boolean;
   allow_temperature?: boolean;
