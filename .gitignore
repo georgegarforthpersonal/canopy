@@ -85,3 +85,6 @@ app/backend/scripts/data/backups/
 
 # Local scratch scripts (not part of the app)
 app/backend/scripts/inspect_surveyor_links.py
+
+# Cannwood report photo plates (local input for import_cannwood_photos.py)
+app/backend/scripts/data/cannwood_photos/
