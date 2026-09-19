@@ -106,14 +106,35 @@ export default function AnnualFrequencyChart({
             <Typography sx={{ fontSize: 12, color: '#666' }}>{location.name}</Typography>
           </Box>
         ))}
-        {series.truncated > 0 && (
-          <Typography sx={{ fontSize: 12, color: '#888' }}>
-            {series.truncated} more location{series.truncated > 1 ? 's' : ''} not shown
-          </Typography>
-        )}
       </Box>
+      {/* Always state the coverage. Silence here used to be ambiguous between
+          "only these recorded it" and "the rest were capped away". */}
+      <Typography sx={{ fontSize: 12, color: '#888', textAlign: 'center', mt: 0.75 }}>
+        {coverageText(series)}
+        {series.droppedNames.length > 0 && (
+          <MuiTooltip title={series.droppedNames.join(', ')} placement="top" arrow>
+            <Box component="span" sx={{ ml: 0.5, textDecoration: 'underline dotted', cursor: 'default' }}>
+              {series.droppedNames.length} not shown
+            </Box>
+          </MuiTooltip>
+        )}
+      </Typography>
     </>
   );
+}
+
+/**
+ * "Recorded at 5 of 17 locations", so the reader always knows the species'
+ * whole footprint, even when the chart is pinned to one location or the
+ * palette cap is holding some back.
+ */
+function coverageText(series: AnnualSeries): string {
+  const base = `Recorded at ${series.recordedLocations} of ${series.totalLocations} locations`;
+  if (series.singleLocation) {
+    return `${base}, showing ${series.locations[0]?.name ?? 'one'}`;
+  }
+  const shown = series.locations.length;
+  return shown < series.recordedLocations ? `${base}, showing ${shown}` : base;
 }
 
 /** The computed pixel rect recharts hands a ReferenceArea's shape prop. */
@@ -134,6 +155,12 @@ function RangeMark({ geometry, range }: { geometry: RangeShapeGeometry; range: A
   const [hovered, setHovered] = useState(false);
   const { x, y, width, height } = geometry;
   if (x == null || y == null || width == null || height == null) return <g />;
+  // A "+" band spans 0-1%, which is a sub-pixel sliver on a 0-100 axis: the
+  // record would read as missing rather than as a trace. Floor the mark so a
+  // trace record is still visibly a record, growing upward from its own top.
+  const MIN_MARK = 6;
+  const drawHeight = Math.max(height, MIN_MARK);
+  const drawY = y + height - drawHeight;
   const meaning = FREQUENCY_BAND_MEANINGS[range.band];
   const parts = [range.locationName, String(range.year), `band ${range.band}`];
   if (meaning) parts.push(meaning.charAt(0).toLowerCase() + meaning.slice(1));
@@ -141,9 +168,9 @@ function RangeMark({ geometry, range }: { geometry: RangeShapeGeometry; range: A
     <MuiTooltip title={parts.join(' · ')} placement="top" arrow>
       <rect
         x={x}
-        y={y}
+        y={drawY}
         width={width}
-        height={height}
+        height={drawHeight}
         rx={3}
         ry={3}
         fill={range.color}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SwardCompositionRow } from '../../services/api';
 import {
+  annualLocationOptions,
   annualSpeciesOptions,
   buildAnnualSeries,
   MAX_ANNUAL_LOCATIONS,
@@ -76,7 +77,7 @@ describe('buildAnnualSeries', () => {
     expect(y2020['SSSI (2991)']).toBeNull();
   });
 
-  it('caps the location count and reports the truncation', () => {
+  it('caps the location count and names what it dropped', () => {
     const many: SwardCompositionRow[] = [];
     for (let i = 0; i < MAX_ANNUAL_LOCATIONS + 2; i++) {
       many.push(row({
@@ -93,6 +94,48 @@ describe('buildAnnualSeries', () => {
     }
     const series = buildAnnualSeries(many, 100)!;
     expect(series.locations).toHaveLength(MAX_ANNUAL_LOCATIONS);
-    expect(series.truncated).toBe(2);
+    expect(series.droppedNames).toHaveLength(2);
+    expect(series.recordedLocations).toBe(MAX_ANNUAL_LOCATIONS + 2);
+    expect(series.singleLocation).toBe(false);
+    // Every dropped name must be selectable, which is the whole point of
+    // naming them rather than counting them.
+    for (const name of series.droppedNames) {
+      const id = annualLocationOptions(many).find((l) => l.name === name)!.id;
+      expect(buildAnnualSeries(many, 100, id)!.locations[0].name).toBe(name);
+    }
+  });
+
+  it('pins to one location, ignoring the cap', () => {
+    const series = buildAnnualSeries(rows, 100, 2)!;
+    expect(series.locations.map((l) => l.name)).toEqual(['Field 2207']);
+    expect(series.singleLocation).toBe(true);
+    expect(series.droppedNames).toEqual([]);
+    expect(series.recordedLocations).toBe(2);
+  });
+
+  it('returns null when the species was never recorded at the pinned location', () => {
+    expect(buildAnnualSeries(rows, 100, 999)).toBeNull();
+  });
+
+  it('counts every location with data, recorded or not', () => {
+    // Yorkshire Fog's location is in the dataset but has no Devil's-bit.
+    const series = buildAnnualSeries(rows, 100)!;
+    expect(series.recordedLocations).toBe(2);
+    expect(series.totalLocations).toBe(2);
+  });
+});
+
+
+describe('annualLocationOptions', () => {
+  it('lists every location with data, alphabetically, with survey counts', () => {
+    const options = annualLocationOptions([
+      row({ location_id: 2, location_name: 'Field 2207', survey_id: 5 }),
+      row({ location_id: 1, location_name: 'SSSI (2991)', survey_id: 1 }),
+      row({ location_id: 1, location_name: 'SSSI (2991)', survey_id: 1, species_id: 200 }),
+      row({ location_id: 1, location_name: 'SSSI (2991)', survey_id: 2 }),
+    ]);
+    expect(options.map((o) => o.name)).toEqual(['Field 2207', 'SSSI (2991)']);
+    // Two distinct surveys, not three rows.
+    expect(options.find((o) => o.name === 'SSSI (2991)')!.surveys).toBe(2);
   });
 });

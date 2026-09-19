@@ -47,6 +47,31 @@ export function annualSpeciesOptions(rows: SwardCompositionRow[]): AnnualSpecies
   return [...byId.values()].sort((a, b) => b.records - a.records || a.name.localeCompare(b.name));
 }
 
+export interface AnnualLocationOption {
+  id: number | null;
+  name: string;
+  /** Surveys of this location carrying any frequency score. */
+  surveys: number;
+}
+
+/**
+ * Locations the picker offers, alphabetical. Every location with frequency
+ * data appears, whether or not the selected species was recorded there, so
+ * the list does not reshuffle as the species changes.
+ */
+export function annualLocationOptions(rows: SwardCompositionRow[]): AnnualLocationOption[] {
+  const byName = new Map<string, { id: number | null; surveys: Set<number> }>();
+  for (const row of rows) {
+    const name = row.location_name ?? 'No location';
+    const entry = byName.get(name) ?? { id: row.location_id, surveys: new Set<number>() };
+    entry.surveys.add(row.survey_id);
+    byName.set(name, entry);
+  }
+  return [...byName.entries()]
+    .map(([name, v]) => ({ id: v.id, name, surveys: v.surveys.size }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export interface AnnualLocationSeries {
   id: number | null;
   name: string;
@@ -65,14 +90,20 @@ export interface AnnualRangeMark {
 export interface AnnualSeries {
   /** Every survey year in the dataset (not just this species'), ascending. */
   years: number[];
-  /** Locations that recorded the species, most-recorded first, capped. */
+  /** Locations drawn, most-recorded first; capped only in "all" mode. */
   locations: AnnualLocationSeries[];
   /** One row per year; per-location percents keyed by location name. */
   rows: Array<Record<string, number | null> & { year: number }>;
   /** Band-only records, drawn as min–max ranges instead of points. */
   ranges: AnnualRangeMark[];
-  /** Locations dropped by the cap (never the ones with the most records). */
-  truncated: number;
+  /** Names dropped by the cap, so the chart can say which, not just how many. */
+  droppedNames: string[];
+  /** How many locations recorded this species at all. */
+  recordedLocations: number;
+  /** How many locations this survey type has any frequency data for. */
+  totalLocations: number;
+  /** Set when the caller pinned the chart to a single location. */
+  singleLocation: boolean;
 }
 
 /**
@@ -80,10 +111,15 @@ export interface AnnualSeries {
  * the species has no rows at all. Percent wins where both a percent and band
  * were recorded; band-only records become ranges. Should a location ever
  * carry two measured surveys in one year, the higher percent stands.
+ *
+ * Pass a locationId (null means "all locations") to pin the chart to one
+ * location: the palette cap then does not apply, so a species recorded in
+ * more locations than the palette has colours is still fully reachable.
  */
 export function buildAnnualSeries(
   allRows: SwardCompositionRow[],
   speciesId: number,
+  locationId?: number | null,
 ): AnnualSeries | null {
   const yearSet = new Set(allRows.map((row) => Number(row.survey_date.slice(0, 4))));
   const years = [...yearSet].sort((a, b) => a - b);
@@ -101,7 +137,9 @@ export function buildAnnualSeries(
   const ranked = [...counts.entries()].sort(
     (a, b) => b[1].records - a[1].records || a[0].localeCompare(b[0]),
   );
-  const kept = ranked.slice(0, MAX_ANNUAL_LOCATIONS);
+  const pinned = locationId != null ? ranked.filter(([, v]) => v.id === locationId) : null;
+  if (pinned && pinned.length === 0) return null;   // species never recorded there
+  const kept = pinned ?? ranked.slice(0, MAX_ANNUAL_LOCATIONS);
   const locations: AnnualLocationSeries[] = kept.map(([name, entry], index) => ({
     id: entry.id,
     name,
@@ -133,5 +171,17 @@ export function buildAnnualSeries(
     }
   }
 
-  return { years, locations, rows, ranges, truncated: ranked.length - kept.length };
+  const totalLocations = new Set(
+    allRows.map((row) => row.location_id ?? row.location_name ?? 'none'),
+  ).size;
+  return {
+    years,
+    locations,
+    rows,
+    ranges,
+    droppedNames: pinned ? [] : ranked.slice(MAX_ANNUAL_LOCATIONS).map(([name]) => name),
+    recordedLocations: ranked.length,
+    totalLocations,
+    singleLocation: !!pinned,
+  };
 }

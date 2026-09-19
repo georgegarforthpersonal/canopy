@@ -10,6 +10,7 @@ import {
   Autocomplete,
   Box,
   CircularProgress,
+  MenuItem,
   Paper,
   TextField,
   Typography,
@@ -19,10 +20,14 @@ import { dashboardAPI, type SwardCompositionRow } from '../../services/api';
 import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
 import AnnualFrequencyChart from '../dashboard/AnnualFrequencyChart';
 import {
+  annualLocationOptions,
   annualSpeciesOptions,
   buildAnnualSeries,
   type AnnualSpeciesOption,
 } from './annualFrequencySeries';
+
+/** Sentinel for the "all locations" option, which is the default view. */
+const ALL_LOCATIONS = '__all__';
 
 interface AnnualFrequencyPanelProps {
   /** The group's survey type — every figure comes from its surveys only. */
@@ -38,6 +43,7 @@ const filterSpecies = createFilterOptions<AnnualSpeciesOption>({
 export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPanelProps) {
   const [rows, setRows] = useState<SwardCompositionRow[] | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [locationKey, setLocationKey] = useState<string>(ALL_LOCATIONS);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -50,6 +56,7 @@ export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPa
         if (!active) return;
         setRows(response.rows);
         setSelectedId(annualSpeciesOptions(response.rows)[0]?.id ?? null);
+        setLocationKey(ALL_LOCATIONS);
       })
       .catch(() => active && setError(true));
     return () => {
@@ -59,9 +66,11 @@ export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPa
 
   const species = useMemo(() => annualSpeciesOptions(rows ?? []), [rows]);
   const selected = species.find((s) => s.id === selectedId) ?? null;
+  const locations = useMemo(() => annualLocationOptions(rows ?? []), [rows]);
+  const pinnedId = locationKey === ALL_LOCATIONS ? null : Number(locationKey);
   const series = useMemo(
-    () => (rows && selectedId != null ? buildAnnualSeries(rows, selectedId) : null),
-    [rows, selectedId],
+    () => (rows && selectedId != null ? buildAnnualSeries(rows, selectedId, pinnedId) : null),
+    [rows, selectedId, pinnedId],
   );
 
   return (
@@ -81,6 +90,24 @@ export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPa
         <Typography sx={{ fontSize: 15, fontWeight: 600, color: groupColors.textPrimary }} noWrap>
           Annual frequency
         </Typography>
+        <Box sx={{ display: 'flex', gap: 1.25, flexDirection: { xs: 'column', sm: 'row' }, width: { xs: '100%', sm: 'auto' } }}>
+        {locations.length > 1 && (
+          <TextField
+            select
+            size="small"
+            label="Location"
+            value={locationKey}
+            onChange={(e) => setLocationKey(e.target.value)}
+            sx={{ width: { xs: '100%', sm: 190 }, flexShrink: 0 }}
+          >
+            <MenuItem value={ALL_LOCATIONS}>All locations</MenuItem>
+            {locations.map((l) => (
+              <MenuItem key={l.name} value={String(l.id)}>
+                {l.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
         {selected ? (
           <Autocomplete
             options={species}
@@ -114,6 +141,7 @@ export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPa
             autoHighlight
           />
         ) : null}
+        </Box>
       </Box>
 
       <Box sx={{ p: 2.25 }}>
@@ -126,7 +154,15 @@ export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPa
             <CircularProgress size={24} />
           </Box>
         ) : (
-          <AnnualFrequencyChart series={series} height={CHART_HEIGHT} />
+          <AnnualFrequencyChart
+            series={series}
+            height={CHART_HEIGHT}
+            emptyMessage={
+              pinnedId !== null
+                ? `${selected?.name ?? 'This species'} was not recorded at this location.`
+                : 'No frequency-scored surveys yet.'
+            }
+          />
         )}
       </Box>
     </Paper>
