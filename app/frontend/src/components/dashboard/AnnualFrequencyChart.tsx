@@ -6,7 +6,8 @@
  * as translucent min–max ranges rather than invented point values; lines
  * connect the measured years across them.
  */
-import { Box, Paper, Typography } from '@mui/material';
+import { useState } from 'react';
+import { Box, Paper, Tooltip as MuiTooltip, Typography } from '@mui/material';
 import {
   CartesianGrid,
   Line,
@@ -17,7 +18,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { AnnualSeries } from '../groups/annualFrequencySeries';
+import { FREQUENCY_BAND_MEANINGS } from '../../config/frequencyScore';
+import type { AnnualRangeMark, AnnualSeries } from '../groups/annualFrequencySeries';
 
 interface AnnualFrequencyChartProps {
   series: AnnualSeries | null;
@@ -74,10 +76,11 @@ export default function AnnualFrequencyChart({
               x2={range.year + 0.14}
               y1={range.lo}
               y2={range.hi}
-              fill={range.color}
-              fillOpacity={0.3}
-              stroke="none"
-              radius={3}
+              // ReferenceArea sits outside the recharts Tooltip, so the mark
+              // draws its own rect wrapped in an MUI Tooltip instead.
+              shape={(shapeProps: RangeShapeGeometry) => (
+                <RangeMark geometry={shapeProps} range={range} />
+              )}
             />
           ))}
           {series.locations.map((location) => (
@@ -108,13 +111,49 @@ export default function AnnualFrequencyChart({
             {series.truncated} more location{series.truncated > 1 ? 's' : ''} not shown
           </Typography>
         )}
-        {series.ranges.length > 0 && (
-          <Typography sx={{ fontSize: 12, color: '#888' }}>
-            shaded = band-only survey (value within range)
-          </Typography>
-        )}
       </Box>
     </>
+  );
+}
+
+/** The computed pixel rect recharts hands a ReferenceArea's shape prop. */
+interface RangeShapeGeometry {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * A band-only range mark: the same translucent rounded rect ReferenceArea
+ * would draw itself, but wrapped in an MUI Tooltip (recharts' own Tooltip
+ * ignores reference elements) that spells out which survey the band came
+ * from and what it means.
+ */
+function RangeMark({ geometry, range }: { geometry: RangeShapeGeometry; range: AnnualRangeMark }) {
+  const [hovered, setHovered] = useState(false);
+  const { x, y, width, height } = geometry;
+  if (x == null || y == null || width == null || height == null) return <g />;
+  const meaning = FREQUENCY_BAND_MEANINGS[range.band];
+  const parts = [range.locationName, String(range.year), `band ${range.band}`];
+  if (meaning) parts.push(meaning.charAt(0).toLowerCase() + meaning.slice(1));
+  return (
+    <MuiTooltip title={parts.join(' · ')} placement="top" arrow>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx={3}
+        ry={3}
+        fill={range.color}
+        fillOpacity={hovered ? 0.45 : 0.3}
+        stroke="none"
+        style={{ cursor: 'default' }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
+    </MuiTooltip>
   );
 }
 
