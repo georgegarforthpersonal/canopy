@@ -11,6 +11,7 @@
  */
 import adHoc from '../assets/canopy/ad-hoc.png';
 import audio from '../assets/canopy/audio.png';
+import botanical from '../assets/canopy/botanical.png';
 import butterfly from '../assets/canopy/butterfly.png';
 import cameraTrap from '../assets/canopy/camera-trap.png';
 import dragonfly from '../assets/canopy/dragonfly.png';
@@ -23,6 +24,7 @@ import wren from '../assets/canopy/wren.png';
 const CANOPY_ICONS: Record<string, string> = {
   'ad-hoc': adHoc,
   audio,
+  botanical,
   butterfly,
   'camera-trap': cameraTrap,
   dragonfly,

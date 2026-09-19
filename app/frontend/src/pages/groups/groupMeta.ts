@@ -44,6 +44,7 @@ const BETA_GROUPS: Record<string, Record<string, GroupActivity>> = {
     'ad hoc': 'record',
     audio: 'record',
     'camera trap': 'record',
+    botanical: 'record',
   },
 };
 

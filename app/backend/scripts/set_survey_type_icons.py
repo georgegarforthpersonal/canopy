@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 # Ordered (pattern, slug) pairs — first match wins, so the more specific
 # names come before the generic ones (e.g. Marsh Fritillary before Butterfly).
 NAME_TO_ICON: list[tuple[str, str]] = [
+    ("botanical", "botanical"),
     ("marsh fritillary", "marsh-fritillary"),
     ("turtledove", "turtle-dove"),
     ("turtle dove", "turtle-dove"),

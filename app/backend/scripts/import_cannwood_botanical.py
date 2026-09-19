@@ -64,13 +64,11 @@ DATA_DIR = Path(__file__).parent / "data" / "cannwood_botanical"
 
 SURVEY_TYPE_NAME = "Botanical"
 SURVEY_TYPE_DESCRIPTION = (
-    "Botanical monitoring of the meadows, rewilding fields and sown plots: "
-    "quadrat/transect surveys scoring each species' percentage frequency "
-    "(share of quadrats containing it) and relative frequency band "
-    "(5 = 81-100% of quadrats ... 1 = 1-10%, + = present but not caught by "
-    "a quadrat), plus walkabout presence records. Series digitised from "
-    "C.J. Smith's annual monitoring reports (2020-2026)."
+    "Quadrat and walkabout botanical surveys of the meadows, rewilding "
+    "fields and sown plots, scoring how often each species lands in a "
+    "sampling quadrat."
 )
+SURVEY_TYPE_ICON = "botanical"
 SURVEYOR_FIRST_NAME = "Chris"
 SURVEYOR_LAST_NAME = "Smith"
 
@@ -200,16 +198,26 @@ def ensure_survey_type(
             allow_show_description=True,
             record_mode=RecordMode.list,
             color="green",
+            icon=SURVEY_TYPE_ICON,
         )
         db.add(survey_type)
         db.flush()
         stats["survey_types_created"] += 1
         logger.info(f"Created survey type {SURVEY_TYPE_NAME!r}")
     else:
-        # Make sure the flag is on for an existing type of this name.
+        # Keep the flag and presentation fields of an existing type in step
+        # with this script, so re-running after a script update syncs them.
         if not survey_type.allow_frequency_score:
             survey_type.allow_frequency_score = True
             logger.info(f"Enabled allow_frequency_score on existing {SURVEY_TYPE_NAME!r}")
+        for field, value in (
+            ("icon", SURVEY_TYPE_ICON),
+            ("color", "green"),
+            ("description", SURVEY_TYPE_DESCRIPTION),
+        ):
+            if getattr(survey_type, field) != value:
+                setattr(survey_type, field, value)
+                logger.info(f"Updated {field} on existing {SURVEY_TYPE_NAME!r}")
 
     linked_species_types = {
         link.species_type_id
