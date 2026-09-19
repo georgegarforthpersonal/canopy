@@ -40,7 +40,7 @@ import SpeciesCountPanel from '../../components/groups/SpeciesCountPanel';
 import SingleSpeciesCountPanel from '../../components/groups/SingleSpeciesCountPanel';
 import SeasonalCountPanel from '../../components/groups/SeasonalCountPanel';
 import DataPanel from '../../components/groups/DataPanel';
-import SwardCompositionPanel from '../../components/groups/SwardCompositionPanel';
+import AnnualFrequencyPanel from '../../components/groups/AnnualFrequencyPanel';
 
 export default function GroupDetailPage() {
   const { typeId } = useParams<{ typeId: string }>();
@@ -202,6 +202,9 @@ export default function GroupDetailPage() {
   // Single-species scheduled groups already get the same chart from
   // SingleSpeciesCountPanel, without a picker.
   const hasSeasonal = activity === 'worklist' && !singleSpecies;
+  // Frequency-scored (botanical) groups get the annual sibling of the
+  // seasonal chart in the same right-column slot.
+  const hasAnnual = surveyType.allow_frequency_score;
   const returnTo = { returnTo: { pathname: `/groups/${typeId}`, label: surveyType.name } };
   // Unscheduled groups record without a slot: media types jump straight to
   // their wizard, plain types to the standard form with the type preselected.
@@ -285,10 +288,10 @@ export default function GroupDetailPage() {
                 />
               </Box>
             )}
-            {/* The seasonal chart makes the right column the tall one, so Data
-                balances into the left column; on xs its order still stacks it
-                last either way. */}
-            {hasSeasonal && dataPanel}
+            {/* The seasonal/annual chart makes the right column the tall
+                one, so Data balances into the left column; on xs its order
+                still stacks it last either way. */}
+            {(hasSeasonal || hasAnnual) && dataPanel}
           </Box>
 
           {/* Right column */}
@@ -311,16 +314,15 @@ export default function GroupDetailPage() {
                 />
               </Box>
             )}
-            {!hasSeasonal && dataPanel}
+            {hasAnnual && (
+              <Box sx={{ order: 5, minWidth: 0 }}>
+                <AnnualFrequencyPanel surveyTypeId={surveyType.id} />
+              </Box>
+            )}
+            {!hasSeasonal && !hasAnnual && dataPanel}
           </Box>
         </Box>
 
-        {/* Full width: the species x survey heatmap needs the whole row. */}
-        {surveyType.allow_frequency_score && (
-          <Box sx={{ mt: 2.25, minWidth: 0 }}>
-            <SwardCompositionPanel surveyTypeId={surveyType.id} />
-          </Box>
-        )}
       </Box>
 
     </Box>
