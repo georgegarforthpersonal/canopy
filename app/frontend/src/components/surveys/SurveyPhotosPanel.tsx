@@ -225,7 +225,7 @@ export function SurveyPhotosPanel({ surveyId, canEdit }: SurveyPhotosPanelProps)
             gap: { xs: 1, sm: 1.5 },
           }}
         >
-          {photos.map((photo, idx) => (
+          {photos.map((photo) => (
             <Box
               key={photo.id}
               onClick={() => openViewer(photo.id)}
