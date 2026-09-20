@@ -136,6 +136,10 @@ def get_cumulative_species(
                 WHERE survey.organisation_id = :org_id
                 {survey_type_filter}
                 {date_filter_sql}
+                -- Start the axis at the filtered species' first sighting:
+                -- unrelated earlier surveys (e.g. plant imports predating the
+                -- first bird record) would otherwise prepend a flat zero run.
+                AND survey.date >= (SELECT MIN(first_seen_date) FROM first_sightings)
                 ORDER BY survey.date
             ),
             species_types_list AS (
