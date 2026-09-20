@@ -322,7 +322,6 @@ export default function GroupDetailPage() {
             {!hasSeasonal && !hasAnnual && dataPanel}
           </Box>
         </Box>
-
       </Box>
 
     </Box>

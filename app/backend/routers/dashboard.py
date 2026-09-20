@@ -534,9 +534,9 @@ def get_sward_composition(
     """
     Every frequency-scored sighting for a survey type, flattened.
 
-    Powers the group page's sward composition panel: the client pivots the
-    rows into a species x survey heatmap per location and derives richness
-    trends. Only sightings carrying a percent or band are included, so
+    Powers the annual frequency charts (group page and Species page): the
+    client pivots the rows into per-location, per-year percent-of-quadrats
+    series. Only sightings carrying a percent or band are included, so
     ordinary count records of the same type stay out of the picture.
     """
     try:

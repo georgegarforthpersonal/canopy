@@ -679,7 +679,7 @@ export interface SpeciesWithCount {
   first_observed: string | null;
 }
 
-/** One frequency-scored sighting, flattened for the sward composition panel. */
+/** One frequency-scored sighting, flattened for the annual frequency charts. */
 export interface SwardCompositionRow {
   location_id: number | null;
   location_name: string | null;
@@ -833,8 +833,8 @@ export interface SurveyTypeCreate {
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
   allow_sighting_photo_upload: boolean;
-  allow_frequency_score?: boolean;
-  allow_survey_photos?: boolean;
+  allow_frequency_score: boolean;
+  allow_survey_photos: boolean;
   allow_start_end_time: boolean;
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
@@ -1607,8 +1607,8 @@ export const dashboardAPI = {
   },
 
   /**
-   * Get every frequency-scored sighting for a survey type (the sward
-   * composition panel pivots the rows client-side).
+   * Get every frequency-scored sighting for a survey type (the annual
+   * frequency charts pivot the rows client-side).
    */
   getSwardComposition: (surveyTypeId: number): Promise<SwardCompositionResponse> => {
     const params = new URLSearchParams();

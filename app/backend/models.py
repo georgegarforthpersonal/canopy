@@ -1462,7 +1462,7 @@ class SpeciesOccurrenceResponse(SQLModel):
 
 
 class SwardCompositionRow(SQLModel):
-    """One frequency-scored sighting, flattened for the sward composition panel."""
+    """One frequency-scored sighting, flattened for the annual frequency charts."""
     location_id: Optional[int] = None
     location_name: Optional[str] = None
     survey_id: int
