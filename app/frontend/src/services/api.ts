@@ -688,7 +688,6 @@ export interface SwardCompositionRow {
   species_id: number;
   species_name: string | null;
   species_scientific_name: string | null;
-  conservation_status: string | null;
   percent_frequency: number | string | null; // NUMERIC serialises as a string
   frequency_band: string | null;
 }
@@ -2196,10 +2195,12 @@ export const imagesAPI = {
   },
 
   /**
-   * Get all camera trap images for a survey
+   * Get all camera trap images for a survey. Pass excludeSightingPhotos for
+   * the survey-level gallery, which must not relist per-sighting photos.
    */
-  getImages: (surveyId: number): Promise<CameraTrapImage[]> => {
-    return fetchAPI(`/surveys/${surveyId}/images`);
+  getImages: (surveyId: number, excludeSightingPhotos = false): Promise<CameraTrapImage[]> => {
+    const query = excludeSightingPhotos ? '?exclude_sighting_photos=true' : '';
+    return fetchAPI(`/surveys/${surveyId}/images${query}`);
   },
 
   /**

@@ -23,8 +23,8 @@ import { MapModeSightings } from '../components/surveys/MapModeSightings';
 import { SurveyPhotosPanel } from '../components/surveys/SurveyPhotosPanel';
 import { getSightingsGridConfig } from '../components/surveys/sightingsGridConfig';
 import { getSpeciesIcon } from '../config';
-import { hasPositiveStageCounts, pickStageCounts } from '../config/stageCounts';
-import { formatFrequencyCell, hasFrequencyScore, pickFrequencyScore } from '../config/frequencyScore';
+import { hasPositiveStageCounts, pickStageCounts, stageCountErrors } from '../config/stageCounts';
+import { formatFrequencyCell, frequencyScoreErrors, hasFrequencyScore, pickFrequencyScore } from '../config/frequencyScore';
 import StageCountsSummary from '../components/surveys/StageCountsSummary';
 import { PageHeader } from '../components/layout/PageHeader';
 import { getSurveyorName, formatDate } from '../utils/formatters';
@@ -573,6 +573,19 @@ export function SurveyDetailPage() {
       const sightingsWithoutLocation = validSightings.filter((s) => !s.location_id);
       if (sightingsWithoutLocation.length > 0) {
         errors.sightings = 'Each sighting must have a location selected';
+      }
+    }
+
+    // Field-level sighting errors blocked here, not at the API: the survey
+    // fields save before the sightings, so a 422 on an invalid sighting
+    // would leave a partial edit behind. Mirrors NewSurveyPage.
+    if (!errors.sightings) {
+      const fieldErrs = validSightings.flatMap((s) => [
+        ...stageCountErrors(pickStageCounts(s), s.count),
+        ...frequencyScoreErrors(pickFrequencyScore(s)),
+      ]);
+      if (fieldErrs.length > 0) {
+        errors.sightings = fieldErrs[0];
       }
     }
 

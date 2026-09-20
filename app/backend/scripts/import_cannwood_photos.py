@@ -225,6 +225,7 @@ def import_photos(
         pages = page_text.get(year, {})
         if not pages:
             logger.warning(f"{year}: no page text, skipping the whole year")
+            continue
         logger.info(f"\n{year}:")
 
         files_by_page: dict[int, list[tuple[str, Path]]] = {}

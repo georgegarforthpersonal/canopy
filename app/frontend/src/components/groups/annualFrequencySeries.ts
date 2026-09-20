@@ -112,14 +112,16 @@ export interface AnnualSeries {
  * were recorded; band-only records become ranges. Should a location ever
  * carry two measured surveys in one year, the higher percent stands.
  *
- * Pass a locationId (null means "all locations") to pin the chart to one
+ * Pass a locationName (null means "all locations") to pin the chart to one
  * location: the palette cap then does not apply, so a species recorded in
- * more locations than the palette has colours is still fully reachable.
+ * more locations than the palette has colours is still fully reachable. The
+ * pin is by name, not id, because the "No location" bucket (surveys without
+ * a location) has no id yet is still a pickable series.
  */
 export function buildAnnualSeries(
   allRows: SwardCompositionRow[],
   speciesId: number,
-  locationId?: number | null,
+  locationName?: string | null,
 ): AnnualSeries | null {
   const yearSet = new Set(allRows.map((row) => Number(row.survey_date.slice(0, 4))));
   const years = [...yearSet].sort((a, b) => a - b);
@@ -137,7 +139,7 @@ export function buildAnnualSeries(
   const ranked = [...counts.entries()].sort(
     (a, b) => b[1].records - a[1].records || a[0].localeCompare(b[0]),
   );
-  const pinned = locationId != null ? ranked.filter(([, v]) => v.id === locationId) : null;
+  const pinned = locationName != null ? ranked.filter(([name]) => name === locationName) : null;
   if (pinned && pinned.length === 0) return null;   // species never recorded there
   const kept = pinned ?? ranked.slice(0, MAX_ANNUAL_LOCATIONS);
   const locations: AnnualLocationSeries[] = kept.map(([name, entry], index) => ({

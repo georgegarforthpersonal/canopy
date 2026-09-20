@@ -1470,7 +1470,6 @@ class SwardCompositionRow(SQLModel):
     species_id: int
     species_name: Optional[str] = None
     species_scientific_name: Optional[str] = None
-    conservation_status: Optional[str] = None
     percent_frequency: Optional[Decimal] = None
     frequency_band: Optional[str] = None
 

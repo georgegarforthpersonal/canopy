@@ -104,7 +104,9 @@ export function frequencyScoreErrors(score: FrequencyScore | null | undefined): 
       errors.push('Frequency % must be a number between 0 and 100.');
     } else if (percent < 0 || percent > 100) {
       errors.push('Frequency % must be between 0 and 100.');
-    } else if (Math.round(percent * 100) !== percent * 100) {
+    } else if (Number(percent.toFixed(2)) !== percent) {
+      // Not percent * 100 === round(percent * 100): binary floats make
+      // 4.35 * 100 come out at 434.999…, falsely rejecting valid entries.
       errors.push('Frequency % can have at most 2 decimal places.');
     }
   }

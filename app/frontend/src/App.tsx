@@ -49,16 +49,17 @@ function BubbleRouteError(): never {
 
 /**
  * "Teams" became "Groups" became the Surveys home; old bookmarks and links
- * keep working.
+ * keep working. A numeric first segment was a group TYPE id under the old
+ * scheme, but means an individual survey under /surveys — rewrite it to the
+ * type-<id> form resolveGroupTypeId accepts so old links land on the group,
+ * not on an unrelated survey.
  */
 function LegacySurveysRedirect() {
   const location = useLocation();
-  return (
-    <Navigate
-      to={{ ...location, pathname: location.pathname.replace(/^\/(teams|groups)/, '/surveys') }}
-      replace
-    />
-  );
+  const pathname = location.pathname
+    .replace(/^\/(teams|groups)/, '/surveys')
+    .replace(/^\/surveys\/(\d+)(\/|$)/, '/surveys/type-$1$2');
+  return <Navigate to={{ ...location, pathname }} replace />;
 }
 
 /**

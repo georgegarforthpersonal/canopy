@@ -152,13 +152,23 @@ export function groupPath(surveyType: Pick<SurveyType, 'id' | 'name'>): string {
 }
 
 /**
- * Resolve a group-page route param — a name slug, a "type-<id>" path, or a
- * bare numeric id (old /groups links keep working via the /surveys redirect,
- * and /surveys/:id/all-style subpaths are unambiguous) — to the survey type
- * id, or null when nothing matches. Only beta group types resolve: a
- * hand-typed /surveys/moth (or any group URL in a non-beta org) is a
- * not-found, keeping the pages behind the same gate as the grid. If two names
- * ever slugify identically the first wins.
+ * Old slugs for renamed survey types, so bookmarks made under the previous
+ * name keep resolving (in both directions, since environments rename at
+ * different times).
+ */
+const SLUG_ALIASES: Record<string, string> = {
+  botanical: 'plant',
+  plant: 'botanical',
+};
+
+/**
+ * Resolve a group-page route param — a name slug, a "type-<id>" path
+ * (numeric group ids from the pre-slug era, rewritten by the legacy
+ * redirect), or a bare numeric id on the /all and /media subpaths — to the
+ * survey type id, or null when nothing matches. Only beta group types
+ * resolve: a hand-typed /surveys/moth (or any group URL in a non-beta org)
+ * is a not-found, keeping the pages behind the same gate as the grid. If two
+ * names ever slugify identically the first wins.
  */
 export async function resolveGroupTypeId(param: string): Promise<number | null> {
   const beta = new Set(betaGroupNames());
@@ -170,5 +180,7 @@ export async function resolveGroupTypeId(param: string): Promise<number | null> 
     return match && isBeta(match) ? match.id : null;
   }
   const slug = param.toLowerCase();
-  return types.find((t) => isBeta(t) && groupSlug(t.name) === slug)?.id ?? null;
+  const bySlug = (s: string) =>
+    types.find((t) => isBeta(t) && groupSlug(t.name) === s)?.id ?? null;
+  return bySlug(slug) ?? (SLUG_ALIASES[slug] ? bySlug(SLUG_ALIASES[slug]) : null);
 }

@@ -16,7 +16,6 @@ function row(overrides: Partial<SwardCompositionRow>): SwardCompositionRow {
     species_id: 100,
     species_name: "Devil's-bit Scabious",
     species_scientific_name: 'Succisa pratensis',
-    conservation_status: null,
     percent_frequency: null,
     frequency_band: null,
     ...overrides,
@@ -100,21 +99,31 @@ describe('buildAnnualSeries', () => {
     // Every dropped name must be selectable, which is the whole point of
     // naming them rather than counting them.
     for (const name of series.droppedNames) {
-      const id = annualLocationOptions(many).find((l) => l.name === name)!.id;
-      expect(buildAnnualSeries(many, 100, id)!.locations[0].name).toBe(name);
+      expect(buildAnnualSeries(many, 100, name)!.locations[0].name).toBe(name);
     }
   });
 
   it('pins to one location, ignoring the cap', () => {
-    const series = buildAnnualSeries(rows, 100, 2)!;
+    const series = buildAnnualSeries(rows, 100, 'Field 2207')!;
     expect(series.locations.map((l) => l.name)).toEqual(['Field 2207']);
     expect(series.singleLocation).toBe(true);
     expect(series.droppedNames).toEqual([]);
     expect(series.recordedLocations).toBe(2);
   });
 
+  it('pins the "No location" bucket, which has no id', () => {
+    const withNone = [
+      ...rows,
+      row({ location_id: null, location_name: null, survey_id: 8, survey_date: '2024-06-10', percent_frequency: 30 }),
+    ];
+    const series = buildAnnualSeries(withNone, 100, 'No location')!;
+    expect(series.locations.map((l) => l.name)).toEqual(['No location']);
+    const y2024 = series.rows.find((r) => r.year === 2024)!;
+    expect(y2024['No location']).toBe(30);
+  });
+
   it('returns null when the species was never recorded at the pinned location', () => {
-    expect(buildAnnualSeries(rows, 100, 999)).toBeNull();
+    expect(buildAnnualSeries(rows, 100, 'Field 9999')).toBeNull();
   });
 
   it('counts every location with data, recorded or not', () => {

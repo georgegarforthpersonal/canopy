@@ -549,7 +549,6 @@ def get_sward_composition(
                 species.id AS species_id,
                 species.name AS species_name,
                 species.scientific_name AS species_scientific_name,
-                species.conservation_status AS conservation_status,
                 sighting.percent_frequency AS percent_frequency,
                 sighting.frequency_band AS frequency_band
             FROM sighting
@@ -571,7 +570,6 @@ def get_sward_composition(
                 species_id=row.species_id,
                 species_name=row.species_name,
                 species_scientific_name=row.species_scientific_name,
-                conservation_status=row.conservation_status,
                 percent_frequency=row.percent_frequency,
                 frequency_band=row.frequency_band,
             )

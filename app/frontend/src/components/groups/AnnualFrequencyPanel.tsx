@@ -67,10 +67,12 @@ export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPa
   const species = useMemo(() => annualSpeciesOptions(rows ?? []), [rows]);
   const selected = species.find((s) => s.id === selectedId) ?? null;
   const locations = useMemo(() => annualLocationOptions(rows ?? []), [rows]);
-  const pinnedId = locationKey === ALL_LOCATIONS ? null : Number(locationKey);
+  // Pinning is by name: the "No location" bucket has no id but is still a
+  // pickable series.
+  const pinnedName = locationKey === ALL_LOCATIONS ? null : locationKey;
   const series = useMemo(
-    () => (rows && selectedId != null ? buildAnnualSeries(rows, selectedId, pinnedId) : null),
-    [rows, selectedId, pinnedId],
+    () => (rows && selectedId != null ? buildAnnualSeries(rows, selectedId, pinnedName) : null),
+    [rows, selectedId, pinnedName],
   );
 
   return (
@@ -102,7 +104,7 @@ export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPa
           >
             <MenuItem value={ALL_LOCATIONS}>All locations</MenuItem>
             {locations.map((l) => (
-              <MenuItem key={l.name} value={String(l.id)}>
+              <MenuItem key={l.name} value={l.name}>
                 {l.name}
               </MenuItem>
             ))}
@@ -158,7 +160,7 @@ export default function AnnualFrequencyPanel({ surveyTypeId }: AnnualFrequencyPa
             series={series}
             height={CHART_HEIGHT}
             emptyMessage={
-              pinnedId !== null
+              pinnedName !== null
                 ? `${selected?.name ?? 'This species'} was not recorded at this location.`
                 : 'No frequency-scored surveys yet.'
             }

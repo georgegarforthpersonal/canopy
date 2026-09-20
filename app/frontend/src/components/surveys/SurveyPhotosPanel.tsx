@@ -84,7 +84,9 @@ export function SurveyPhotosPanel({ surveyId, canEdit }: SurveyPhotosPanelProps)
 
   const loadPhotos = useCallback(async () => {
     try {
-      const images = await imagesAPI.getImages(surveyId);
+      // Photos attached to individual sightings stay out of this gallery —
+      // they already show on their sighting rows.
+      const images = await imagesAPI.getImages(surveyId, true);
       setPhotos(orderSurveyPhotos(images));
       setError(null);
     } catch (err) {
@@ -103,19 +105,22 @@ export function SurveyPhotosPanel({ surveyId, canEdit }: SurveyPhotosPanelProps)
     };
   }, [loadPhotos]);
 
-  const openViewer = async (clickedIndex: number) => {
+  const openViewer = async (clickedId: number) => {
     const items = await Promise.all(
       photos.map(async (photo) => {
         try {
           const res = await imagesAPI.getPreviewUrl(photo.id);
-          return { src: res.preview_url, alt: photo.filename, caption: photo.filename };
+          return { id: photo.id, src: res.preview_url, alt: photo.filename, caption: photo.filename };
         } catch {
-          return { src: '', alt: photo.filename, caption: photo.filename };
+          return { id: photo.id, src: '', alt: photo.filename, caption: photo.filename };
         }
       })
     );
-    setViewerImages(items.filter((item) => item.src));
-    setViewerIndex(clickedIndex);
+    // Failed preview fetches drop out, so find the clicked photo's position
+    // in the surviving list — a grid index would point at the wrong image.
+    const usable = items.filter((item) => item.src);
+    setViewerImages(usable.map(({ id: _id, ...item }) => item));
+    setViewerIndex(Math.max(0, usable.findIndex((item) => item.id === clickedId)));
     setViewerOpen(true);
   };
 
@@ -132,7 +137,9 @@ export function SurveyPhotosPanel({ surveyId, canEdit }: SurveyPhotosPanelProps)
     setError(null);
     try {
       const prepared = await downscalePhotos(accepted);
-      await imagesAPI.uploadFilesWithMetadata(surveyId, prepared, undefined, true);
+      // Recovers from duplicate-filename 400s (phone capture names repeat),
+      // same as the sighting-photo upload sites.
+      await imagesAPI.uploadFilesRecoveringDuplicates(surveyId, prepared, undefined, true);
       await loadPhotos();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload photos');
@@ -221,7 +228,7 @@ export function SurveyPhotosPanel({ surveyId, canEdit }: SurveyPhotosPanelProps)
           {photos.map((photo, idx) => (
             <Box
               key={photo.id}
-              onClick={() => openViewer(idx)}
+              onClick={() => openViewer(photo.id)}
               title={photo.filename}
               sx={{
                 cursor: 'pointer',
