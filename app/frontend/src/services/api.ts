@@ -1518,7 +1518,7 @@ export const surveyTypesAPI = {
   },
 
   /**
-   * List reference files attached to a survey type (most recent first)
+   * List reference files attached to a survey type (alphabetical by filename)
    */
   getFiles: (surveyTypeId: number): Promise<SurveyTypeFile[]> => {
     return fetchAPI(`/survey-types/${surveyTypeId}/files`);
