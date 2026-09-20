@@ -224,6 +224,17 @@ def main() -> None:
 
         survey_type = find_survey_type(db, org)
         enable_survey_photos(db, survey_type, stats)
+
+        # Confirm BEFORE importing: plates upload to R2 as they go, and object
+        # storage takes no part in the transaction, so aborting afterwards
+        # would roll back the rows and strand the uploaded objects.
+        if not args.dry_run and not args.yes:
+            confirm = input("\nUpload the plates and attach them? [y/N] ")
+            if confirm.strip().lower() != "y":
+                db.rollback()
+                logger.info("Aborted, nothing uploaded.")
+                return
+
         import_photos(db, org, survey_type, photos_dir, args.dry_run, stats)
 
         logger.info("")
@@ -234,12 +245,6 @@ def main() -> None:
             db.rollback()
             logger.info("\nDRY RUN complete, rolled back. Re-run with --no-dry-run to apply.")
             return
-        if not args.yes:
-            confirm = input("\nApply these changes? [y/N] ")
-            if confirm.strip().lower() != "y":
-                db.rollback()
-                logger.info("Aborted, rolled back.")
-                return
         db.commit()
         logger.info("\nImport committed.")
 

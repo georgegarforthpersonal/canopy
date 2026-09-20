@@ -69,9 +69,12 @@ export default function AnnualFrequencyChart({
             axisLine={false}
           />
           <RechartsTooltip content={<AnnualTooltip />} />
-          {series.ranges.map((range) => (
+          {/* Keyed by position: one location can carry two band-only surveys
+              in a year (a quadrat table and a walkabout list), so location and
+              year alone do not identify a mark. */}
+          {series.ranges.map((range, index) => (
             <ReferenceArea
-              key={`${range.locationName}-${range.year}`}
+              key={`${range.locationName}-${range.year}-${index}`}
               x1={range.year - 0.14}
               x2={range.year + 0.14}
               y1={range.lo}

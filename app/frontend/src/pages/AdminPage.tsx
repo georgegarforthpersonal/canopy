@@ -1200,7 +1200,16 @@ export function AdminPage() {
                 control={
                   <Switch
                     checked={formAllowImageUpload}
-                    onChange={(e) => setFormAllowImageUpload(e.target.checked)}
+                    onChange={(e) => {
+                      setFormAllowImageUpload(e.target.checked);
+                      // The two photo toggles below are unavailable for camera
+                      // trap types; greying them out is not enough, a value set
+                      // earlier would still save and leave both surfaces on.
+                      if (e.target.checked) {
+                        setFormAllowSightingPhotoUpload(false);
+                        setFormAllowSurveyPhotos(false);
+                      }
+                    }}
                     disabled={savingSurveyType}
                   />
                 }

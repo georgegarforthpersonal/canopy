@@ -56,6 +56,16 @@ export function formatRecordedDate(dateIso: string): string {
 }
 
 /**
+ * Caption for a gallery photo. Sighting photos are named after their species
+ * ("Unidentified" when the species row has no name); survey-level photos have
+ * no species at all, and are named after the survey's location.
+ */
+export function photoLabel(photo: { species_id: number | null; species_name: string | null }): string {
+  if (photo.species_name) return photo.species_name;
+  return photo.species_id === null ? 'Survey photo' : 'Unidentified';
+}
+
+/**
  * Compact date labels for the group card's schedule line, which is capped at
  * one line: the year is dropped when the date falls in the current year (the
  * common case for a next/last survey) and kept when it genuinely differs.

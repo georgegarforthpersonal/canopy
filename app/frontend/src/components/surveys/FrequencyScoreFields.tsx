@@ -20,12 +20,17 @@ import {
   frequencyScoreErrors,
   percentAsNumber,
   type FrequencyScore,
-  type FrequencyScoreKey,
 } from '../../config/frequencyScore';
 
 interface FrequencyScoreFieldsProps {
   value: FrequencyScore;
-  onChange: (key: FrequencyScoreKey, next: number | string | null) => void;
+  /**
+   * Called with every field this edit changes, as ONE patch. Typing a percent
+   * also derives the band, and callers that rebuild their state from a prop
+   * (the inline sightings grid) would lose the first of two separate calls
+   * made in the same event.
+   */
+  onChange: (patch: Partial<FrequencyScore>) => void;
   disabled?: boolean;
 }
 
@@ -44,15 +49,16 @@ export default function FrequencyScoreFields({
 
   const handlePercentChange = (raw: string) => {
     if (raw === '') {
-      onChange('percent_frequency', null);
+      onChange({ percent_frequency: null });
       return;
     }
     if (!/^\d{0,3}(\.\d{0,2})?$/.test(raw)) return;
-    onChange('percent_frequency', raw);
     const parsed = percentAsNumber(raw);
-    if (parsed !== null && parsed > 0 && parsed <= 100) {
-      onChange('frequency_band', deriveBand(parsed));
-    }
+    onChange(
+      parsed !== null && parsed > 0 && parsed <= 100
+        ? { percent_frequency: raw, frequency_band: deriveBand(parsed) }
+        : { percent_frequency: raw },
+    );
   };
 
   return (
@@ -65,7 +71,7 @@ export default function FrequencyScoreFields({
           size="small"
           exclusive
           value={band}
-          onChange={(_e, next: string | null) => onChange('frequency_band', next)}
+          onChange={(_e, next: string | null) => onChange({ frequency_band: next })}
           disabled={disabled}
           aria-label="Frequency band"
         >

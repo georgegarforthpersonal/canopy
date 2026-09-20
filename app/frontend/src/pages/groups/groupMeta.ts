@@ -145,10 +145,15 @@ export function groupSlug(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Canonical path for a group — the name slug, or "type-<id>" if the name has
- * no sluggable characters (a bare numeric path would read as a survey id). */
+/**
+ * Canonical path for a group — the name slug, falling back to "type-<id>"
+ * when the name has no sluggable characters OR slugifies to digits alone
+ * (a bare numeric path reads as a survey id, so it would open a survey).
+ */
 export function groupPath(surveyType: Pick<SurveyType, 'id' | 'name'>): string {
-  return `/surveys/${groupSlug(surveyType.name) || `type-${surveyType.id}`}`;
+  const slug = groupSlug(surveyType.name);
+  const addressable = slug && !/^\d+$/.test(slug);
+  return `/surveys/${addressable ? slug : `type-${surveyType.id}`}`;
 }
 
 /**

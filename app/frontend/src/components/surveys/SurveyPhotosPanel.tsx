@@ -21,27 +21,11 @@ import {
 } from '../../config/surveyPhotos';
 
 /**
- * Thumbnail that lazily resolves a presigned preview URL, filling its grid cell.
- * Same lifecycle as the sighting thumbnails, sized for a gallery rather than a row.
+ * Thumbnail filling its grid cell, or a placeholder until (or unless) its
+ * presigned URL resolves. The URLs are resolved once by the panel and shared
+ * with the viewer, so opening a photo costs no further requests.
  */
-function SurveyPhotoThumbnail({ imageId, alt }: { imageId: number; alt: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    imagesAPI
-      .getPreviewUrl(imageId)
-      .then((res) => {
-        if (mounted) setUrl(res.preview_url);
-      })
-      .catch(() => {
-        /* a missing preview just leaves the placeholder in place */
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [imageId]);
-
+function SurveyPhotoThumbnail({ url, alt }: { url: string | null; alt: string }) {
   if (!url) {
     return <Box sx={{ width: '100%', aspectRatio: '4 / 3', bgcolor: 'grey.200', borderRadius: 1 }} />;
   }
@@ -72,13 +56,16 @@ export interface SurveyPhotosPanelProps {
  */
 export function SurveyPhotosPanel({ surveyId, canEdit }: SurveyPhotosPanelProps) {
   const [photos, setPhotos] = useState<CameraTrapImage[]>([]);
+  // Presigned preview URL per image id, resolved once and shared by the
+  // thumbnails and the viewer. A photo missing from the map either has not
+  // resolved yet or failed; both render as a placeholder.
+  const [urls, setUrls] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const [viewerImages, setViewerImages] = useState<ImageViewerItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
 
@@ -105,22 +92,46 @@ export function SurveyPhotosPanel({ surveyId, canEdit }: SurveyPhotosPanelProps)
     };
   }, [loadPhotos]);
 
-  const openViewer = async (clickedId: number) => {
-    const items = await Promise.all(
-      photos.map(async (photo) => {
-        try {
-          const res = await imagesAPI.getPreviewUrl(photo.id);
-          return { id: photo.id, src: res.preview_url, alt: photo.filename, caption: photo.filename };
-        } catch {
-          return { id: photo.id, src: '', alt: photo.filename, caption: photo.filename };
-        }
-      })
-    );
-    // Failed preview fetches drop out, so find the clicked photo's position
-    // in the surviving list — a grid index would point at the wrong image.
-    const usable = items.filter((item) => item.src);
-    setViewerImages(usable.map(({ id: _id, ...item }) => item));
-    setViewerIndex(Math.max(0, usable.findIndex((item) => item.id === clickedId)));
+  // Resolve each photo's preview URL once. Photos already resolved are left
+  // alone, so an upload only costs requests for the new files.
+  useEffect(() => {
+    let mounted = true;
+    const missing = photos.filter((photo) => !(photo.id in urls));
+    if (missing.length === 0) return;
+    (async () => {
+      const resolved = await Promise.all(
+        missing.map(async (photo) => {
+          try {
+            const res = await imagesAPI.getPreviewUrl(photo.id);
+            return [photo.id, res.preview_url] as const;
+          } catch {
+            // A missing preview just leaves the placeholder in place.
+            return null;
+          }
+        })
+      );
+      if (!mounted) return;
+      const added = resolved.filter((entry): entry is readonly [number, string] => entry !== null);
+      if (added.length > 0) setUrls((prev) => ({ ...prev, ...Object.fromEntries(added) }));
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [photos, urls]);
+
+  // Photos whose preview failed are skipped by the viewer, so the clicked
+  // photo's slot is its position among the survivors, not in the grid.
+  const viewable = photos.filter((photo) => urls[photo.id]);
+  const viewerImages: ImageViewerItem[] = viewable.map((photo) => ({
+    src: urls[photo.id],
+    alt: photo.filename,
+    caption: photo.filename,
+  }));
+
+  const openViewer = (clickedId: number) => {
+    const index = viewable.findIndex((photo) => photo.id === clickedId);
+    if (index === -1) return; // still loading, or its preview failed
+    setViewerIndex(index);
     setViewerOpen(true);
   };
 
@@ -238,7 +249,7 @@ export function SurveyPhotosPanel({ surveyId, canEdit }: SurveyPhotosPanelProps)
                 '&:hover': { opacity: 0.85 },
               }}
             >
-              <SurveyPhotoThumbnail imageId={photo.id} alt={photo.filename} />
+              <SurveyPhotoThumbnail url={urls[photo.id] ?? null} alt={photo.filename} />
             </Box>
           ))}
         </Box>

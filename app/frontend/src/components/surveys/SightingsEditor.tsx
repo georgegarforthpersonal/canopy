@@ -250,6 +250,15 @@ export function SightingsEditor({
     }
   };
 
+  /**
+   * Apply several fields to one row in a single change. Two updateSighting
+   * calls in the same event would both map over the `sightings` prop captured
+   * by this render, so the second would discard the first.
+   */
+  const patchSighting = (tempId: string, patch: Partial<DraftSighting>) => {
+    onSightingsChange(sightings.map((s) => (s.tempId === tempId ? { ...s, ...patch } : s)));
+  };
+
   const updateSighting = (tempId: string, field: keyof DraftSighting, value: any) => {
     const isLastRow = sightings[sightings.length - 1].tempId === tempId;
     const shouldAutoAdd = field === 'species_id' && value !== null && isLastRow;
@@ -1097,7 +1106,7 @@ export function SightingsEditor({
                   <Box sx={{ px: 1.5, pb: 2 }}>
                     <FrequencyScoreFields
                       value={sighting}
-                      onChange={(key, next) => updateSighting(sighting.tempId, key, next)}
+                      onChange={(patch) => patchSighting(sighting.tempId, patch)}
                     />
                   </Box>
                 )}

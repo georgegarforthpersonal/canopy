@@ -2,7 +2,7 @@
  * Full media gallery for a group. Camera trap types: every species ever
  * recorded, each with its most recent photo (grid), most recently seen
  * first. Audio types: the same per species for detection clips (rows).
- * Sighting-photo types: the latest photos added to sightings, newest first,
+ * Sighting- and survey-photo types: the latest photos added, newest first,
  * which may repeat a species.
  */
 import { useEffect, useState } from 'react';
@@ -18,7 +18,7 @@ import {
 } from '../../services/api';
 import { groupCardSx, groupColors } from './groupsTokens';
 import { resolveGroupTypeId } from './groupMeta';
-import { formatRecordedDate } from './surveyState';
+import { formatRecordedDate, photoLabel } from './surveyState';
 import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
 import { AudioClipPlayer } from '../../components/audio/AudioClipPlayer';
 import { ImageViewerModal, type ImageViewerItem } from '../../components/ImageViewerModal';
@@ -120,7 +120,7 @@ export default function GroupMediaPage() {
   // survey-photo galleries are a feed of the latest uploads.
   const feed =
     (surveyType.allow_sighting_photo_upload || surveyType.allow_survey_photos) && !surveyType.allow_image_upload;
-  const photoAlt = feed ? 'Survey photo' : 'Camera trap photo';
+  const photoAlt = feed ? 'Photo' : 'Camera trap photo';
   const total = isPhotos ? photos.length : clips.length;
   const viewerImages: ImageViewerItem[] = [];
   const viewerIndexOf = photos.map((p) => {
@@ -128,11 +128,13 @@ export default function GroupMediaPage() {
     viewerImages.push({
       src: p.url,
       alt: p.species_name ?? photoAlt,
-      caption: `${p.species_name ?? 'Unidentified'} · ${formatRecordedDate(p.date)}`,
+      caption: `${photoLabel(p)} · ${formatRecordedDate(p.date)}`,
     });
     return viewerImages.length - 1;
   });
-  const galleryTitle = feed ? 'All photos' : 'All species';
+  // 'Recent', not 'All': the feed is capped (RECENT_PHOTO_FEED_CAP), and a
+  // type with more photos than that keeps the rest on its survey pages.
+  const galleryTitle = feed ? 'Recent photos' : 'All species';
 
   return (
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
@@ -187,7 +189,7 @@ export default function GroupMediaPage() {
                     <Box sx={{ width: '100%', aspectRatio: '4 / 3', bgcolor: 'grey.200', borderRadius: '8px' }} />
                   )}
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: groupColors.textPrimary, mt: 0.5 }} noWrap>
-                    {p.species_name ?? 'Unidentified'}
+                    {photoLabel(p)}
                   </Typography>
                   <Typography sx={{ fontSize: 11.5, color: groupColors.textMuted }} noWrap>
                     {formatRecordedDate(p.date)}

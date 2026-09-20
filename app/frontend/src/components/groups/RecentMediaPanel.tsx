@@ -2,8 +2,8 @@
  * Media gallery panel for groups. For camera trap types (perSpecies): each
  * species' MOST RECENT photo, ordered by how recently the species was last
  * seen — one look at what's around, without one busy badger monopolising the
- * strip. For sighting-photo types (!perSpecies): a feed of the latest photos
- * added to sightings, which may repeat a species. 'clips' lists each
+ * strip. For sighting- and survey-photo types (!perSpecies): a feed of the
+ * latest photos added, which may repeat a species. 'clips' lists each
  * species' latest audio detection. Capped, with a door to the full gallery
  * page. Photos open in the shared image viewer; clips play in place via
  * AudioClipPlayer.
@@ -20,7 +20,7 @@ import {
 import { AudioClipPlayer } from '../audio/AudioClipPlayer';
 import { ImageViewerModal, type ImageViewerItem } from '../ImageViewerModal';
 import { groupCardSx, groupColors } from '../../pages/groups/groupsTokens';
-import { formatRecordedDateShort } from '../../pages/groups/surveyState';
+import { formatRecordedDateShort, photoLabel } from '../../pages/groups/surveyState';
 
 /** Species shown on the panel before the "All species" door takes over. */
 const PHOTO_PANEL_CAP = 8;
@@ -28,8 +28,8 @@ const CLIP_PANEL_CAP = 6;
 
 interface RecentMediaPanelProps {
   kind: 'photos' | 'clips';
-  /** One latest photo per species (camera trap) vs a feed of recent
-      sighting photos. Only meaningful for kind 'photos'. */
+  /** One latest photo per species (camera trap) vs a feed of the most
+      recent photos. Only meaningful for kind 'photos'. */
   perSpecies?: boolean;
   surveyTypeId: number;
   onViewAll: () => void;
@@ -93,7 +93,7 @@ export default function RecentMediaPanel({ kind, perSpecies = true, surveyTypeId
     kind === 'clips' ? 'Latest detections by species'
     : feed ? 'Recent photos'
     : 'Latest by species';
-  const photoAlt = feed ? 'Sighting photo' : 'Camera trap photo';
+  const photoAlt = feed ? 'Photo' : 'Camera trap photo';
   const empty = kind === 'photos' ? photos.length === 0 : clips.length === 0;
   // The viewer skips tiles whose preview URL failed, so map each photo to its
   // viewer slot by position.
@@ -103,7 +103,7 @@ export default function RecentMediaPanel({ kind, perSpecies = true, surveyTypeId
     viewerImages.push({
       src: p.url,
       alt: p.species_name ?? photoAlt,
-      caption: `${p.species_name ?? 'Unidentified'} · ${formatRecordedDateShort(p.date)}`,
+      caption: `${photoLabel(p)} · ${formatRecordedDateShort(p.date)}`,
     });
     return viewerImages.length - 1;
   });
@@ -157,7 +157,7 @@ export default function RecentMediaPanel({ kind, perSpecies = true, surveyTypeId
                 <Box sx={{ width: '100%', aspectRatio: '4 / 3', bgcolor: 'grey.200', borderRadius: '8px' }} />
               )}
               <Typography sx={{ fontSize: 12, fontWeight: 600, color: groupColors.textPrimary, mt: 0.5 }} noWrap>
-                {p.species_name ?? 'Unidentified'}
+                {photoLabel(p)}
               </Typography>
               <Typography sx={{ fontSize: 11, color: groupColors.textMuted }} noWrap>
                 {formatRecordedDateShort(p.date)}
@@ -214,7 +214,7 @@ export default function RecentMediaPanel({ kind, perSpecies = true, surveyTypeId
         >
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: groupColors.textPrimary }}>
-              {feed ? 'All photos' : 'All species'}
+              {feed ? 'Recent photos' : 'All species'}
             </Typography>
             <Typography sx={{ fontSize: 12, color: groupColors.textMuted }}>
               {kind === 'clips'

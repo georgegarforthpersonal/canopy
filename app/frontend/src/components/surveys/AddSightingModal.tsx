@@ -16,7 +16,6 @@ import {
   frequencyScoreErrors,
   pickFrequencyScore,
   type FrequencyScore,
-  type FrequencyScoreKey,
 } from '../../config/frequencyScore';
 import MultiLocationMapPicker, { type DraftIndividualLocation } from './MultiLocationMapPicker';
 import FrequencyScoreFields from './FrequencyScoreFields';
@@ -546,9 +545,7 @@ export function AddSightingModal({
           {allowFrequencyScore && (
             <FrequencyScoreFields
               value={frequencyScore}
-              onChange={(key: FrequencyScoreKey, next) =>
-                setFrequencyScore((prev) => ({ ...prev, [key]: next }))
-              }
+              onChange={(patch) => setFrequencyScore((prev) => ({ ...prev, ...patch }))}
             />
           )}
 
