@@ -62,7 +62,9 @@ export default function SurveyTypeFilesManager({ surveyTypeId }: SurveyTypeFiles
           .map((r) => r.value);
         const failed = results.length - created.length;
 
-        if (created.length > 0) setFiles((prev) => [...created, ...prev]);
+        // Refetch rather than splicing locally: the list order is the
+        // server's (filename, collation-dependent) and can't be reproduced here.
+        if (created.length > 0) await loadFiles();
         if (failed === 0) {
           toast.success(created.length === 1 ? 'File uploaded' : `${created.length} files uploaded`);
         } else if (created.length === 0) {
@@ -74,7 +76,7 @@ export default function SurveyTypeFilesManager({ surveyTypeId }: SurveyTypeFiles
         setUploading(false);
       }
     },
-    [surveyTypeId, toast],
+    [surveyTypeId, toast, loadFiles],
   );
 
   const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
