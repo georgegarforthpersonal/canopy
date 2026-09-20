@@ -5,6 +5,7 @@ import {
   Navigate,
   Outlet,
   useLocation,
+  useParams,
   useRouteError,
 } from 'react-router-dom';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -46,15 +47,29 @@ function BubbleRouteError(): never {
   throw useRouteError();
 }
 
-/** "Teams" became "Groups"; old bookmarks and links keep working. */
-function LegacyTeamsRedirect() {
+/**
+ * "Teams" became "Groups" became the Surveys home; old bookmarks and links
+ * keep working. A numeric first segment was a group TYPE id under the old
+ * scheme, but means an individual survey under /surveys — rewrite it to the
+ * type-<id> form resolveGroupTypeId accepts so old links land on the group,
+ * not on an unrelated survey.
+ */
+function LegacySurveysRedirect() {
   const location = useLocation();
-  return (
-    <Navigate
-      to={{ ...location, pathname: location.pathname.replace(/^\/teams/, '/groups') }}
-      replace
-    />
-  );
+  const pathname = location.pathname
+    .replace(/^\/(teams|groups)/, '/surveys')
+    .replace(/^\/surveys\/(\d+)(\/|$)/, '/surveys/type-$1$2');
+  return <Navigate to={{ ...location, pathname }} replace />;
+}
+
+/**
+ * /surveys/:id serves two pages: a numeric id is an individual survey (the
+ * detail page), anything else is a survey-type name slug (the group overview
+ * that used to live at /groups/:typeId).
+ */
+function SurveyOrGroupPage() {
+  const { id } = useParams<{ id: string }>();
+  return /^\d+$/.test(id ?? '') ? <SurveyDetailPage /> : <GroupDetailPage />;
 }
 
 
@@ -87,13 +102,6 @@ const router = createBrowserRouter([
           </RequireAuth>
         ),
         children: [
-          // Groups (beta) — grid, per-type group page, and full survey history
-          { path: '/groups', element: <GroupsPage /> },
-          { path: '/groups/:typeId', element: <GroupDetailPage /> },
-          { path: '/groups/:typeId/all', element: <AllSurveysPage /> },
-          { path: '/groups/:typeId/media', element: <GroupMediaPage /> },
-          { path: '/teams/*', element: <LegacyTeamsRedirect /> },
-
           // Dashboard page
           { path: '/species', element: <SpeciesPage /> },
           { path: '/tracking', element: <TrackingPage /> },
@@ -103,11 +111,15 @@ const router = createBrowserRouter([
           // Admin page
           { path: '/admin', element: <AdminPage /> },
 
-          // The flat surveys list is retired where Groups covers the org —
-          // /surveys (the list URL only) aliases the Groups landing so every
-          // legacy target (back buttons, cancel, post-save) lands correctly.
-          // Orgs without Groups keep the flat list as their fallback.
-          { path: '/surveys', element: orgHasGroups() ? <Navigate to="/groups" replace /> : <SurveysPage /> },
+          // Surveys home — the per-type group grid where Groups covers the
+          // org, the flat list elsewhere. The per-type overview, full history
+          // and media pages live underneath it.
+          { path: '/surveys', element: orgHasGroups() ? <GroupsPage /> : <SurveysPage /> },
+          { path: '/surveys/:id/all', element: <AllSurveysPage /> },
+          { path: '/surveys/:id/media', element: <GroupMediaPage /> },
+          // Old Groups-era URLs keep working.
+          { path: '/groups/*', element: <LegacySurveysRedirect /> },
+          { path: '/teams/*', element: <LegacySurveysRedirect /> },
 
           // New survey page
           { path: '/surveys/new', element: <NewSurveyPage /> },
@@ -118,11 +130,11 @@ const router = createBrowserRouter([
           // Audio survey wizard
           { path: '/surveys/new/audio', element: <NewAudioSurveyPage /> },
 
-          // Survey detail page
-          { path: '/surveys/:id', element: <SurveyDetailPage /> },
+          // Survey detail (numeric id) or group overview (name slug)
+          { path: '/surveys/:id', element: <SurveyOrGroupPage /> },
 
           // Redirect root to the landing page
-          { path: '/', element: <Navigate to={orgHasGroups() ? '/groups' : '/surveys'} replace /> },
+          { path: '/', element: <Navigate to="/surveys" replace /> },
 
           // Unmatched routes render an empty layout (as with <Routes> before)
           { path: '*', element: null },

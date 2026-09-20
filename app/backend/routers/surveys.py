@@ -31,6 +31,7 @@ from models import (
     ScheduledSurvey,
     Sighting, SightingCreate, SightingUpdate, SightingWithDetails,
     STAGE_COUNT_FIELDS,
+    FREQUENCY_FIELDS,
     Species, SpeciesType, Location, SurveySurveyor,
     SurveyType,
     BreedingStatusCode, BreedingStatusCodeRead,
@@ -694,6 +695,8 @@ def get_survey_sightings(
         Sighting.larvae,
         Sighting.exuviae,
         Sighting.emerging_adults,
+        Sighting.percent_frequency,
+        Sighting.frequency_band,
         Sighting.client_uuid,
         Species.name.label('species_name'),  # type: ignore[union-attr]
         Species.scientific_name.label('species_scientific_name'),  # type: ignore[union-attr]
@@ -749,7 +752,7 @@ def get_survey_sightings(
             "device_id": row.device_id,
             "count": row.count,
             "notes": row.notes,
-            **{field: getattr(row, field) for field in STAGE_COUNT_FIELDS},
+            **{field: getattr(row, field) for field in (*STAGE_COUNT_FIELDS, *FREQUENCY_FIELDS)},
             "client_uuid": row.client_uuid,
             "species_name": row.species_name,
             "species_scientific_name": row.species_scientific_name,
@@ -803,7 +806,7 @@ def _sighting_with_individuals_response(db: Session, db_sighting: Sighting) -> d
         "device_id": db_sighting.device_id,
         "count": db_sighting.count,
         "notes": db_sighting.notes,
-        **{field: getattr(db_sighting, field) for field in STAGE_COUNT_FIELDS},
+        **{field: getattr(db_sighting, field) for field in (*STAGE_COUNT_FIELDS, *FREQUENCY_FIELDS)},
         "client_uuid": db_sighting.client_uuid,
         "species_name": species.name if species else None,
         "species_scientific_name": species.scientific_name if species else None,
@@ -958,7 +961,7 @@ def create_sighting(
         location_id=sighting.location_id,
         device_id=sighting.device_id,
         notes=sighting.notes,
-        **{field: getattr(sighting, field) for field in STAGE_COUNT_FIELDS},
+        **{field: getattr(sighting, field) for field in (*STAGE_COUNT_FIELDS, *FREQUENCY_FIELDS)},
         client_uuid=sighting.client_uuid,
     )
 
@@ -1181,7 +1184,7 @@ def update_sighting(
         "device_id": db_sighting.device_id,
         "count": db_sighting.count,
         "notes": db_sighting.notes,
-        **{field: getattr(db_sighting, field) for field in STAGE_COUNT_FIELDS},
+        **{field: getattr(db_sighting, field) for field in (*STAGE_COUNT_FIELDS, *FREQUENCY_FIELDS)},
         "client_uuid": db_sighting.client_uuid,
         "species_name": species.name if species else None,
         "species_scientific_name": species.scientific_name if species else None,

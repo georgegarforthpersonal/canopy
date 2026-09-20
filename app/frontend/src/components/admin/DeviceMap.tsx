@@ -341,11 +341,14 @@ export default function DeviceMap({
               />
             )}
 
-            {/* Field boundaries — always hoverable; clickable to edit unless read-only. */}
+            {/* Field boundaries — always hoverable; clickable to edit unless
+                read-only. Outline-only, same as the sighting-entry maps: a
+                filled shape washes out the basemap underneath. */}
             {locationsWithBoundaries.length > 0 && (
               <FieldBoundaryOverlay
                 locations={locationsWithBoundaries}
                 interactive
+                outlineOnly
                 onEditLocation={readOnly ? undefined : onEditLocation}
                 onDeleteLocation={readOnly ? undefined : onDeleteLocation}
               />

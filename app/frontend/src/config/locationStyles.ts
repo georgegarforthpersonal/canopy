@@ -17,10 +17,13 @@ export const ROUTE_COLOR = '#D6273A';
 
 export const LOCATION_TYPE_STYLE: Record<Exclude<LocationType, 'none'>, LocationStyle> = {
   area: { stroke: '#0072B2', fill: '#0072B2', fillOpacity: 0.2, weight: 2 },
-  route: { stroke: ROUTE_COLOR, fill: ROUTE_COLOR, fillOpacity: 0.2, weight: 5 },
+  // Routes draw as a thin line over a white casing (see FieldBoundaryOverlay),
+  // the convention routing apps use: legible on any basemap without the
+  // heavy-marker look of a fat stroke.
+  route: { stroke: ROUTE_COLOR, fill: ROUTE_COLOR, fillOpacity: 0.2, weight: 3 },
   point: { stroke: '#CC79A7', fill: '#CC79A7', fillOpacity: 0.8, weight: 2 },
   // A sector is a segment of a route; share the route colour and weight.
-  sector: { stroke: ROUTE_COLOR, fill: ROUTE_COLOR, fillOpacity: 0.2, weight: 5 },
+  sector: { stroke: ROUTE_COLOR, fill: ROUTE_COLOR, fillOpacity: 0.2, weight: 3 },
 };
 
 /**

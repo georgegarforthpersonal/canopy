@@ -1,12 +1,13 @@
 import { Box, Typography, Paper, MenuItem, Autocomplete, TextField, createFilterOptions } from '@mui/material';
 import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { dashboardAPI, getOrgSlug } from '../services/api';
+import { dashboardAPI, getOrgSlug, surveyTypesAPI } from '../services/api';
 import type { SpeciesWithCount, SpeciesSightingLocation } from '../services/api';
 import SightingsMap from '../components/dashboard/SightingsMap';
 import CumulativeSpeciesChart from '../components/dashboard/CumulativeSpeciesChart';
 import SpeciesOccurrenceChart from '../components/dashboard/SpeciesOccurrenceChart';
 import SpeciesGroupIcon from '../components/dashboard/SpeciesGroupIcon';
+import AnnualFrequencyPanel from '../components/groups/AnnualFrequencyPanel';
 import { speciesTypes, getSpeciesDisplayName } from '../config';
 import { SPACING } from '../config/responsive';
 import { PageTitle } from '../components/layout/PageTitle';
@@ -77,6 +78,14 @@ export function SpeciesPage() {
   // Which species types actually have entries
   const [availableSpeciesTypes, setAvailableSpeciesTypes] = useState<string[]>([]);
 
+  // Frequency-scored survey types (admin → survey type's allow_frequency_score)
+  // and the species groups they cover. Groups surveyed this way — plants,
+  // scored as a % of sampling quadrats — get the annual frequency chart the
+  // group page uses instead of seasonal counts, which don't fit that method.
+  const [frequencyTypes, setFrequencyTypes] = useState<
+    Array<{ id: number; name: string; speciesTypeNames: string[] }>
+  >([]);
+
   // Fetch the species list (ranked) when the species type changes; auto-select
   // the top. Guarded so a slow earlier group can't overwrite a fast later one.
   useEffect(() => {
@@ -121,6 +130,33 @@ export function SpeciesPage() {
     };
   }, [selectedSpeciesId, isCannwood]);
 
+  // Which survey types are frequency-scored, and for which groups (once).
+  // Failing quietly falls back to the seasonal chart — same as today.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const types = await surveyTypesAPI.getAll();
+        const flagged = await Promise.all(
+          types.filter((t) => t.allow_frequency_score).map((t) => surveyTypesAPI.getById(t.id)),
+        );
+        if (!active) return;
+        setFrequencyTypes(
+          flagged.map((t) => ({
+            id: t.id,
+            name: t.name,
+            speciesTypeNames: t.species_types.map((st) => st.name),
+          })),
+        );
+      } catch (err) {
+        console.warn('Failed to load frequency-scored survey types:', err);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Species types that actually have entries (once)
   useEffect(() => {
     dashboardAPI
@@ -141,6 +177,11 @@ export function SpeciesPage() {
   // Non-null selection lets the picker use disableClearable: clearing to
   // "no species" only empties the chart, so the X is a dead end.
   const selectedSpecies = speciesList.find((s) => s.id === selectedSpeciesId) ?? null;
+  // Frequency-scored survey types covering the selected group (normally zero
+  // or one — e.g. Cannwood's Plant survey for the plants group).
+  const groupFrequencyTypes = frequencyTypes.filter((t) =>
+    t.speciesTypeNames.includes(selectedSpeciesTypes[0]),
+  );
 
   return (
     <Box sx={{ p: SPACING.PAGE_PADDING }}>
@@ -206,7 +247,12 @@ export function SpeciesPage() {
               label={`${getSpeciesDisplayName(selectedSpeciesTypes[0])} recorded`}
               value={String(stats.species)}
             />
-            <Stat label="Individuals recorded" value={stats.individuals.toLocaleString()} />
+            {/* Frequency-scored records are presence scores (count=1 each),
+                not individuals counted — label the sum honestly. */}
+            <Stat
+              label={groupFrequencyTypes.length > 0 ? 'Records' : 'Individuals recorded'}
+              value={stats.individuals.toLocaleString()}
+            />
             <Stat label="New this year" value={String(stats.newThisYear)} />
             <Stat
               label="Latest addition"
@@ -235,6 +281,17 @@ export function SpeciesPage() {
         />
       </Paper>
 
+      {/* Frequency-scored groups (plants): counts through the year don't fit
+          a method that scores % of sampling quadrats, so those groups get the
+          group page's annual frequency panel — its own species and location
+          pickers included — instead of the seasonal chart. */}
+      {groupFrequencyTypes.length > 0 ? (
+        groupFrequencyTypes.map((t) => (
+          <Box key={t.id} sx={{ mt: 3 }}>
+            <AnnualFrequencyPanel surveyTypeId={t.id} />
+          </Box>
+        ))
+      ) : (
       <Paper elevation={0} sx={{ p: { xs: 2.5, sm: 3 }, mt: 3, border: '1px solid', borderColor: 'divider' }}>
         <Box
           sx={{
@@ -304,10 +361,14 @@ export function SpeciesPage() {
         </Box>
         <SpeciesOccurrenceChart speciesId={selectedSpeciesId} height={280} />
       </Paper>
+      )}
 
       {/* Sightings map — Cannwood only: Heal doesn't record GPS coordinates
-          on sightings, so the map would always be empty. */}
-      {isCannwood && (
+          on sightings, so the map would always be empty. Hidden for
+          frequency-scored groups too: quadrat scoring produces no point
+          sightings, and the seasonal panel's species picker that drove this
+          map is not shown for them. */}
+      {isCannwood && groupFrequencyTypes.length === 0 && (
         <Paper elevation={0} sx={{ p: { xs: 2.5, sm: 3 }, mt: 3, border: '1px solid', borderColor: 'divider' }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
             Sighting locations

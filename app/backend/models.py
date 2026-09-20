@@ -14,7 +14,7 @@ from datetime import date as date_type, time as time_type, datetime
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 from enum import Enum as PyEnum
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from sqlmodel import Field, SQLModel, Relationship
 import sqlalchemy as sa
 
@@ -730,6 +730,8 @@ class SurveyTypeBase(SQLModel):
     allow_audio_upload: bool = Field(default=False, description="Whether audio files can be uploaded for this survey type")
     allow_image_upload: bool = Field(default=False, description="Whether camera trap images can be uploaded for this survey type")
     allow_sighting_photo_upload: bool = Field(default=False, description="Whether photos can be attached to individual sightings for documentation")
+    allow_frequency_score: bool = Field(default=False, description="Whether sightings carry a botanical frequency score (percent of quadrats and/or relative frequency band)")
+    allow_survey_photos: bool = Field(default=False, description="Whether photos can be attached to the survey itself (habitat and landscape shots that describe a visit rather than a species)")
     allow_start_end_time: bool = Field(default=False, description="Whether start/end time fields are shown for this survey type")
     allow_sun_percentage: bool = Field(default=False, description="Whether sun percentage field is shown for this survey type")
     allow_temperature: bool = Field(default=False, description="Whether temperature field is shown for this survey type")
@@ -809,6 +811,8 @@ class SurveyTypeUpdate(SQLModel):
     allow_audio_upload: Optional[bool] = None
     allow_image_upload: Optional[bool] = None
     allow_sighting_photo_upload: Optional[bool] = None
+    allow_frequency_score: Optional[bool] = None
+    allow_survey_photos: Optional[bool] = None
     allow_start_end_time: Optional[bool] = None
     allow_sun_percentage: Optional[bool] = None
     allow_temperature: Optional[bool] = None
@@ -845,8 +849,10 @@ class SurveyTypeWithDetails(SurveyTypeRead):
 # ============================================================================
 
 class RecentSpeciesPhoto(SQLModel):
-    """A species' most recent camera trap photo for a survey type's gallery."""
-    species_id: int
+    """A photo in a survey type's gallery. Sighting photos carry their
+    species; survey-level photos (habitat shots, report plates) have no
+    species, and species_name carries the survey's location instead."""
+    species_id: Optional[int] = None
     species_name: Optional[str] = None
     camera_trap_image_id: int
     survey_id: int
@@ -1111,10 +1117,30 @@ class SightingBase(SQLModel):
     larvae: Optional[int] = Field(None, ge=0, description="Larvae")
     exuviae: Optional[int] = Field(None, ge=0, description="Exuviae (cast larval skins)")
     emerging_adults: Optional[int] = Field(None, ge=0, description="Emerging/teneral adults")
+    # Botanical frequency score (survey types with allow_frequency_score). The
+    # percent is the share of sampling quadrats containing the species; the
+    # band is the surveyor's relative-frequency convention (5 = 81-100% of
+    # quadrats … 1 = 1-10%, '+' = present but not caught by a quadrat). None
+    # means not recorded — count stays 1 for presence on botanical sightings.
+    percent_frequency: Optional[Decimal] = Field(
+        None, ge=0, le=100, max_digits=5, decimal_places=2,
+        description="Percentage of sampling quadrats containing the species (botanical surveys)"
+    )
+    frequency_band: Optional[str] = Field(
+        None, max_length=2,
+        description="Relative frequency band: '+', '1', '1+', '2', '3', '4' or '5'"
+    )
     # See Survey.client_uuid — same idempotent-retry contract, scoped to the survey.
     client_uuid: Optional[str] = Field(
         None, max_length=36, description="Client-minted UUID making the create idempotent on retry"
     )
+
+    @field_validator("frequency_band")
+    @classmethod
+    def _frequency_band_in_scale(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in FREQUENCY_BANDS:
+            raise ValueError(f"frequency_band must be one of {sorted(FREQUENCY_BANDS)}")
+        return value
 
 
 #: The BDS stage/behaviour count columns, in recording-form order. `count`
@@ -1126,6 +1152,16 @@ STAGE_COUNT_FIELDS = (
     "exuviae",
     "emerging_adults",
 )
+
+#: Botanical frequency columns, splatted alongside STAGE_COUNT_FIELDS wherever
+#: sightings are copied field-by-field.
+FREQUENCY_FIELDS = (
+    "percent_frequency",
+    "frequency_band",
+)
+
+#: Valid relative-frequency band values, low to high.
+FREQUENCY_BANDS = {"+", "1", "1+", "2", "3", "4", "5"}
 
 
 class Sighting(SightingBase, table=True):  # type: ignore[call-arg]
@@ -1179,6 +1215,16 @@ class SightingUpdate(SQLModel):
     larvae: Optional[int] = Field(None, ge=0)
     exuviae: Optional[int] = Field(None, ge=0)
     emerging_adults: Optional[int] = Field(None, ge=0)
+    # Botanical frequency score; sent explicitly as null to clear.
+    percent_frequency: Optional[Decimal] = Field(None, ge=0, le=100, max_digits=5, decimal_places=2)
+    frequency_band: Optional[str] = Field(None, max_length=2)
+
+    @field_validator("frequency_band")
+    @classmethod
+    def _frequency_band_in_scale(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in FREQUENCY_BANDS:
+            raise ValueError(f"frequency_band must be one of {sorted(FREQUENCY_BANDS)}")
+        return value
 
 
 class SightingRead(SightingBase):
@@ -1415,6 +1461,24 @@ class SpeciesOccurrenceResponse(SQLModel):
     data: List[SpeciesOccurrenceDataPoint] = Field(description="Occurrence data points by survey")
     date_range: DateRange = Field(description="Date range of the data")
     species_name: str = Field(description="Name of the species")
+
+
+class SwardCompositionRow(SQLModel):
+    """One frequency-scored sighting, flattened for the annual frequency charts."""
+    location_id: Optional[int] = None
+    location_name: Optional[str] = None
+    survey_id: int
+    survey_date: date_type
+    species_id: int
+    species_name: Optional[str] = None
+    species_scientific_name: Optional[str] = None
+    percent_frequency: Optional[Decimal] = None
+    frequency_band: Optional[str] = None
+
+
+class SwardCompositionResponse(SQLModel):
+    """Every frequency-scored sighting for a survey type; the client pivots."""
+    rows: List[SwardCompositionRow] = Field(default_factory=list)
 
 
 class SpeciesWithCount(SQLModel):

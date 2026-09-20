@@ -12,11 +12,17 @@ import {
   type StageCountKey,
   type StageCounts,
 } from '../../config/stageCounts';
+import {
+  frequencyScoreErrors,
+  pickFrequencyScore,
+  type FrequencyScore,
+} from '../../config/frequencyScore';
 import MultiLocationMapPicker, { type DraftIndividualLocation } from './MultiLocationMapPicker';
+import FrequencyScoreFields from './FrequencyScoreFields';
 import StageCountsFields from './StageCountsFields';
 import NumberStepper from './NumberStepper';
 
-export interface SightingData extends StageCounts {
+export interface SightingData extends StageCounts, FrequencyScore {
   species_id: number | null;
   count: number;
   individuals?: DraftIndividualLocation[];
@@ -44,6 +50,7 @@ interface AddSightingModalProps {
   allowCoordinateEntry?: boolean; // Whether typed coordinates can place sighting locations
   allowSightingNotes?: boolean; // Whether notes field is shown
   allowSightingPhotoUpload?: boolean; // Whether photo upload is shown
+  allowFrequencyScore?: boolean; // Whether the botanical frequency score is shown
   allowSightingDeviceSelection?: boolean; // When true, show device dropdown that supplies the sighting's location
   devices?: Device[]; // Available devices for sighting-level selection
   surveyLocationId?: number | null; // Survey-level location ID for initial map zoom
@@ -72,6 +79,7 @@ export function AddSightingModal({
   allowCoordinateEntry = false,
   allowSightingNotes = true,
   allowSightingPhotoUpload = false,
+  allowFrequencyScore = false,
   allowSightingDeviceSelection = false,
   devices = [],
   surveyLocationId,
@@ -94,6 +102,7 @@ export function AddSightingModal({
   );
   const [notes, setNotes] = useState<string>(initialData?.notes || '');
   const [stageCounts, setStageCounts] = useState<StageCounts>(() => pickStageCounts(initialData));
+  const [frequencyScore, setFrequencyScore] = useState<FrequencyScore>(() => pickFrequencyScore(initialData));
   const [pendingPhotos, setPendingPhotos] = useState<File[]>(initialData?.pendingPhotos || []);
   const [existingImageIds, setExistingImageIds] = useState<number[]>(initialData?.existingImageIds || []);
   const [removedImageIds, setRemovedImageIds] = useState<number[]>(initialData?.removedImageIds || []);
@@ -146,6 +155,7 @@ export function AddSightingModal({
       setSelectedDeviceId(initialData.device_id || null);
       setNotes(initialData.notes || '');
       setStageCounts(pickStageCounts(initialData));
+      setFrequencyScore(pickFrequencyScore(initialData));
       setPendingPhotos(initialData.pendingPhotos || []);
       setExistingImageIds(initialData.existingImageIds || []);
       setRemovedImageIds(initialData.removedImageIds || []);
@@ -159,6 +169,7 @@ export function AddSightingModal({
       // Without this, counts tapped in then cancelled resurface on the next
       // add — phantom breeding evidence against whatever species comes next.
       setStageCounts(pickStageCounts(null));
+      setFrequencyScore(pickFrequencyScore(null));
       setPendingPhotos([]);
       setExistingImageIds([]);
       setRemovedImageIds([]);
@@ -188,6 +199,7 @@ export function AddSightingModal({
         // Only persist the matrix for species types that record it, so a species
         // swap after typing can't leave orphaned counts behind.
         ...(showStageCounts ? stageCounts : pickStageCounts(null)),
+        ...(allowFrequencyScore ? frequencyScore : pickFrequencyScore(null)),
         pendingPhotos: pendingPhotos.length > 0 ? pendingPhotos : undefined,
         existingImageIds: existingImageIds.length > 0 ? existingImageIds : undefined,
         removedImageIds: removedImageIds.length > 0 ? removedImageIds : undefined,
@@ -200,6 +212,7 @@ export function AddSightingModal({
       setSelectedDeviceId(null);
       setNotes('');
       setStageCounts(pickStageCounts(null));
+      setFrequencyScore(pickFrequencyScore(null));
       setPendingPhotos([]);
       setExistingImageIds([]);
       setRemovedImageIds([]);
@@ -216,6 +229,7 @@ export function AddSightingModal({
     setSelectedDeviceId(initialData?.device_id || null);
     setNotes(initialData?.notes || '');
     setStageCounts(pickStageCounts(initialData));
+    setFrequencyScore(pickFrequencyScore(initialData));
     setPendingPhotos(initialData?.pendingPhotos || []);
     setExistingImageIds(initialData?.existingImageIds || []);
     setRemovedImageIds(initialData?.removedImageIds || []);
@@ -281,7 +295,8 @@ export function AddSightingModal({
   const canSave = selectedSpeciesId !== null && countOk &&
     (!locationAtSightingLevel || selectedLocationId !== null) &&
     (!allowSightingDeviceSelection || selectedDeviceId !== null) &&
-    (!showStageCounts || stageCountErrors(stageCounts, count).length === 0);
+    (!showStageCounts || stageCountErrors(stageCounts, count).length === 0) &&
+    (!allowFrequencyScore || frequencyScoreErrors(frequencyScore).length === 0);
 
   return (
     <Dialog
@@ -523,6 +538,14 @@ export function AddSightingModal({
               onChange={(key: StageCountKey, next) =>
                 setStageCounts((prev) => ({ ...prev, [key]: next }))
               }
+            />
+          )}
+
+          {/* Botanical frequency score (quadrat surveys) */}
+          {allowFrequencyScore && (
+            <FrequencyScoreFields
+              value={frequencyScore}
+              onChange={(patch) => setFrequencyScore((prev) => ({ ...prev, ...patch }))}
             />
           )}
 

@@ -19,6 +19,8 @@ from models import (
     SpeciesOccurrenceResponse,
     SpeciesOccurrenceDataPoint,
     SpeciesWithCount,
+    SwardCompositionResponse,
+    SwardCompositionRow,
     Organisation
 )
 
@@ -134,6 +136,10 @@ def get_cumulative_species(
                 WHERE survey.organisation_id = :org_id
                 {survey_type_filter}
                 {date_filter_sql}
+                -- Start the axis at the filtered species' first sighting:
+                -- unrelated earlier surveys (e.g. plant imports predating the
+                -- first bird record) would otherwise prepend a flat zero run.
+                AND survey.date >= (SELECT MIN(first_seen_date) FROM first_sightings)
                 ORDER BY survey.date
             ),
             species_types_list AS (
@@ -521,3 +527,57 @@ def get_species_sightings(
             status_code=500,
             detail=f"Failed to fetch species sightings: {str(e)}"
         )
+
+
+@router.get("/sward-composition", response_model=SwardCompositionResponse)
+def get_sward_composition(
+    survey_type_id: int = Query(..., description="Survey type whose frequency-scored sightings to return"),
+    org: Organisation = Depends(get_current_organisation),
+    db: Session = Depends(get_db)
+) -> SwardCompositionResponse:
+    """
+    Every frequency-scored sighting for a survey type, flattened.
+
+    Powers the annual frequency charts (group page and Species page): the
+    client pivots the rows into per-location, per-year percent-of-quadrats
+    series. Only sightings carrying a percent or band are included, so
+    ordinary count records of the same type stay out of the picture.
+    """
+    try:
+        rows = db.execute(text("""
+            SELECT
+                location.id AS location_id,
+                location.name AS location_name,
+                survey.id AS survey_id,
+                survey.date AS survey_date,
+                species.id AS species_id,
+                species.name AS species_name,
+                species.scientific_name AS species_scientific_name,
+                sighting.percent_frequency AS percent_frequency,
+                sighting.frequency_band AS frequency_band
+            FROM sighting
+            JOIN survey ON sighting.survey_id = survey.id
+            JOIN species ON sighting.species_id = species.id
+            LEFT JOIN location ON survey.location_id = location.id
+            WHERE survey.organisation_id = :org_id
+              AND survey.survey_type_id = :survey_type_id
+              AND (sighting.percent_frequency IS NOT NULL OR sighting.frequency_band IS NOT NULL)
+            ORDER BY location.name NULLS LAST, survey.date, COALESCE(species.name, species.scientific_name)
+        """), {"org_id": org.id, "survey_type_id": survey_type_id}).fetchall()
+
+        return SwardCompositionResponse(rows=[
+            SwardCompositionRow(
+                location_id=row.location_id,
+                location_name=row.location_name,
+                survey_id=row.survey_id,
+                survey_date=row.survey_date,
+                species_id=row.species_id,
+                species_name=row.species_name,
+                species_scientific_name=row.species_scientific_name,
+                percent_frequency=row.percent_frequency,
+                frequency_band=row.frequency_band,
+            )
+            for row in rows
+        ])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch sward composition: {str(e)}")

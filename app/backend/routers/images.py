@@ -44,6 +44,7 @@ from models import (
     Organisation,
     ProcessingStatus,
     ProcessingSummary,
+    SightingImage,
     Survey,
 )
 from services.job_queue import nudge_dispatcher
@@ -175,6 +176,11 @@ async def filter_images_for_false_positives(
 @router.get("/{survey_id}/images", response_model=List[CameraTrapImageRead])
 def list_images(
     survey_id: int,
+    exclude_sighting_photos: bool = Query(
+        False,
+        description="Leave out images attached to individual sightings "
+        "(the survey-level photo gallery lists only the rest)",
+    ),
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
@@ -188,12 +194,14 @@ def list_images(
     if not survey:
         raise HTTPException(status_code=404, detail="Survey not found")
 
-    images = (
-        db.query(CameraTrapImage)
-        .filter(CameraTrapImage.survey_id == survey_id)
-        .order_by(CameraTrapImage.image_timestamp.desc())  # type: ignore[union-attr]
-        .all()
-    )
+    query = db.query(CameraTrapImage).filter(CameraTrapImage.survey_id == survey_id)
+    if exclude_sighting_photos:
+        query = query.filter(
+            ~db.query(SightingImage)
+            .filter(SightingImage.camera_trap_image_id == CameraTrapImage.id)
+            .exists()
+        )
+    images = query.order_by(CameraTrapImage.image_timestamp.desc()).all()  # type: ignore[union-attr]
 
     result = []
     for img in images:

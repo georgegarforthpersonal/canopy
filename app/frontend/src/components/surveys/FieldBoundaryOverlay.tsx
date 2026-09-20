@@ -67,15 +67,22 @@ interface FieldBoundaryOverlayProps {
 // Dark red used to single out a hovered sector.
 const SECTOR_HOVER_STROKE = '#8A1C28';
 
-// A route stroke is ~5px wide — hopeless as a touch target. Every visible
+// A route stroke is ~3px wide — hopeless as a touch target. Every visible
 // polyline gets an invisible fat twin that does the event handling instead,
 // giving lines a finger-sized hit area without changing how they look.
 const HIT_AREA_WEIGHT = 24;
 
+// Cartographic "casing": every route line sits on a slightly wider white
+// underlay, the convention routing apps use to keep a thin line legible on
+// any basemap — vegetation green and satellite imagery alike.
+const CASING_COLOR = '#FFFFFF';
+const CASING_EXTRA_WEIGHT = 3;
+const CASING_OPACITY = 0.85;
+
 /**
- * A polyline whose interactivity lives on an invisible, much wider twin.
- * The visible line never handles events; tooltips, popups and hover
- * handlers attach to the twin.
+ * A cased polyline whose interactivity lives on an invisible, much wider
+ * twin. The visible line and its casing never handle events; tooltips,
+ * popups and hover handlers attach to the twin.
  */
 function TappablePolyline({
   positions,
@@ -90,15 +97,24 @@ function TappablePolyline({
   eventHandlers?: L.LeafletEventHandlerFnMap;
   children?: React.ReactNode;
 }) {
+  const casing: L.PathOptions = {
+    color: CASING_COLOR,
+    weight: (pathOptions.weight ?? 3) + CASING_EXTRA_WEIGHT,
+    opacity: CASING_OPACITY,
+  };
   if (!interactive) {
     return (
-      <Polyline positions={positions} pathOptions={pathOptions} interactive={false}>
-        {children}
-      </Polyline>
+      <>
+        <Polyline positions={positions} pathOptions={casing} interactive={false} />
+        <Polyline positions={positions} pathOptions={pathOptions} interactive={false}>
+          {children}
+        </Polyline>
+      </>
     );
   }
   return (
     <>
+      <Polyline positions={positions} pathOptions={casing} interactive={false} />
       <Polyline positions={positions} pathOptions={pathOptions} interactive={false} />
       <Polyline
         positions={positions}

@@ -294,6 +294,78 @@ class TestCreateSurveyType:
         details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
         assert details["record_mode"] == "map"
 
+    def test_allow_frequency_score_defaults_off_and_is_updatable(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """allow_frequency_score gates botanical frequency entry; off by default."""
+        survey_type = create_survey_type(name="Botanical")
+
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_frequency_score"] is False
+
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}",
+            json={"allow_frequency_score": True},
+            headers=auth_headers,
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_frequency_score"] is True
+
+        # An update that doesn't mention the flag leaves it alone.
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"description": "quadrats"}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_frequency_score"] is True
+
+    def test_allow_survey_photos_defaults_off_and_is_updatable(
+        self, client: TestClient, auth_headers: dict, create_survey_type
+    ):
+        """allow_survey_photos gates the survey-level photo gallery; off by default."""
+        survey_type = create_survey_type(name="Habitat")
+
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_survey_photos"] is False
+
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}",
+            json={"allow_survey_photos": True},
+            headers=auth_headers,
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_survey_photos"] is True
+
+        # An update that doesn't mention the flag leaves it alone.
+        r = client.put(
+            f"/api/survey-types/{survey_type.id}", json={"description": "plates"}, headers=auth_headers
+        )
+        assert r.status_code == 200
+        details = client.get(f"/api/survey-types/{survey_type.id}", headers=auth_headers).json()
+        assert details["allow_survey_photos"] is True
+
+    def test_create_carries_allow_survey_photos(
+        self, client: TestClient, auth_headers: dict
+    ):
+        """The create endpoint enumerates its fields by hand, so the flag needs a guard."""
+        response = client.post(
+            "/api/survey-types",
+            json={
+                "name": "Photo plates",
+                "allow_survey_photos": True,
+                "location_ids": [],
+                "species_type_ids": [],
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201, response.text
+        created_id = response.json()["id"]
+
+        details = client.get(f"/api/survey-types/{created_id}", headers=auth_headers).json()
+        assert details["allow_survey_photos"] is True
+
     def test_update_replaces_device_allocation(
         self, client: TestClient, auth_headers: dict, create_survey_type, create_device
     ):

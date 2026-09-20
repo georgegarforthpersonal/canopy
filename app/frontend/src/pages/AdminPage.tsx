@@ -174,6 +174,8 @@ export function AdminPage() {
   const [formAllowAudioUpload, setFormAllowAudioUpload] = useState(false);
   const [formAllowImageUpload, setFormAllowImageUpload] = useState(false);
   const [formAllowSightingPhotoUpload, setFormAllowSightingPhotoUpload] = useState(false);
+  const [formAllowFrequencyScore, setFormAllowFrequencyScore] = useState(false);
+  const [formAllowSurveyPhotos, setFormAllowSurveyPhotos] = useState(false);
   const [formAllowStartEndTime, setFormAllowStartEndTime] = useState(false);
   const [formAllowSunPercentage, setFormAllowSunPercentage] = useState(false);
   const [formAllowTemperature, setFormAllowTemperature] = useState(false);
@@ -363,6 +365,8 @@ export function AdminPage() {
       setFormAllowAudioUpload(details.allow_audio_upload);
       setFormAllowImageUpload(details.allow_image_upload);
       setFormAllowSightingPhotoUpload(details.allow_sighting_photo_upload);
+      setFormAllowFrequencyScore(details.allow_frequency_score);
+      setFormAllowSurveyPhotos(details.allow_survey_photos);
       setFormAllowStartEndTime(details.allow_start_end_time);
       setFormAllowSunPercentage(details.allow_sun_percentage);
       setFormAllowTemperature(details.allow_temperature);
@@ -392,6 +396,8 @@ export function AdminPage() {
     setFormAllowAudioUpload(false);
     setFormAllowImageUpload(false);
     setFormAllowSightingPhotoUpload(false);
+    setFormAllowFrequencyScore(false);
+    setFormAllowSurveyPhotos(false);
     setFormAllowStartEndTime(false);
     setFormAllowSunPercentage(false);
     setFormAllowTemperature(false);
@@ -445,6 +451,8 @@ export function AdminPage() {
         allow_audio_upload: formAllowAudioUpload,
         allow_image_upload: formAllowImageUpload,
         allow_sighting_photo_upload: formAllowSightingPhotoUpload,
+        allow_frequency_score: formAllowFrequencyScore,
+        allow_survey_photos: formAllowSurveyPhotos,
         allow_start_end_time: formAllowStartEndTime,
         allow_sun_percentage: formAllowSunPercentage,
         allow_temperature: formAllowTemperature,
@@ -1192,7 +1200,16 @@ export function AdminPage() {
                 control={
                   <Switch
                     checked={formAllowImageUpload}
-                    onChange={(e) => setFormAllowImageUpload(e.target.checked)}
+                    onChange={(e) => {
+                      setFormAllowImageUpload(e.target.checked);
+                      // The two photo toggles below are unavailable for camera
+                      // trap types; greying them out is not enough, a value set
+                      // earlier would still save and leave both surfaces on.
+                      if (e.target.checked) {
+                        setFormAllowSightingPhotoUpload(false);
+                        setFormAllowSurveyPhotos(false);
+                      }
+                    }}
                     disabled={savingSurveyType}
                   />
                 }
@@ -1221,6 +1238,42 @@ export function AdminPage() {
                   : formAllowSightingPhotoUpload
                   ? 'Users can attach photos to individual sightings for documentation'
                   : 'Sighting photo upload is disabled for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowSurveyPhotos}
+                    onChange={(e) => setFormAllowSurveyPhotos(e.target.checked)}
+                    disabled={savingSurveyType || formAllowImageUpload}
+                  />
+                }
+                label="Allow survey photos"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowImageUpload
+                  ? 'Not available for camera trap survey types'
+                  : formAllowSurveyPhotos
+                  ? 'Each survey gets a photo gallery for habitat and landscape shots that describe the whole visit'
+                  : 'Survey photo galleries are hidden for this survey type'}
+              </Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formAllowFrequencyScore}
+                    onChange={(e) => setFormAllowFrequencyScore(e.target.checked)}
+                    disabled={savingSurveyType}
+                  />
+                }
+                label="Allow frequency score"
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4, mt: -1 }}>
+                {formAllowFrequencyScore
+                  ? 'Sightings carry a botanical frequency score (% of quadrats and/or a band from + to 5)'
+                  : 'Frequency scoring is hidden for this survey type'}
               </Typography>
             </Box>
           </FormSection>

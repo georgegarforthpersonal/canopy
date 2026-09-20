@@ -92,7 +92,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
 }
 
 export default function AllSurveysPage() {
-  const { typeId } = useParams<{ typeId: string }>();
+  const { id: typeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
@@ -173,7 +173,7 @@ export default function AllSurveysPage() {
   if (error) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Error' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/surveys' }, { label: 'Error' }]} />
         <Alert severity="error">Failed to load surveys. Please try again.</Alert>
       </Box>
     );
@@ -182,7 +182,7 @@ export default function AllSurveysPage() {
   if (notFound || !surveyType) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Not found' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/surveys' }, { label: 'Not found' }]} />
         <Typography sx={{ color: groupColors.textSecondary }}>
           This group could not be found.
         </Typography>
@@ -211,7 +211,7 @@ export default function AllSurveysPage() {
   const returnTo = {
     state: {
       returnTo: {
-        pathname: `/groups/${typeId}/all`,
+        pathname: `/surveys/${typeId}/all`,
         label: surveyType.name,
       },
     },
@@ -235,8 +235,8 @@ export default function AllSurveysPage() {
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
         <GroupBreadcrumb
           crumbs={[
-            { label: 'Surveys', to: '/groups' },
-            { label: surveyType.name, to: `/groups/${typeId}` },
+            { label: 'Surveys', to: '/surveys' },
+            { label: surveyType.name, to: `/surveys/${typeId}` },
             { label: 'All surveys' },
           ]}
         />

@@ -20,7 +20,7 @@ describe('readReturnTo', () => {
   });
 
   it('reads a returnTo passed via navigation state', () => {
-    const returnTo = { pathname: '/groups/12', label: 'Heal Butterflies' };
+    const returnTo = { pathname: '/surveys/butterfly', label: 'Heal Butterflies' };
     expect(readReturnTo(locationWith({ returnTo }))).toEqual(returnTo);
   });
 });
@@ -57,9 +57,9 @@ describe('returnAfterAction', () => {
   });
 
   it('returns to a space plainly and toasts from the acting page', () => {
-    const space = { pathname: '/groups/12', label: 'Heal Butterflies' };
+    const space = { pathname: '/surveys/butterfly', label: 'Heal Butterflies' };
     expect(returnAfterAction(space, 'edited', 947)).toEqual({
-      to: '/groups/12',
+      to: '/surveys/butterfly',
       toastHere: true,
     });
   });

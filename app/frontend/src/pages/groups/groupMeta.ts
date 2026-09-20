@@ -1,7 +1,7 @@
 /**
  * Helpers mapping a survey type to its Groups presentation: the accent colour
  * for its icon tile, the species type that drives its wildlife icon/charts,
- * and the name-slug URLs that make groups addressable as /groups/butterfly.
+ * and the name-slug URLs that make groups addressable as /surveys/butterfly.
  */
 import { notionColors } from '../../theme';
 import { ORG_SLUG, surveyTypesAPI, type SurveyType, type SurveyTypeWithDetails } from '../../services/api';
@@ -44,6 +44,10 @@ const BETA_GROUPS: Record<string, Record<string, GroupActivity>> = {
     'ad hoc': 'record',
     audio: 'record',
     'camera trap': 'record',
+    // "Botanical" is being renamed "Plant" (rename_botanical_to_plant.py);
+    // both names stay listed until every environment is renamed.
+    botanical: 'record',
+    plant: 'record',
   },
 };
 
@@ -141,28 +145,47 @@ export function groupSlug(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Canonical path for a group — the name slug, or the id if the name has no
- * sluggable characters. */
+/**
+ * Canonical path for a group — the name slug, falling back to "type-<id>"
+ * when the name has no sluggable characters OR slugifies to digits alone
+ * (a bare numeric path reads as a survey id, so it would open a survey).
+ */
 export function groupPath(surveyType: Pick<SurveyType, 'id' | 'name'>): string {
-  return `/groups/${groupSlug(surveyType.name) || surveyType.id}`;
+  const slug = groupSlug(surveyType.name);
+  const addressable = slug && !/^\d+$/.test(slug);
+  return `/surveys/${addressable ? slug : `type-${surveyType.id}`}`;
 }
 
 /**
- * Resolve a /groups/:typeId route param — a name slug or a numeric id (old
- * links keep working) — to the survey type id, or null when nothing matches.
- * Only beta group types resolve: a hand-typed /groups/moth (or any group URL
- * in a non-beta org) is a not-found, keeping the pages behind the same gate
- * as the grid. If two names ever slugify identically the first wins, and the
- * numeric URL stays canonical.
+ * Old slugs for renamed survey types, so bookmarks made under the previous
+ * name keep resolving (in both directions, since environments rename at
+ * different times).
+ */
+const SLUG_ALIASES: Record<string, string> = {
+  botanical: 'plant',
+  plant: 'botanical',
+};
+
+/**
+ * Resolve a group-page route param — a name slug, a "type-<id>" path
+ * (numeric group ids from the pre-slug era, rewritten by the legacy
+ * redirect), or a bare numeric id on the /all and /media subpaths — to the
+ * survey type id, or null when nothing matches. Only beta group types
+ * resolve: a hand-typed /surveys/moth (or any group URL in a non-beta org)
+ * is a not-found, keeping the pages behind the same gate as the grid. If two
+ * names ever slugify identically the first wins.
  */
 export async function resolveGroupTypeId(param: string): Promise<number | null> {
   const beta = new Set(betaGroupNames());
   const isBeta = (t: SurveyType) => beta.has(t.name.trim().toLowerCase());
   const types = await surveyTypesAPI.getAll();
-  if (/^\d+$/.test(param)) {
-    const match = types.find((t) => t.id === Number(param));
+  const idMatch = /^(?:type-)?(\d+)$/.exec(param);
+  if (idMatch) {
+    const match = types.find((t) => t.id === Number(idMatch[1]));
     return match && isBeta(match) ? match.id : null;
   }
   const slug = param.toLowerCase();
-  return types.find((t) => isBeta(t) && groupSlug(t.name) === slug)?.id ?? null;
+  const bySlug = (s: string) =>
+    types.find((t) => isBeta(t) && groupSlug(t.name) === s)?.id ?? null;
+  return bySlug(slug) ?? (SLUG_ALIASES[slug] ? bySlug(SLUG_ALIASES[slug]) : null);
 }

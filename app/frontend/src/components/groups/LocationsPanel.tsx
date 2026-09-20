@@ -91,6 +91,7 @@ export default function LocationsPanel({ locations, devices = [] }: LocationsPan
     l.location_type === 'route' ? 0 : l.location_type === 'sector' ? 1 : 2;
   const visible = [...locations].sort((a, b) => order(a) - order(b));
   const empty = visible.length === 0 && devices.length === 0;
+  const undrawn = visible.filter((l) => !l.geometry).length;
 
   return (
     <Paper sx={groupCardSx}>
@@ -150,12 +151,24 @@ export default function LocationsPanel({ locations, devices = [] }: LocationsPan
           </Typography>
         </Box>
       ) : view === 'map' ? (
-        <DeviceMap
-          locationsWithBoundaries={visible}
-          devices={devices}
-          readOnly
-          height={360}
-        />
+        <>
+          <DeviceMap
+            locationsWithBoundaries={visible}
+            devices={devices}
+            readOnly
+            height={360}
+          />
+          {/* The map can only draw locations that have a boundary, so say so
+              rather than letting them look as though they don't exist. */}
+          {undrawn > 0 && (
+            <Box sx={{ px: 2.25, py: 1.25, borderTop: `1px solid ${groupColors.dividerInner}` }}>
+              <Typography sx={{ fontSize: 12, color: groupColors.textMuted }}>
+                {undrawn} of {visible.length} locations have no boundary drawn yet, so do not
+                appear on the map. They are all in the list.
+              </Typography>
+            </Box>
+          )}
+        </>
       ) : (
         <Box>
           {visible.map((location) => (

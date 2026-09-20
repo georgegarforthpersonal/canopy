@@ -563,6 +563,10 @@ export interface Sighting {
   larvae?: number | null;
   exuviae?: number | null;
   emerging_adults?: number | null;
+  // Botanical frequency score; null = not recorded (see config/frequencyScore).
+  // The percent arrives as a string (NUMERIC serialisation).
+  percent_frequency?: number | string | null;
+  frequency_band?: string | null;
   client_uuid?: string | null; // Client-minted idempotency uuid (see Survey.client_uuid)
 }
 
@@ -626,6 +630,9 @@ export interface SightingCreateRequest {
   larvae?: number | null;
   exuviae?: number | null;
   emerging_adults?: number | null;
+  // Botanical frequency score; omit or null when not recorded
+  percent_frequency?: number | string | null;
+  frequency_band?: string | null;
   client_uuid?: string; // Client-minted idempotency uuid; retries return the existing sighting
 }
 
@@ -670,6 +677,23 @@ export interface SpeciesWithCount {
   total_count: number;
   /** Date of the earliest survey recording this species (ISO), if any. */
   first_observed: string | null;
+}
+
+/** One frequency-scored sighting, flattened for the annual frequency charts. */
+export interface SwardCompositionRow {
+  location_id: number | null;
+  location_name: string | null;
+  survey_id: number;
+  survey_date: string;
+  species_id: number;
+  species_name: string | null;
+  species_scientific_name: string | null;
+  percent_frequency: number | string | null; // NUMERIC serialises as a string
+  frequency_band: string | null;
+}
+
+export interface SwardCompositionResponse {
+  rows: SwardCompositionRow[];
 }
 
 export interface SpeciesSightingLocation {
@@ -731,6 +755,8 @@ export interface SurveyType {
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
   allow_sighting_photo_upload: boolean;
+  allow_frequency_score: boolean;
+  allow_survey_photos: boolean;
   allow_start_end_time: boolean;
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
@@ -756,7 +782,9 @@ export interface SurveyTypeWithDetails extends SurveyType {
 
 /** A species' most recent camera trap photo for a survey type's gallery. */
 export interface RecentSpeciesPhoto {
-  species_id: number;
+  /** Null for survey-level photos (habitat shots); species_name then
+      carries the survey's location instead. */
+  species_id: number | null;
   species_name: string | null;
   camera_trap_image_id: number;
   survey_id: number;
@@ -806,6 +834,8 @@ export interface SurveyTypeCreate {
   allow_audio_upload: boolean;
   allow_image_upload: boolean;
   allow_sighting_photo_upload: boolean;
+  allow_frequency_score: boolean;
+  allow_survey_photos: boolean;
   allow_start_end_time: boolean;
   allow_sun_percentage: boolean;
   allow_temperature: boolean;
@@ -837,6 +867,8 @@ export interface SurveyTypeUpdate {
   allow_audio_upload?: boolean;
   allow_image_upload?: boolean;
   allow_sighting_photo_upload?: boolean;
+  allow_frequency_score?: boolean;
+  allow_survey_photos?: boolean;
   allow_start_end_time?: boolean;
   allow_sun_percentage?: boolean;
   allow_temperature?: boolean;
@@ -1576,6 +1608,16 @@ export const dashboardAPI = {
   },
 
   /**
+   * Get every frequency-scored sighting for a survey type (the annual
+   * frequency charts pivot the rows client-side).
+   */
+  getSwardComposition: (surveyTypeId: number): Promise<SwardCompositionResponse> => {
+    const params = new URLSearchParams();
+    params.append('survey_type_id', surveyTypeId.toString());
+    return fetchAPI(`/dashboard/sward-composition?${params.toString()}`);
+  },
+
+  /**
    * Get all sightings with location data for a specific species
    */
   getSpeciesSightings: (speciesId: number, startDate?: string, endDate?: string): Promise<SpeciesSightingLocation[]> => {
@@ -2155,10 +2197,12 @@ export const imagesAPI = {
   },
 
   /**
-   * Get all camera trap images for a survey
+   * Get all camera trap images for a survey. Pass excludeSightingPhotos for
+   * the survey-level gallery, which must not relist per-sighting photos.
    */
-  getImages: (surveyId: number): Promise<CameraTrapImage[]> => {
-    return fetchAPI(`/surveys/${surveyId}/images`);
+  getImages: (surveyId: number, excludeSightingPhotos = false): Promise<CameraTrapImage[]> => {
+    const query = excludeSightingPhotos ? '?exclude_sighting_photos=true' : '';
+    return fetchAPI(`/surveys/${surveyId}/images${query}`);
   },
 
   /**

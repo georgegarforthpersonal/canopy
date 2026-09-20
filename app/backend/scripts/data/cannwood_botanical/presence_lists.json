@@ -1,0 +1,125 @@
+{
+  "_comment": "Walkabout presence-only species lists stated explicitly in the reports (no quadrats). Imported as sightings with frequency_band '+'. Only lists the reports enumerate cleanly are included; scattered prose mentions are not.",
+  "tables": [
+    {
+      "table": "2025-0259-walkabout",
+      "metric": "presence",
+      "date": "2025-07-03",
+      "date_precision": "day",
+      "method": "Walkabout survey of Lark Farm field 0259 after SSSI seed-rich hay strewing, 3 July 2025 (driven in by Nick in the Hi-Sun over the poached ground). Species listed as established from the strewn hay, plus the flowering Creeping Thistle patches.",
+      "source": "Monitoring Report 2025, section 2.2",
+      "parcels": ["lark-0259"],
+      "expected_totals": {"lark-0259": 11},
+      "count_rule": "every non-null cell counts",
+      "rows": [
+        ["common-bent", "+"],
+        ["sweet-vernal-grass", "+"],
+        ["birds-foot-trefoil", "+"],
+        ["white-clover", "+"],
+        ["red-clover", "+"],
+        ["meadow-buttercup", "+"],
+        ["creeping-buttercup", "+"],
+        ["self-heal", "+"],
+        ["lesser-knapweed", "+"],
+        ["sneezewort", {"value": "+", "note": "A Somerset Notable; especially pleasing among the hay-strewing recruits"}],
+        ["creeping-thistle", {"value": "+", "note": "Flowering patches in the less closely grazed parts, drawing bees, hoverflies and butterflies"}]
+      ]
+    },
+    {
+      "table": "2026-plot-c",
+      "metric": "presence",
+      "date": "2026-06-29",
+      "date_precision": "day",
+      "method": "Walkabout observations of the sown garden bank (plot C), first recorded in 2026; 'just one mass of flowers'.",
+      "source": "Annual Monitoring Report 2026, section 4.2 and photos 41-44",
+      "parcels": ["plot-c"],
+      "expected_totals": {"plot-c": 6},
+      "count_rule": "every non-null cell counts",
+      "rows": [
+        ["white-clover", {"value": "D", "note": "Predominating with Red Clover across the bank"}],
+        ["red-clover", {"value": "D", "note": "Predominating with White Clover across the bank"}],
+        ["birds-foot-trefoil", "+"],
+        ["ox-eye-daisy", "+"],
+        ["cats-ear", "+"],
+        ["corn-poppy", {"value": "+", "note": "A single plant"}]
+      ]
+    },
+    {
+      "table": "2021-wew-walkabout",
+      "metric": "presence",
+      "date": "2021-09-07",
+      "date_precision": "day",
+      "method": "Preliminary recces of West End Wood (West), 27 April and 7 September 2021; herbaceous flora noted outside the conifer blocks. Far from a comprehensive survey (the report's words).",
+      "source": "Ecological Monitoring Report 2021, section 3.5",
+      "parcels": ["wew"],
+      "expected_totals": {"wew": 11},
+      "count_rule": "every non-null cell counts",
+      "rows": [
+        ["creeping-soft-grass", "+"],
+        ["soft-rush", "+"],
+        ["pendulous-sedge", "+"],
+        ["common-bent", "+"],
+        ["wood-millet", "+"],
+        ["wood-avens", "+"],
+        ["ground-ivy", "+"],
+        ["bluebell", "+"],
+        ["enchanters-nightshade", "+"],
+        ["hedge-woundwort", "+"],
+        ["wood-sorrel", "+"]
+      ]
+    },
+    {
+      "table": "2023-wew-walkabout",
+      "metric": "presence",
+      "date": "2023-07-06",
+      "date_precision": "day",
+      "method": "Walk-through of West End Wood (West) on 6 July 2023, focused on the flora of the rides, verges and the main glade.",
+      "source": "Annual Monitoring Report 2023, section 3.3 and Appendix III",
+      "parcels": ["wew"],
+      "expected_totals": {"wew": 19},
+      "count_rule": "every non-null cell counts",
+      "rows": [
+        ["yorkshire-fog", "+"],
+        ["rough-meadow-grass", "+"],
+        ["giant-fescue", "+"],
+        ["remote-sedge", "+"],
+        ["pendulous-sedge", {"value": "+", "note": "In the main glade with Marsh Horsetail"}],
+        ["marsh-horsetail", {"value": "D", "note": "Dominating the main glade, 'almost a dinosaur-era landscape'"}],
+        ["birds-foot-trefoil", "+"],
+        ["greater-birds-foot-trefoil", "+"],
+        ["self-heal", "+"],
+        ["hedge-woundwort", "+"],
+        ["foxglove", "+"],
+        ["marsh-bedstraw", "+"],
+        ["herb-robert", "+"],
+        ["black-medick", {"value": "+", "note": "Indicating something of a calcareous influence"}],
+        ["bluebell", "+"],
+        ["enchanters-nightshade", "+"],
+        ["hairy-st-johns-wort", "+"],
+        ["square-stemmed-st-johns-wort", "+"],
+        ["great-willowherb", "+"]
+      ]
+    },
+    {
+      "table": "2024-wew-walkabout",
+      "metric": "presence",
+      "date": "2024-08-29",
+      "date_precision": "day",
+      "method": "Walkabout of the newly clear-felled areas of West End Wood (West), 29 August 2024.",
+      "source": "Annual Monitoring Report 2024, section 3 and photos 20-25",
+      "parcels": ["wew"],
+      "expected_totals": {"wew": 8},
+      "count_rule": "every non-null cell counts",
+      "rows": [
+        ["marsh-horsetail", "+"],
+        ["water-mint", "+"],
+        ["wild-angelica", "+"],
+        ["wood-false-brome", "+"],
+        ["self-heal", "+"],
+        ["hairy-st-johns-wort", "+"],
+        ["wood-speedwell", {"value": "+", "note": "Must have lain dormant under the coniferous cover"}],
+        ["montbretia", {"value": "+", "note": "A garden escape, a long way from any gardens; flowering patch among the marshy vegetation"}]
+      ]
+    }
+  ]
+}

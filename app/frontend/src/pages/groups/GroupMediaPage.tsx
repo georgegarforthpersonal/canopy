@@ -2,7 +2,7 @@
  * Full media gallery for a group. Camera trap types: every species ever
  * recorded, each with its most recent photo (grid), most recently seen
  * first. Audio types: the same per species for detection clips (rows).
- * Sighting-photo types: the latest photos added to sightings, newest first,
+ * Sighting- and survey-photo types: the latest photos added, newest first,
  * which may repeat a species.
  */
 import { useEffect, useState } from 'react';
@@ -18,7 +18,7 @@ import {
 } from '../../services/api';
 import { groupCardSx, groupColors } from './groupsTokens';
 import { resolveGroupTypeId } from './groupMeta';
-import { formatRecordedDate } from './surveyState';
+import { formatRecordedDate, photoLabel } from './surveyState';
 import GroupBreadcrumb from '../../components/groups/GroupBreadcrumb';
 import { AudioClipPlayer } from '../../components/audio/AudioClipPlayer';
 import { ImageViewerModal, type ImageViewerItem } from '../../components/ImageViewerModal';
@@ -26,7 +26,7 @@ import { ImageViewerModal, type ImageViewerItem } from '../../components/ImageVi
 type LoadedPhoto = RecentSpeciesPhoto & { url: string | null };
 
 export default function GroupMediaPage() {
-  const { typeId } = useParams<{ typeId: string }>();
+  const { id: typeId } = useParams<{ id: string }>();
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
   const [photos, setPhotos] = useState<LoadedPhoto[]>([]);
@@ -95,7 +95,7 @@ export default function GroupMediaPage() {
   if (error) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Error' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/surveys' }, { label: 'Error' }]} />
         <Alert severity="error">Failed to load the species gallery. Please try again.</Alert>
       </Box>
     );
@@ -104,7 +104,7 @@ export default function GroupMediaPage() {
   if (notFound || !surveyType) {
     return (
       <Box sx={{ maxWidth: 900, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Not found' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/surveys' }, { label: 'Not found' }]} />
         <Typography sx={{ color: groupColors.textSecondary }}>
           This group could not be found.
         </Typography>
@@ -114,11 +114,13 @@ export default function GroupMediaPage() {
 
   // The type's config decides the mode — inferring it from whichever list
   // happens to be non-empty would call an empty audio group a photo gallery.
-  const isPhotos = surveyType.allow_image_upload || surveyType.allow_sighting_photo_upload;
-  // Camera trap galleries show one latest photo per species; sighting-photo
-  // galleries are a feed of the latest uploads (may repeat a species).
-  const feed = surveyType.allow_sighting_photo_upload && !surveyType.allow_image_upload;
-  const photoAlt = feed ? 'Sighting photo' : 'Camera trap photo';
+  const isPhotos =
+    surveyType.allow_image_upload || surveyType.allow_sighting_photo_upload || surveyType.allow_survey_photos;
+  // Camera trap galleries show one latest photo per species; sighting- and
+  // survey-photo galleries are a feed of the latest uploads.
+  const feed =
+    (surveyType.allow_sighting_photo_upload || surveyType.allow_survey_photos) && !surveyType.allow_image_upload;
+  const photoAlt = feed ? 'Photo' : 'Camera trap photo';
   const total = isPhotos ? photos.length : clips.length;
   const viewerImages: ImageViewerItem[] = [];
   const viewerIndexOf = photos.map((p) => {
@@ -126,19 +128,21 @@ export default function GroupMediaPage() {
     viewerImages.push({
       src: p.url,
       alt: p.species_name ?? photoAlt,
-      caption: `${p.species_name ?? 'Unidentified'} · ${formatRecordedDate(p.date)}`,
+      caption: `${photoLabel(p)} · ${formatRecordedDate(p.date)}`,
     });
     return viewerImages.length - 1;
   });
-  const galleryTitle = feed ? 'All photos' : 'All species';
+  // 'Recent', not 'All': the feed is capped (RECENT_PHOTO_FEED_CAP), and a
+  // type with more photos than that keeps the rest on its survey pages.
+  const galleryTitle = feed ? 'Recent photos' : 'All species';
 
   return (
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
       <Box sx={{ maxWidth: 900, mx: 'auto' }}>
         <GroupBreadcrumb
           crumbs={[
-            { label: 'Surveys', to: '/groups' },
-            { label: surveyType.name, to: `/groups/${typeId}` },
+            { label: 'Surveys', to: '/surveys' },
+            { label: surveyType.name, to: `/surveys/${typeId}` },
             { label: galleryTitle },
           ]}
         />
@@ -148,7 +152,7 @@ export default function GroupMediaPage() {
         </Typography>
         <Typography sx={{ fontSize: 13.5, color: '#888', mb: 2 }}>
           {feed
-            ? `${surveyType.name} · ${total} recent photo${total === 1 ? '' : 's'} from sightings, newest first`
+            ? `${surveyType.name} · ${total} recent photo${total === 1 ? '' : 's'}, newest first`
             : `${surveyType.name} · ${total} species, each with its latest ${isPhotos ? 'photo' : 'detection'}, most recently seen first`}
         </Typography>
 
@@ -185,7 +189,7 @@ export default function GroupMediaPage() {
                     <Box sx={{ width: '100%', aspectRatio: '4 / 3', bgcolor: 'grey.200', borderRadius: '8px' }} />
                   )}
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: groupColors.textPrimary, mt: 0.5 }} noWrap>
-                    {p.species_name ?? 'Unidentified'}
+                    {photoLabel(p)}
                   </Typography>
                   <Typography sx={{ fontSize: 11.5, color: groupColors.textMuted }} noWrap>
                     {formatRecordedDate(p.date)}
