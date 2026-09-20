@@ -22,6 +22,7 @@ Usage:
     ./dev-run migrate_species.py -s mites                    # Dry-run for mites (Acari)
     ./dev-run migrate_species.py -s fungi                    # Dry-run for fungi and lichens
     ./dev-run migrate_species.py -s woodlice                 # Dry-run for woodlice (Isopoda)
+    ./dev-run migrate_species.py -s plants                   # Dry-run for plants (see also import_uk_plants.py)
 
 Defaults to dry-run mode. Use --no-dry-run to write to database.
 """
@@ -232,6 +233,33 @@ SPECIES_CONFIG = {
                 "min_occurrence": 0,
                 "require_common_name": False
             }
+        ]
+    },
+    # Reconciling the whole UK flora (about 10,000 taxa) through this script's
+    # interactive matcher is impractical: scripts/import_uk_plants.py does the
+    # bulk add non-interactively. This entry keeps -s plants available for the
+    # same targeted matching the other groups get.
+    "plants": {
+        "db_type": "plant",
+        "display_name": "Plants",
+        "allowed_ranks": ["species", "subspecies", "genus"],
+        "subgroups": [
+            {"name": "Flowering plants", "api_filter": 'taxonGroup_s:"flowering plant"',
+             "min_occurrence": 0, "require_common_name": False},
+            {"name": "Conifers", "api_filter": "taxonGroup_s:conifer",
+             "min_occurrence": 0, "require_common_name": False},
+            {"name": "Ferns", "api_filter": "taxonGroup_s:fern",
+             "min_occurrence": 0, "require_common_name": False},
+            {"name": "Clubmosses", "api_filter": "taxonGroup_s:clubmoss",
+             "min_occurrence": 0, "require_common_name": False},
+            {"name": "Horsetails", "api_filter": "taxonGroup_s:horsetail",
+             "min_occurrence": 0, "require_common_name": False},
+            {"name": "Mosses", "api_filter": "taxonGroup_s:moss",
+             "min_occurrence": 0, "require_common_name": False},
+            {"name": "Liverworts", "api_filter": "taxonGroup_s:liverwort",
+             "min_occurrence": 0, "require_common_name": False},
+            {"name": "Stoneworts", "api_filter": "taxonGroup_s:stonewort",
+             "min_occurrence": 0, "require_common_name": False},
         ]
     },
     "woodlice": {
