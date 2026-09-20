@@ -6,7 +6,7 @@ README.md) and creates, for the Cannwood organisation:
 
 - plant species from the registry (the existing empty 'plant' species type);
 - area locations for the surveyed parcels (matched by name/alias first);
-- a "Botanical" survey type with allow_frequency_score on, linked to the
+- a "Plant" survey type with allow_frequency_score on, linked to the
   plant species type and the parcel locations;
 - a "Chris Smith" surveyor;
 - one survey per (table, parcel) with sightings carrying percent_frequency
@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).parent / "data" / "cannwood_botanical"
 
-SURVEY_TYPE_NAME = "Botanical"
+SURVEY_TYPE_NAME = "Plant"
 SURVEY_TYPE_DESCRIPTION = (
     "Quadrat and walkabout botanical surveys of the meadows, rewilding "
     "fields and sown plots, scoring how often each species lands in a "

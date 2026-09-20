@@ -6,7 +6,7 @@ holding several numbered photos with their captions on the facing page. The
 plates document a parcel's condition over a visit, not a single species, so
 they belong to the survey rather than to any of its sightings. They are stored
 as camera_trap_image rows hanging off survey_id and shown by the survey-level
-photo gallery, which this script also switches on for the Botanical survey
+photo gallery, which this script also switches on for the Plant survey
 type (allow_survey_photos).
 
 Pairing an individual photo with its individual caption is not reliable, so
@@ -24,7 +24,7 @@ only when the evidence is unambiguous:
      in data/cannwood_botanical/locations.json. A page covering several
      parcels, or naming a parcel the registry does not know, is skipped: there
      is no way to say which of them a given plate shows;
-  4. a Botanical survey exists at that location in the report year.
+  4. a Plant survey exists at that location in the report year.
 
 Everything else is skipped and counted, with the reason logged.
 
@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).parent / "data" / "cannwood_botanical"
 DEFAULT_PHOTOS_DIR = Path(__file__).parent / "data" / "cannwood_photos"
 
-SURVEY_TYPE_NAME = "Botanical"
+SURVEY_TYPE_NAME = "Plant"
 
 #: Anything smaller is page furniture, not a photograph: the repeated FCLS
 #: logo is ~7.7KB and the cover-page decorations are a few tens of KB.
@@ -188,7 +188,7 @@ def resolve_locations(db: Session, org: Organisation, registry: list[dict]) -> d
 def find_survey(
     db: Session, org: Organisation, survey_type: SurveyType, location: Location, year: int
 ) -> Survey | None:
-    """The Botanical survey at this parcel in this report year (at most one exists)."""
+    """The Plant survey at this parcel in this report year (at most one exists)."""
     surveys = db.query(Survey).filter(
         Survey.organisation_id == org.id,
         Survey.survey_type_id == survey_type.id,

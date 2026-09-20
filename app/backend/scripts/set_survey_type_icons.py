@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # names come before the generic ones (e.g. Marsh Fritillary before Butterfly).
 NAME_TO_ICON: list[tuple[str, str]] = [
     ("botanical", "botanical"),
+    ("plant", "botanical"),
     ("marsh fritillary", "marsh-fritillary"),
     ("turtledove", "turtle-dove"),
     ("turtle dove", "turtle-dove"),
