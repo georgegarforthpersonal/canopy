@@ -8,14 +8,12 @@ import { PoweredByCanopy } from './PoweredByCanopy';
 import canopyLogo from '../../assets/canopy-logo.svg';
 import { orgLogoUrl } from '../../config/orgBranding';
 import { getOrgSlug } from '../../services/api';
-import { orgHasGroups } from '../../pages/groups/groupMeta';
 
 /**
  * TopNavBar - Main navigation bar with logo and navigation icons
  *
  * Features:
- * - Logo on far left (clickable, goes to the surveys home — /groups for
- *   groups orgs, /surveys otherwise)
+ * - Logo on far left (clickable, goes to the surveys home)
  * - Navigation icons with tooltips (desktop/tablet)
  * - Hamburger menu on mobile that opens drawer
  * - Active state indication
@@ -34,10 +32,9 @@ export function TopNavBar() {
   // the Canopy mark with their name as text.
   const orgLogo = orgLogoUrl(organisation?.slug);
 
-  // Where Groups covers the org, the groups grid IS the Surveys tab (the
-  // flat list is retired); orgs without groups keep the flat list.
-  const showGroups = orgHasGroups();
-  const surveysHome = showGroups ? '/groups' : '/surveys';
+  // /surveys is the home for every org: the groups grid where Groups covers
+  // the org, the flat list elsewhere.
+  const surveysHome = '/surveys';
   // Only Cannwood runs GPS trackers today.
   const hasTrackers = getOrgSlug() === 'cannwood';
 
@@ -74,12 +71,7 @@ export function TopNavBar() {
       : []),
   ];
 
-  const isActivePath = (path: string) => {
-    // Survey detail/record pages keep the Surveys tab lit even though they
-    // live under /surveys while the tab points at /groups.
-    if (path === '/groups' && location.pathname.startsWith('/surveys')) return true;
-    return location.pathname.startsWith(path);
-  };
+  const isActivePath = (path: string) => location.pathname.startsWith(path);
 
   const handleNavClick = (path: string) => {
     navigate(path);

@@ -135,10 +135,10 @@ describe('recordSurveyPath', () => {
 
 describe('groupPath', () => {
   it('uses the name slug', () => {
-    expect(groupPath({ id: 3, name: 'Butterfly' })).toBe('/groups/butterfly');
+    expect(groupPath({ id: 3, name: 'Butterfly' })).toBe('/surveys/butterfly');
   });
 
-  it('falls back to the id when the name has no sluggable characters', () => {
-    expect(groupPath({ id: 3, name: '!!!' })).toBe('/groups/3');
+  it('falls back to type-<id> when the name has no sluggable characters', () => {
+    expect(groupPath({ id: 3, name: '!!!' })).toBe('/surveys/type-3');
   });
 });

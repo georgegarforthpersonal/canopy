@@ -43,7 +43,7 @@ import DataPanel from '../../components/groups/DataPanel';
 import AnnualFrequencyPanel from '../../components/groups/AnnualFrequencyPanel';
 
 export default function GroupDetailPage() {
-  const { typeId } = useParams<{ typeId: string }>();
+  const { id: typeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [surveyType, setSurveyType] = useState<SurveyTypeWithDetails | null>(null);
@@ -175,7 +175,7 @@ export default function GroupDetailPage() {
   if (error) {
     return (
       <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Error' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/surveys' }, { label: 'Error' }]} />
         <Alert severity="error">Failed to load this survey type. Please try again.</Alert>
       </Box>
     );
@@ -184,7 +184,7 @@ export default function GroupDetailPage() {
   if (notFound || !surveyType) {
     return (
       <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto', px: { xs: 2, sm: 4 }, py: 4 }}>
-        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/groups' }, { label: 'Not found' }]} />
+        <GroupBreadcrumb crumbs={[{ label: 'Surveys', to: '/surveys' }, { label: 'Not found' }]} />
         <Typography sx={{ color: groupColors.textSecondary }}>
           This group could not be found.
         </Typography>
@@ -205,7 +205,7 @@ export default function GroupDetailPage() {
   // Frequency-scored (botanical) groups get the annual sibling of the
   // seasonal chart in the same right-column slot.
   const hasAnnual = surveyType.allow_frequency_score;
-  const returnTo = { returnTo: { pathname: `/groups/${typeId}`, label: surveyType.name } };
+  const returnTo = { returnTo: { pathname: `/surveys/${typeId}`, label: surveyType.name } };
   // Unscheduled groups record without a slot: media types jump straight to
   // their wizard, plain types to the standard form with the type preselected.
   const recordNew = () => navigate(recordSurveyPath(surveyType), { state: returnTo });
@@ -221,7 +221,7 @@ export default function GroupDetailPage() {
     <Box sx={{ bgcolor: groupColors.page, minHeight: '100%', px: { xs: 2, sm: 4 }, py: { xs: 2, sm: 3 } }}>
       <Box sx={{ maxWidth: GROUP_MAX_WIDTH, mx: 'auto' }}>
         <GroupBreadcrumb
-          crumbs={[{ label: 'Surveys', to: '/groups' }, { label: surveyType.name }]}
+          crumbs={[{ label: 'Surveys', to: '/surveys' }, { label: surveyType.name }]}
         />
 
         <GroupHero surveyType={surveyType} />
@@ -254,7 +254,7 @@ export default function GroupDetailPage() {
                   }
                   onRecord={recordNew}
                   onOpenSurvey={openSurvey}
-                  onViewAll={() => navigate(`/groups/${typeId}/all`)}
+                  onViewAll={() => navigate(`/surveys/${typeId}/all`)}
                 />
               ) : (
                 <SurveysPanel
@@ -266,7 +266,7 @@ export default function GroupDetailPage() {
                   greenIds={greenIds}
                   onSignupSaved={handleSignupSaved}
                   onOpenRecorded={openSurvey}
-                  onViewAll={() => navigate(`/groups/${typeId}/all`)}
+                  onViewAll={() => navigate(`/surveys/${typeId}/all`)}
                   onRecordNew={recordNew}
                 />
               )}
@@ -284,7 +284,7 @@ export default function GroupDetailPage() {
                   kind={surveyType.allow_audio_upload && !surveyType.allow_image_upload ? 'clips' : 'photos'}
                   perSpecies={surveyType.allow_image_upload}
                   surveyTypeId={surveyType.id}
-                  onViewAll={() => navigate(`/groups/${typeId}/media`)}
+                  onViewAll={() => navigate(`/surveys/${typeId}/media`)}
                 />
               </Box>
             )}
