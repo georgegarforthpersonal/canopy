@@ -655,12 +655,12 @@ def list_survey_type_files(
     org: Organisation = Depends(get_current_organisation),
     db: Session = Depends(get_db),
 ) -> List[SurveyTypeFile]:
-    """List reference files for a survey type (most recent first)."""
+    """List reference files for a survey type (alphabetical by filename)."""
     _get_owned_survey_type(survey_type_id, org, db)
     files = (
         db.query(SurveyTypeFile)
         .filter(SurveyTypeFile.survey_type_id == survey_type_id)
-        .order_by(col(SurveyTypeFile.created_at).desc())
+        .order_by(func.lower(col(SurveyTypeFile.filename)), col(SurveyTypeFile.id))
         .all()
     )
     return files  # type: ignore[no-any-return]

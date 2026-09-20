@@ -55,6 +55,22 @@ class TestListSurveyTypeFiles:
         resp = client.get("/api/survey-types/99999/files", headers=auth_headers)
         assert resp.status_code == 404
 
+    def test_alphabetical_by_filename(
+        self, client, auth_headers, create_survey_type, patch_r2
+    ):
+        """Listing is alphabetical by filename (case-insensitive), not upload order."""
+        st = create_survey_type(name="Butterfly")
+        for name in ["Cannwood 2026.pdf", "cannwood 2020.pdf", "Cannwood 2023.pdf"]:
+            assert _upload(client, auth_headers, st.id, filename=name).status_code == 201
+
+        resp = client.get(f"/api/survey-types/{st.id}/files", headers=auth_headers)
+        assert resp.status_code == 200
+        assert [f["filename"] for f in resp.json()] == [
+            "cannwood 2020.pdf",
+            "Cannwood 2023.pdf",
+            "Cannwood 2026.pdf",
+        ]
+
 
 class TestUploadSurveyTypeFile:
     def test_upload_returns_metadata(self, client, auth_headers, create_survey_type, patch_r2):
