@@ -278,7 +278,7 @@ export default function GroupDetailPage() {
                 <SpeciesCountPanel speciesTypes={surveyType.species_types.map((st) => st.name)} surveyTypeId={surveyType.id} />
               )}
             </Box>
-            {(surveyType.allow_image_upload || surveyType.allow_audio_upload || surveyType.allow_sighting_photo_upload) && (
+            {(surveyType.allow_image_upload || surveyType.allow_audio_upload || surveyType.allow_sighting_photo_upload || surveyType.allow_survey_photos) && (
               <Box sx={{ order: 6, minWidth: 0 }}>
                 <RecentMediaPanel
                   kind={surveyType.allow_audio_upload && !surveyType.allow_image_upload ? 'clips' : 'photos'}

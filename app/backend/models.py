@@ -849,8 +849,10 @@ class SurveyTypeWithDetails(SurveyTypeRead):
 # ============================================================================
 
 class RecentSpeciesPhoto(SQLModel):
-    """A species' most recent camera trap photo for a survey type's gallery."""
-    species_id: int
+    """A photo in a survey type's gallery. Sighting photos carry their
+    species; survey-level photos (habitat shots, report plates) have no
+    species, and species_name carries the survey's location instead."""
+    species_id: Optional[int] = None
     species_name: Optional[str] = None
     camera_trap_image_id: int
     survey_id: int

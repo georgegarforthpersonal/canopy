@@ -114,11 +114,13 @@ export default function GroupMediaPage() {
 
   // The type's config decides the mode — inferring it from whichever list
   // happens to be non-empty would call an empty audio group a photo gallery.
-  const isPhotos = surveyType.allow_image_upload || surveyType.allow_sighting_photo_upload;
-  // Camera trap galleries show one latest photo per species; sighting-photo
-  // galleries are a feed of the latest uploads (may repeat a species).
-  const feed = surveyType.allow_sighting_photo_upload && !surveyType.allow_image_upload;
-  const photoAlt = feed ? 'Sighting photo' : 'Camera trap photo';
+  const isPhotos =
+    surveyType.allow_image_upload || surveyType.allow_sighting_photo_upload || surveyType.allow_survey_photos;
+  // Camera trap galleries show one latest photo per species; sighting- and
+  // survey-photo galleries are a feed of the latest uploads.
+  const feed =
+    (surveyType.allow_sighting_photo_upload || surveyType.allow_survey_photos) && !surveyType.allow_image_upload;
+  const photoAlt = feed ? 'Survey photo' : 'Camera trap photo';
   const total = isPhotos ? photos.length : clips.length;
   const viewerImages: ImageViewerItem[] = [];
   const viewerIndexOf = photos.map((p) => {
@@ -148,7 +150,7 @@ export default function GroupMediaPage() {
         </Typography>
         <Typography sx={{ fontSize: 13.5, color: '#888', mb: 2 }}>
           {feed
-            ? `${surveyType.name} · ${total} recent photo${total === 1 ? '' : 's'} from sightings, newest first`
+            ? `${surveyType.name} · ${total} recent photo${total === 1 ? '' : 's'}, newest first`
             : `${surveyType.name} · ${total} species, each with its latest ${isPhotos ? 'photo' : 'detection'}, most recently seen first`}
         </Typography>
 

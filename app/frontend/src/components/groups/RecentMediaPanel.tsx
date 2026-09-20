@@ -126,7 +126,7 @@ export default function RecentMediaPanel({ kind, perSpecies = true, surveyTypeId
             {kind === 'clips'
               ? 'No detections yet — each species appears here with its latest clip.'
               : feed
-                ? 'No photos yet — photos added to sightings appear here.'
+                ? 'No photos yet — the latest photos added appear here.'
                 : 'No photos yet — each species appears here with its latest photo.'}
           </Typography>
         </Box>

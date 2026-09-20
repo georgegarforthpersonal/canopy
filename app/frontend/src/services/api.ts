@@ -782,7 +782,9 @@ export interface SurveyTypeWithDetails extends SurveyType {
 
 /** A species' most recent camera trap photo for a survey type's gallery. */
 export interface RecentSpeciesPhoto {
-  species_id: number;
+  /** Null for survey-level photos (habitat shots); species_name then
+      carries the survey's location instead. */
+  species_id: number | null;
   species_name: string | null;
   camera_trap_image_id: number;
   survey_id: number;
