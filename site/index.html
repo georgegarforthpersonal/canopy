@@ -85,7 +85,7 @@
 
   .hero { position: relative; overflow: hidden; background: #DCE3EA; }
   .hero-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; }
-  .hero-inner { position: relative; display: flex; align-items: center; min-height: clamp(460px, 72vh, 700px); padding-top: 56px; padding-bottom: 64px; }
+  .hero-inner { position: relative; z-index: 1; display: flex; align-items: center; min-height: clamp(460px, 72vh, 700px); padding-top: 56px; padding-bottom: 64px; }
   /* Wider screens: taller hero locked to the photo's aspect so the roosting doves
      (the branch row lower-left, the cluster centre, the lone bird right) stay in
      frame below and beside the card instead of hidden behind it. */
@@ -108,6 +108,8 @@
     /* Pull the card up over the photo's lower edge so the two read as one
        block rather than a photo and, separately, a box beneath it. */
     .hero-card { max-width: none; margin-top: -44px; }
+    /* Stacked, the card already separates photo from band; nothing to fade. */
+    .hero-fade { display: none; }
     .hero-credit { font-size: 11px; }
   }
   .hero-card { background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2); padding: clamp(28px, 4vw, 44px); max-width: 560px; }
@@ -117,6 +119,9 @@
   .hero-ctas { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
   .btn-hero { padding: 14px 28px; font-size: 16px; }
   .hero-email { font-size: 15px; font-weight: 500; }
+  /* The hero photo ends on the stat band, so fade it into that colour: a hard
+     edge between the two reads as a mistake. */
+  .hero-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: linear-gradient(to bottom, rgba(30, 52, 35, 0), #1E3423); }
   .hero-credit { position: absolute; right: 16px; top: 14px; margin: 0; font-size: 12px; color: #333333; background: rgba(255, 255, 255, 0.9); padding: 4px 10px; border-radius: 4px; }
 
   /* Phones: keep the header on one row and give the copy a little more width. */
@@ -131,8 +136,6 @@
   }
 
   .field { position: relative; background: #1E3423; overflow: hidden; }
-  .field-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 40%; }
-  .field-scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(20, 32, 22, 0.82), rgba(20, 32, 22, 0.58)); }
   .field-inner { position: relative; padding-top: 96px; padding-bottom: 96px; }
   .field .kicker, .case .kicker { margin: 0 0 14px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #3E6A45; }
   .field .kicker { color: #A9C7AE; }
@@ -140,7 +143,6 @@
   .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 32px; }
   .field-stat .num { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #ffffff; }
   .field-stat .txt { margin-top: 6px; font-size: 15px; line-height: 1.5; color: #DCE7DD; }
-  .field-credit { position: absolute; right: 20px; bottom: 12px; margin: 0; font-size: 12px; color: rgba(255, 255, 255, 0.65); }
 
   .case { padding-top: 80px; }
   /* :last-of-type matches by tag, so `.case:last-of-type` would never match
@@ -219,6 +221,7 @@
   <main style="flex: 1;">
     <section class="hero">
       <img class="hero-photo" src="/assets/cannwood-dove-roost-1600.jpg" srcset="/assets/cannwood-dove-roost-800.jpg 800w, /assets/cannwood-dove-roost-1600.jpg 1600w" sizes="100vw" width="1600" height="1067" alt="Turtle doves silhouetted on the bare branches of a dead tree at dusk at Cannwood" fetchpriority="high">
+      <div class="hero-fade"></div>
       <p class="hero-credit">Turtle doves roosting at dusk, Cannwood, Somerset</p>
       <div class="shell hero-inner">
         <div class="hero-card">
@@ -234,9 +237,6 @@
     </section>
 
     <section class="field">
-      <img class="field-photo" src="/assets/cannwood-turtle-doves-1600.jpg" srcset="/assets/cannwood-turtle-doves-800.jpg 800w, /assets/cannwood-turtle-doves-1600.jpg 1600w" sizes="100vw" width="1600" height="1067" alt="A flock of turtle doves and chaffinches taking flight from rough grassland at Cannwood" loading="lazy">
-      <div class="field-scrim"></div>
-      <p class="field-credit">Turtle doves at Cannwood</p>
       <div class="shell field-inner">
         <p class="kicker">In the field</p>
         <p class="intro">Every number below comes off a live Canopy, recorded by the people who work the land. Not a demo, not a pilot: the day-to-day record two rewilding projects run on.</p>
