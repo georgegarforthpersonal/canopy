@@ -121,7 +121,10 @@
   .hero-email { font-size: 15px; font-weight: 500; }
   /* The hero photo ends on the stat band, so fade it into that colour: a hard
      edge between the two reads as a mistake. */
-  .hero-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: linear-gradient(to bottom, rgba(30, 52, 35, 0), #1E3423); }
+  /* Reach the band's colour before the photo's edge, not at it: a gradient
+     that is still a few percent transparent on the last row lets pale sky
+     through and draws exactly the line it is meant to hide. */
+  .hero-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 240px; background: linear-gradient(to bottom, rgba(30, 52, 35, 0) 0%, rgba(30, 52, 35, 0.12) 26%, rgba(30, 52, 35, 0.32) 46%, rgba(30, 52, 35, 0.55) 62%, rgba(30, 52, 35, 0.76) 74%, rgba(30, 52, 35, 0.90) 83%, rgba(30, 52, 35, 0.97) 90%, #1E3423 96%); }
   .hero-credit { position: absolute; right: 16px; top: 14px; margin: 0; font-size: 12px; color: #333333; background: rgba(255, 255, 255, 0.9); padding: 4px 10px; border-radius: 4px; }
 
   /* Phones: keep the header on one row and give the copy a little more width. */
