@@ -98,11 +98,16 @@
     .hero-photo { object-position: center 32%; }
   }
   /* Small screens: the card would fill the width and hide the photo entirely,
-     so stack instead — the full frame as a band up top, the card below it. */
+     so stack instead — the full frame as a band up top, the card lapping over it. */
   @media (max-width: 719px) {
-    .hero-photo { position: static; height: auto; aspect-ratio: 3 / 2; display: block; }
-    .hero-inner { min-height: 0; padding-top: 28px; padding-bottom: 48px; }
-    .hero-card { max-width: none; }
+    /* The section's fill would otherwise show as a grey band under the photo,
+       so match the page and let the card carry the colour. */
+    .hero { background: #fafafa; }
+    .hero-photo { position: static; height: auto; aspect-ratio: 4 / 3; display: block; object-position: center 28%; }
+    .hero-inner { min-height: 0; padding-top: 0; padding-bottom: 48px; }
+    /* Pull the card up over the photo's lower edge so the two read as one
+       block rather than a photo and, separately, a box beneath it. */
+    .hero-card { max-width: none; margin-top: -44px; }
     .hero-credit { font-size: 11px; }
   }
   .hero-card { background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2); padding: clamp(28px, 4vw, 44px); max-width: 560px; }
@@ -114,13 +119,16 @@
   .hero-email { font-size: 15px; font-weight: 500; }
   .hero-credit { position: absolute; right: 16px; top: 14px; margin: 0; font-size: 12px; color: #333333; background: rgba(255, 255, 255, 0.9); padding: 4px 10px; border-radius: 4px; }
 
-  .services { padding-top: 24px; padding-bottom: 88px; }
-  .services h2 { margin: 0 0 10px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
-  .services .sub { margin: 0 0 40px; font-size: 16px; color: #666666; max-width: 40em; }
-  .svc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 24px; }
-  .svc { background: #ffffff; border: 1px solid #ececec; border-radius: 8px; padding: 26px 26px 28px; }
-  .svc h3 { margin: 0 0 10px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-  .svc p { margin: 0; font-size: 15px; line-height: 1.6; color: #555555; }
+  /* Phones: keep the header on one row and give the copy a little more width. */
+  @media (max-width: 430px) {
+    .shell { padding: 0 20px; }
+    header.site, footer.site { padding: 20px; }
+    .brand img { width: 26px; height: 26px; }
+    .brand span { font-size: 18px; }
+    .nav-actions { gap: 8px; }
+    .btn-nav { padding: 9px 14px; font-size: 13px; }
+    .login summary { padding: 8px 12px; font-size: 13px; }
+  }
 
   .field { position: relative; background: #1E3423; overflow: hidden; }
   .field-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 40%; }
@@ -195,10 +203,10 @@
       <details class="login" id="login">
         <summary>Log in</summary>
         <div class="login-menu">
-          <a href="https://cannwood.canopydata.app">Cannwood
-            <span>400-acre rewilding estate, Somerset</span></a>
           <a href="https://heal.canopydata.app">Heal Rewilding
             <span>Heal Somerset, rewilding charity</span></a>
+          <a href="https://cannwood.canopydata.app">Cannwood
+            <span>400-acre rewilding estate, Somerset</span></a>
           <div class="yours">
             <a href="#contact">Your project here &rarr;</a>
           </div>
@@ -225,36 +233,13 @@
       </div>
     </section>
 
-    <section class="services shell">
-      <h2>What we do</h2>
-      <p class="sub">From a shoebox of SD cards to a live platform your whole team logs into. We take on the whole journey, or any one part of it.</p>
-      <div class="svc-grid">
-        <div class="svc">
-          <h3>All your data in one place</h3>
-          <p>We consolidate survey spreadsheets, consultant reports and historic records into one shared platform, so every sighting, survey and device is at your whole team's fingertips.</p>
-        </div>
-        <div class="svc">
-          <h3>Bespoke applications</h3>
-          <p>Software shaped around how you actually work: volunteer survey entry, camera-trap review, tracking dashboards. Built quickly, then refined in the field alongside you.</p>
-        </div>
-        <div class="svc">
-          <h3>Device pipelines &amp; AI</h3>
-          <p>Camera traps, acoustic recorders and GPS tags feeding your record automatically. AI species identification you review, rather than data entry you dread.</p>
-        </div>
-        <div class="svc">
-          <h3>Analysis &amp; reporting</h3>
-          <p>Seasonal trends, species discovery curves and the evidence funders, partners and regulators ask for. Generated from live data, not compiled by hand each year.</p>
-        </div>
-      </div>
-    </section>
-
     <section class="field">
       <img class="field-photo" src="/assets/cannwood-turtle-doves-1600.jpg" srcset="/assets/cannwood-turtle-doves-800.jpg 800w, /assets/cannwood-turtle-doves-1600.jpg 1600w" sizes="100vw" width="1600" height="1067" alt="A flock of turtle doves and chaffinches taking flight from rough grassland at Cannwood" loading="lazy">
       <div class="field-scrim"></div>
       <p class="field-credit">Turtle doves at Cannwood</p>
       <div class="shell field-inner">
         <p class="kicker">In the field</p>
-        <p class="intro">We don't just advise. We build, deploy and run. The Canopy platform began as a bespoke build for one rewilding estate and is now in daily use at two.</p>
+        <p class="intro">Every number below comes off a live Canopy, recorded by the people who work the land. Not a demo, not a pilot: the day-to-day record two rewilding projects run on.</p>
         <div class="field-grid">
           <div class="field-stat">
             <div class="num">713</div>
@@ -280,7 +265,7 @@
       <p class="kicker">Case study</p>
       <h2>Heal Rewilding</h2>
       <p class="where">Heal Somerset, a rewilding charity</p>
-      <p class="story">Heal runs on volunteers, so their Canopy is shaped around them. Survey groups for butterflies and dragonflies plan their season, recorders enter counts from a phone in the field, and every walk feeds the same living record the staff team works from. It's the same platform as Cannwood underneath, with a different application on top. That's what bespoke means.</p>
+      <p class="story">Canopy began at Heal, shaped around the volunteers who do the recording. Survey groups for butterflies and dragonflies plan their season, recorders enter counts from a phone in the field, and every walk feeds the same living record the staff team works from, alongside the spreadsheets and consultant reports that came before it. It's the same platform as Cannwood underneath, with a different application on top. That's what bespoke means.</p>
       <div class="demo-grid">
         <div class="demo-card">
           <div class="demo-media">
@@ -325,7 +310,7 @@
       <p class="kicker">Case study</p>
       <h2>Cannwood</h2>
       <p class="where">A 400-acre rewilding estate in Somerset</p>
-      <p class="story">Cannwood is where Canopy began: one estate's camera traps, bird surveys and historic records pulled into a single living map. Today the platform runs the estate's day-to-day ecological record. Satellite-tagged turtle doves are followed through the season, camera-trap cards are identified by AI and reviewed by eye, and decades of aerial imagery show the land changing on one timeline.</p>
+      <p class="story">The same platform, a different estate and a different set of problems. Canopy runs Cannwood's day-to-day ecological record: satellite-tagged turtle doves followed through the season, camera-trap cards identified by AI and reviewed by eye, and decades of aerial imagery showing the land changing on one timeline.</p>
       <div class="demo-grid">
         <div class="demo-card">
           <div class="demo-media">
@@ -341,16 +326,16 @@
         </div>
         <div class="demo-card">
           <div class="demo-media">
-            <video autoplay muted loop playsinline preload="metadata" poster="/assets/demo-land-management-poster.jpg" aria-label="Canopy land management view: an aerial imagery slider sweeping between 2000 and 2024 at Cannwood, showing fields returning to woodland">
-              <source src="/assets/demo-land-management-v2.mp4" type="video/mp4">
-              <source src="/assets/demo-land-management-v2.webm" type="video/webm">
+            <video autoplay muted loop playsinline preload="metadata" poster="/assets/demo-land-management-poster-v3.jpg" aria-label="Canopy land management view: an aerial imagery slider sweeping across the decades at Cannwood, showing fields returning to woodland">
+              <source src="/assets/demo-land-management-v3.mp4" type="video/mp4">
+              <source src="/assets/demo-land-management-v3.webm" type="video/webm">
             </video>
           </div>
           <div class="demo-meta">
             <img src="/assets/favicon.png" alt="">
             <div>
               <div class="title">The land, changing</div>
-              <div class="caption">Aerial imagery on one timeline, 2000 to 2024: fields returning to woodland.</div>
+              <div class="caption">Aerial imagery on one timeline: fields returning to woodland.</div>
             </div>
           </div>
         </div>
