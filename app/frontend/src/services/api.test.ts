@@ -153,3 +153,29 @@ describe('session expiry handling', () => {
     expect(localStorage.getItem(TOKEN_KEY)).toBe('stale-token');
   });
 });
+
+describe('isMissingFilesError', () => {
+  it('matches the 422 for a multipart body with no files part', async () => {
+    const { ApiError, isMissingFilesError } = await import('./api');
+    const err = new ApiError(
+      '[{"type":"missing","loc":["body","files"],"msg":"Field required","input":null}]',
+      422
+    );
+    expect(isMissingFilesError(err)).toBe(true);
+  });
+
+  it('ignores 422s about other fields', async () => {
+    const { ApiError, isMissingFilesError } = await import('./api');
+    const err = new ApiError(
+      '[{"type":"missing","loc":["body","date"],"msg":"Field required","input":null}]',
+      422
+    );
+    expect(isMissingFilesError(err)).toBe(false);
+  });
+
+  it('ignores non-422 statuses and non-ApiErrors', async () => {
+    const { ApiError, isMissingFilesError } = await import('./api');
+    expect(isMissingFilesError(new ApiError('["body","files"]', 400))).toBe(false);
+    expect(isMissingFilesError(new TypeError('Failed to fetch'))).toBe(false);
+  });
+});

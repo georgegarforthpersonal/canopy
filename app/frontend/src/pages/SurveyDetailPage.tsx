@@ -4,7 +4,7 @@ import { useParams, useNavigate, useSearchParams, useLocation } from 'react-rout
 import { Edit, Delete, Save, Cancel, CalendarToday, Person, LocationOn, AccessTime, Thermostat, WbSunny } from '@mui/icons-material';
 import dayjs, { Dayjs } from 'dayjs';
 import { usePermissions } from '../context/AuthContext';
-import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI, devicesAPI, ApiError, isRetryableError } from '../services/api';
+import { surveysAPI, surveyorsAPI, locationsAPI, speciesAPI, surveyTypesAPI, imagesAPI, devicesAPI, ApiError, isRetryableError, isMissingFilesError } from '../services/api';
 import type { SurveyDetail, Sighting, SightingAudioClip, Surveyor, Location, Species, Survey, BreedingStatusCode, LocationWithBoundary, SurveyType, Device } from '../services/api';
 import { SurveyFormFields, hasTimeValidationError } from '../components/surveys/SurveyFormFields';
 import { SightingsEditor } from '../components/surveys/SightingsEditor';
@@ -15,6 +15,7 @@ import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { useDraftAutosave, useOnlineStatus, useSyncRetry, useWakeLock } from '../hooks';
 import { downscalePhotos } from '../utils/downscalePhoto';
+import { findUnreadableFiles, unreadablePhotosMessage } from '../utils/fileHealth';
 import { loadSurveyDraft, deleteSurveyDraft, saveSurveyDraft, surveyDraftKey } from '../services/draftStore';
 import type { SurveyDraftForm, SurveyDraftRecord } from '../services/draftStore';
 import { draftFingerprint, ensureClientUuids, adoptServerIds } from '../utils/surveyDraftSync';
@@ -639,6 +640,20 @@ export function SurveyDetailPage() {
     setSaving(true);
     setError(null);
 
+    // Photos restored from the local draft can be dead references: iOS may
+    // have evicted the blob data behind a stored File while its metadata
+    // survived. A dead File is silently dropped from the multipart body, so
+    // the upload fails identically on every retry — probe for that here,
+    // before anything is sent, and make the user re-attach.
+    const unreadable = await findUnreadableFiles(
+      editDraftSightings.flatMap((s) => s.pendingPhotos ?? [])
+    );
+    if (unreadable.length > 0) {
+      setError(unreadablePhotosMessage(unreadable));
+      setSaving(false);
+      return;
+    }
+
     // Every to-be-created sighting/individual gets a client-minted uuid the
     // server dedupes on, then the whole plan is flushed to the local draft
     // BEFORE any request: if the app dies mid-save, the retry (even after a
@@ -930,6 +945,16 @@ export function SurveyDetailPage() {
         setPendingSync(true);
         setSyncErrorDetail(err instanceof Error ? err.message : String(err));
         setError(null);
+      } else if (isMissingFilesError(err)) {
+        // The photo's data never made it into the request body (dead File
+        // reference) — retrying re-sends the same dead reference, so don't
+        // present this as a transient failure.
+        setPendingSync(false);
+        setError(
+          'A photo could not be sent — its image data is no longer readable on ' +
+            'this device. Remove the photo from its sighting or re-attach it ' +
+            'from your photo library, then save again.'
+        );
       } else {
         setPendingSync(false);
         setError(err instanceof Error ? err.message : 'Failed to update survey');

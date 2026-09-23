@@ -41,6 +41,19 @@ export const isRetryableError = (error: unknown): boolean => {
   return error instanceof TypeError || !navigator.onLine;
 };
 
+/**
+ * A file upload whose multipart body reached the server with no `files`
+ * part at all. WebKit silently drops a File whose backing blob data is gone
+ * (e.g. a photo restored from an IndexedDB draft after iOS reclaimed
+ * storage), so a retry re-sends the same dead reference and can never
+ * succeed — callers must tell the user to remove or re-attach the photo
+ * rather than offer a retry.
+ */
+export const isMissingFilesError = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 422 &&
+  error.message.includes('["body","files"]');
+
 // API base URL - uses environment variable if available, otherwise falls back to auto-detection
 const getApiBaseUrl = () => {
   // First check if environment variable is set (for production deployments)
